@@ -1,0 +1,30 @@
+# Local working notes, drafts, and scratch files
+temp-docs/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+.next/
+out/
+cache/
+
+# Foundry
+broadcast/
+!broadcast/**/dry-run/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
