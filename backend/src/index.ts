@@ -6,9 +6,15 @@ import { keccak256, toBytes } from "viem";
 import { z } from "zod";
 import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
-import { extractTerms } from "./extract";
-import { extractedTermsSchema, type ExtractedTerms, type TermField } from "./schema";
-import { mintGate, validateTerms } from "./validator";
+import { ConfigurationError, extractTerms } from "./extract";
+import {
+  extractedTermsSchema,
+  fieldsNeedingReview,
+  mintGate,
+  validateTerms,
+  type ExtractedTerms,
+  type TermField,
+} from "@tokenforge/core";
 
 /**
  * The extraction service.
@@ -114,9 +120,7 @@ app.post("/documents/:id/extract", async (c) => {
 
   const result = await extractTerms(document.text);
   const validation = validateTerms(result.terms);
-  const unreviewed = (Object.keys(result.terms) as TermField[]).filter(
-    (key) => result.terms[key].confidence < 0.9,
-  );
+  const unreviewed = fieldsNeedingReview(result.terms);
 
   const status = !validation.consistent
     ? "INVALID"
@@ -186,10 +190,7 @@ app.post("/extractions/:id/review", async (c) => {
   }
 
   const validation = validateTerms(parsed.data);
-  const confirmed = new Set(body.confirmed);
-  const unreviewed = (Object.keys(parsed.data) as TermField[]).filter(
-    (key) => parsed.data[key].confidence < 0.9 && !confirmed.has(key),
-  );
+  const unreviewed = fieldsNeedingReview(parsed.data, new Set(body.confirmed));
 
   const extraction = await prisma.extraction.update({
     where: { id },
@@ -220,11 +221,18 @@ function mergeTerms(
 
   for (const [key, value] of Object.entries(corrections)) {
     if (!(key in merged)) continue;
-    const field = merged[key as TermField] as { value: unknown; note: string | null };
+    const field = merged[key as TermField] as {
+      value: unknown;
+      note?: string | null;
+      editedByHuman?: boolean;
+    };
+
     field.value = value;
-    // A human-supplied value is not the model's guess any more, so the
-    // confidence attached to it no longer means anything.
-    (field as unknown as { confidence: number }).confidence = 1;
+    // Marked as human-edited rather than assigned a confidence of 1. Confidence
+    // is the model's own estimate of a value it produced, and overwriting it
+    // would misreport a person's correction as the model having been certain.
+    // `fieldsNeedingReview` treats the flag as vouching for the field.
+    field.editedByHuman = true;
     field.note = "Corrected during human review.";
   }
 
@@ -248,15 +256,15 @@ app.get("/extractions/:id/mint-gate", async (c) => {
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
 
   const issuerVerified = c.req.query("issuerVerified") === "true";
-  const gate = mintGate(
-    extraction.terms as ExtractedTerms,
-    issuerVerified,
-    new Set(
-      (Object.keys(extraction.terms as ExtractedTerms) as TermField[]).filter(
-        (key) => !extraction.unreviewedFields.includes(key),
-      ),
+  // Anything not on the stored unreviewed list has already been vouched for.
+  const terms = extraction.terms as ExtractedTerms;
+  const confirmed = new Set(
+    (Object.keys(terms) as TermField[]).filter(
+      (key) => !extraction.unreviewedFields.includes(key),
     ),
   );
+
+  const gate = mintGate(terms, issuerVerified, { confirmed });
 
   return c.json({ gate });
 });
@@ -320,6 +328,10 @@ app.post("/extractions/:id/mint", async (c) => {
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
     return c.json({ error: err.message }, err.status);
+  }
+  if (err instanceof ConfigurationError) {
+    // The operator needs to see this one; it is not a client mistake.
+    return c.json({ error: err.message }, 503);
   }
   if (err instanceof z.ZodError) {
     return c.json({ error: "Invalid request body.", issues: err.issues }, 400);

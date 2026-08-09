@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
-import { extractedTermsSchema, type ExtractedTerms } from "./schema";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { extractedTermsSchema, type ExtractedTerms } from "@tokenforge/core";
 
 /**
  * The AI core: a legal document in, economic terms with per-field confidence
@@ -17,6 +17,21 @@ import { extractedTermsSchema, type ExtractedTerms } from "./schema";
  */
 
 /**
+ * Gemini through its OpenAI-compatible endpoint.
+ *
+ * Keeping the OpenAI SDK means the provider is a base URL and a key rather than
+ * a rewrite, so switching back — or to anything else speaking the same
+ * protocol — is configuration. Note that the compatibility layer exposes
+ * `/chat/completions` and not the Responses API, which is why extraction below
+ * uses `chat.completions.parse`.
+ */
+const BASE_URL =
+  process.env.LLM_BASE_URL ??
+  "https://generativelanguage.googleapis.com/v1beta/openai/";
+
+const MODEL = process.env.LLM_MODEL ?? "gemini-2.5-pro";
+
+/**
  * Constructed on first use, not at import.
  *
  * The SDK throws when no key is present, and building it eagerly took the whole
@@ -25,19 +40,21 @@ import { extractedTermsSchema, type ExtractedTerms } from "./schema";
  */
 let client: OpenAI | undefined;
 
-function openai(): OpenAI {
+/** The service is misconfigured, as opposed to the request being bad. */
+export class ConfigurationError extends Error {}
+
+function llm(): OpenAI {
   if (!client) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error(
-        "OPENAI_API_KEY is not set, so terms cannot be extracted. Add it to .env.",
+    const apiKey = process.env.GEMINI_API_KEY ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new ConfigurationError(
+        "GEMINI_API_KEY is not set, so terms cannot be extracted. Add it to .env.",
       );
     }
-    client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    client = new OpenAI({ apiKey, baseURL: BASE_URL });
   }
   return client;
 }
-
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-5";
 
 const EXTRACTION_PROMPT = `You extract the economic terms of debt instruments from legal documents: loan agreements, invoices, and bond term sheets.
 
@@ -85,25 +102,30 @@ export async function extractTerms(
   documentText: string,
 ): Promise<ExtractionResult> {
   const startedAt = Date.now();
-  const format = zodTextFormat(extractedTermsSchema, "extracted_terms");
+  const response_format = zodResponseFormat(
+    extractedTermsSchema,
+    "extracted_terms",
+  );
 
-  const first = await openai().responses.parse({
+  const first = await llm().chat.completions.parse({
     model: MODEL,
-    input: [
+    messages: [
       { role: "system", content: EXTRACTION_PROMPT },
       { role: "user", content: documentText },
     ],
-    text: { format },
+    response_format,
   });
 
-  const draft = first.output_parsed;
+  const draft = first.choices[0]?.message.parsed;
   if (!draft) {
-    throw new Error("Extraction returned no parsed output.");
+    throw new Error(
+      `Extraction returned no parsed output (finish reason: ${first.choices[0]?.finish_reason ?? "unknown"}).`,
+    );
   }
 
-  const second = await openai().responses.parse({
+  const second = await llm().chat.completions.parse({
     model: MODEL,
-    input: [
+    messages: [
       { role: "system", content: VERIFICATION_PROMPT },
       { role: "user", content: documentText },
       {
@@ -111,18 +133,21 @@ export async function extractTerms(
         content: `Extraction to audit:\n\n${JSON.stringify(draft, null, 2)}`,
       },
     ],
-    text: { format },
+    response_format,
   });
 
-  const verified = second.output_parsed ?? draft;
+  // A failed audit is not a failed extraction: keep the first pass rather than
+  // losing the whole result because the second call came back unparseable.
+  const verified = second.choices[0]?.message.parsed ?? draft;
 
   return {
     terms: reconcileQuotes(verified, documentText),
     model: MODEL,
     promptTokens:
-      (first.usage?.input_tokens ?? 0) + (second.usage?.input_tokens ?? 0),
+      (first.usage?.prompt_tokens ?? 0) + (second.usage?.prompt_tokens ?? 0),
     completionTokens:
-      (first.usage?.output_tokens ?? 0) + (second.usage?.output_tokens ?? 0),
+      (first.usage?.completion_tokens ?? 0) +
+      (second.usage?.completion_tokens ?? 0),
     latencyMs: Date.now() - startedAt,
   };
 }

@@ -112,8 +112,41 @@ export type CovenantKind = (typeof COVENANT_KINDS)[number];
 export type PaymentPeriod = z.infer<typeof paymentPeriodSchema>;
 export type Covenant = z.infer<typeof covenantSchema>;
 export type LatePaymentTerms = z.infer<typeof latePaymentSchema>;
-export type ExtractedTerms = z.infer<typeof extractedTermsSchema>;
+
+/** Exactly what the model returns, before anyone has looked at it. */
+export type RawExtractedTerms = z.infer<typeof extractedTermsSchema>;
+
+/**
+ * Terms as the application holds them: the model's output plus review state.
+ *
+ * `editedByHuman` is deliberately absent from the zod schema. It is not
+ * something a model reports, and OpenAI's structured outputs require every
+ * property to be present — an optional field there is not permitted. Adding it
+ * as a mapped type keeps one source of truth for the shape while letting the
+ * review flow record who has vouched for what.
+ */
+export type ExtractedTerms = {
+  [K in keyof RawExtractedTerms]: Omit<RawExtractedTerms[K], "note"> & {
+    /**
+     * Required of the model — it must say something or explicitly null — but
+     * optional for terms the application constructs, such as fixtures and
+     * hand-entered corrections, which have no model rationale to report.
+     */
+    note?: string | null;
+    editedByHuman?: boolean;
+  };
+};
+
 export type TermField = keyof ExtractedTerms;
+
+/** One field of the extraction, with its confidence and provenance. */
+export type Extracted<T> = {
+  value: T;
+  confidence: number;
+  sourceQuote: string;
+  note: string | null;
+  editedByHuman?: boolean;
+};
 
 export const TERM_FIELDS = Object.keys(
   extractedTermsSchema.shape,

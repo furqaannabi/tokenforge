@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { confidencePct } from "@/lib/format";
-import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/validator";
+import { LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
 import type { NoteStatus } from "@/lib/types";
 
 /**

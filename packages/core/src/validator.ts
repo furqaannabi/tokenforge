@@ -1,14 +1,17 @@
 /**
  * The deterministic validator.
  *
- * Rules, not AI. This runs on the extracted values alone and ignores confidence
+ * Rules, not AI. It runs on extracted values alone and ignores confidence
  * entirely: a term set the model was 99% sure about still fails if the schedule
- * doesn't reproduce the stated rate. Any blocking issue makes the terms
- * unmintable, so the contract never receives numbers that were never checked.
+ * does not reproduce the stated rate. Any blocking issue makes the terms
+ * unmintable, so the contract never receives numbers nobody checked.
  *
- * Confidence is handled separately, by `reviewGate` below — a field can be
- * arithmetically consistent and still too uncertain to mint without a human
- * signing off on it.
+ * Confidence is a separate question, handled by `mintGate` below — a field can
+ * be arithmetically consistent and still too uncertain to mint unsupervised.
+ *
+ * This is the single copy. The web app and the extraction service both import
+ * it, so a reviewer and the server can never disagree about whether a set of
+ * terms is mintable.
  */
 
 import {
@@ -16,33 +19,33 @@ import {
   DAY_COUNTS,
   PAYMENT_FREQUENCIES,
   PERIODS_PER_YEAR,
-  type Currency,
   type DayCount,
   type ExtractedTerms,
+  type PaymentFrequency,
   type PaymentPeriod,
   type TermField,
-} from "./types";
+} from "./schema";
 
-/** Fields at or below this confidence must be confirmed by a human before minting. */
+/** Fields at or below this confidence need a human before minting. */
 export const LOW_CONFIDENCE_THRESHOLD = 0.9;
 
-/** Coupon math tolerance, as a fraction of the computed interest. */
+/** Coupon math tolerance, as a fraction of computed interest. */
 const INTEREST_TOLERANCE = 0.01;
 
-/** Rates outside this band are treated as extraction failures, not exotic loans. */
+/** Rates outside this band are extraction failures, not exotic loans. */
 const MIN_RATE_PCT = 0;
 const MAX_RATE_PCT = 40;
 
 export interface ValidationIssue {
   field: TermField;
-  /** `blocking` prevents minting outright. `warning` is surfaced but mintable. */
+  /** `blocking` prevents minting. `warning` is surfaced but mintable. */
   severity: "blocking" | "warning";
   message: string;
 }
 
 export interface ValidationResult {
   issues: ValidationIssue[];
-  /** True when no blocking issue was found. Confidence is not considered here. */
+  /** True when nothing blocking was found. Confidence is not considered. */
   consistent: boolean;
 }
 
@@ -74,7 +77,7 @@ function days360(start: Date, end: Date): number {
   return (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1);
 }
 
-/** The fraction of a year between two dates under the given convention. */
+/** Fraction of a year between two dates under the given convention. */
 export function accrualFraction(
   dayCount: DayCount,
   start: Date,
@@ -90,10 +93,7 @@ export function accrualFraction(
   }
 }
 
-/**
- * Interest due for one period on a given outstanding balance.
- * Exported so the schedule builder and the validator agree by construction.
- */
+/** Interest for one period on a given outstanding balance. */
 export function periodInterest(
   outstanding: number,
   ratePct: number,
@@ -101,7 +101,11 @@ export function periodInterest(
   periodStart: Date,
   periodEnd: Date,
 ): number {
-  return outstanding * (ratePct / 100) * accrualFraction(dayCount, periodStart, periodEnd);
+  return (
+    outstanding *
+    (ratePct / 100) *
+    accrualFraction(dayCount, periodStart, periodEnd)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +113,7 @@ export function periodInterest(
 // ---------------------------------------------------------------------------
 
 /**
- * @param now Injected so results are deterministic in tests and in the demo.
+ * @param now Injected so results are deterministic in tests and demos.
  */
 export function validateTerms(
   terms: ExtractedTerms,
@@ -128,21 +132,31 @@ export function validateTerms(
   const schedule = terms.schedule.value;
 
   // --- Enumerations -------------------------------------------------------
-  if (!CURRENCIES.includes(terms.currency.value as Currency)) {
-    block("currency", `${terms.currency.value} is not a supported settlement currency.`);
+  if (!CURRENCIES.includes(terms.currency.value)) {
+    block(
+      "currency",
+      `${terms.currency.value} is not a supported settlement currency.`,
+    );
   }
   if (!DAY_COUNTS.includes(dayCount)) {
     block("dayCount", `${dayCount} is not a recognised day-count convention.`);
   }
   if (!PAYMENT_FREQUENCIES.includes(frequency)) {
-    block("paymentFrequency", `${frequency} is not a recognised payment frequency.`);
+    block(
+      "paymentFrequency",
+      `${frequency} is not a recognised payment frequency.`,
+    );
   }
 
   // --- Scalars ------------------------------------------------------------
   if (!Number.isFinite(principal) || principal <= 0) {
     block("principal", "Principal must be a positive amount.");
   }
-  if (!Number.isFinite(ratePct) || ratePct <= MIN_RATE_PCT || ratePct > MAX_RATE_PCT) {
+  if (
+    !Number.isFinite(ratePct) ||
+    ratePct <= MIN_RATE_PCT ||
+    ratePct > MAX_RATE_PCT
+  ) {
     block(
       "interestRatePct",
       `Interest rate of ${ratePct}% is outside the accepted range (${MIN_RATE_PCT}–${MAX_RATE_PCT}%).`,
@@ -153,18 +167,18 @@ export function validateTerms(
   const agreementDate = parseISO(terms.agreementDate.value);
   const maturityDate = parseISO(terms.maturityDate.value);
 
-  if (!agreementDate) {
-    block("agreementDate", "Agreement date is not a valid date.");
-  }
-  if (!maturityDate) {
-    block("maturityDate", "Maturity date is not a valid date.");
-  }
+  if (!agreementDate) block("agreementDate", "Agreement date is not a valid date.");
+  if (!maturityDate) block("maturityDate", "Maturity date is not a valid date.");
+
   if (agreementDate && maturityDate) {
     if (agreementDate >= maturityDate) {
       block("maturityDate", "Maturity date must fall after the agreement date.");
     }
     if (maturityDate <= now) {
-      block("maturityDate", "Maturity date is in the past; this note cannot be issued.");
+      block(
+        "maturityDate",
+        "Maturity date is in the past; this note cannot be issued.",
+      );
     }
   }
 
@@ -174,22 +188,21 @@ export function validateTerms(
     return { issues, consistent: false };
   }
 
-  const scheduleIssues = validateSchedule({
-    schedule,
-    principal,
-    ratePct,
-    dayCount,
-    frequency,
-    agreementDate,
-    maturityDate,
-  });
-  issues.push(...scheduleIssues);
+  issues.push(
+    ...validateSchedule({
+      schedule,
+      principal,
+      ratePct,
+      dayCount,
+      frequency,
+      agreementDate,
+      maturityDate,
+    }),
+  );
 
   // --- Late payment -------------------------------------------------------
   const { gracePeriodDays, penaltyRatePct } = terms.latePayment.value;
-  if (gracePeriodDays < 0) {
-    block("latePayment", "Grace period cannot be negative.");
-  }
+  if (gracePeriodDays < 0) block("latePayment", "Grace period cannot be negative.");
   if (penaltyRatePct < 0) {
     block("latePayment", "Late-payment penalty rate cannot be negative.");
   }
@@ -219,13 +232,13 @@ function validateSchedule({
   principal: number;
   ratePct: number;
   dayCount: DayCount;
-  frequency: ExtractedTerms["paymentFrequency"]["value"];
+  frequency: PaymentFrequency;
   agreementDate: Date | null;
   maturityDate: Date | null;
 }): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const block = (message: string) =>
-    issues.push({ field: "schedule", severity: "blocking", message });
+    issues.push({ field: "schedule" as TermField, severity: "blocking", message });
 
   const dates = schedule.map((period) => parseISO(period.dueDate));
   if (dates.some((date) => date === null)) {
@@ -236,31 +249,30 @@ function validateSchedule({
 
   // Ordering
   for (let i = 1; i < dueDates.length; i++) {
-    if (dueDates[i] <= dueDates[i - 1]) {
+    if (dueDates[i]! <= dueDates[i - 1]!) {
       block(
-        `Payment ${schedule[i].index} (${schedule[i].dueDate}) is not after payment ${schedule[i - 1].index}.`,
+        `Payment ${schedule[i]!.index} (${schedule[i]!.dueDate}) is not after payment ${schedule[i - 1]!.index}.`,
       );
       break;
     }
   }
 
   // Bounds against the agreement and maturity dates
-  if (agreementDate && dueDates[0] <= agreementDate) {
+  if (agreementDate && dueDates[0]! <= agreementDate) {
     block("First payment falls on or before the agreement date.");
   }
   if (maturityDate) {
-    const finalDue = dueDates[dueDates.length - 1];
+    const finalDue = dueDates[dueDates.length - 1]!;
     if (finalDue.getTime() !== maturityDate.getTime()) {
       block(
-        `Final payment (${schedule[schedule.length - 1].dueDate}) does not fall on the maturity date (${maturityDate.toISOString().slice(0, 10)}).`,
+        `Final payment (${schedule[schedule.length - 1]!.dueDate}) does not fall on the maturity date (${maturityDate.toISOString().slice(0, 10)}).`,
       );
     }
   }
 
-  // Cadence: the number of periods should match the declared frequency over the term.
+  // Cadence: period count should match the declared frequency over the term.
   if (agreementDate && maturityDate) {
-    const years =
-      accrualFraction("ACT/365", agreementDate, maturityDate);
+    const years = accrualFraction("ACT/365", agreementDate, maturityDate);
     const expectedPeriods = Math.round(years * PERIODS_PER_YEAR[frequency]);
     if (Math.abs(schedule.length - expectedPeriods) > 1) {
       block(
@@ -289,10 +301,10 @@ function validateSchedule({
         ratePct,
         dayCount,
         periodStart,
-        dueDates[i],
+        dueDates[i]!,
       );
-      outstanding -= schedule[i].principal;
-      periodStart = dueDates[i];
+      outstanding -= schedule[i]!.principal;
+      periodStart = dueDates[i]!;
     }
 
     const scheduledInterest = schedule.reduce((sum, p) => sum + p.interest, 0);
@@ -316,14 +328,21 @@ function round2(n: number): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Fields the model was unsure about and a human has not yet confirmed.
- * Independent of `validateTerms` — arithmetic consistency and extraction
- * certainty are different failure modes and the UI reports them separately.
+ * Fields the model was unsure about that a human has not yet vouched for.
+ *
+ * Confirmation arrives two ways and both count. The web app flips
+ * `editedByHuman` on the field as a reviewer works through the screen; the
+ * service is handed an explicit set of confirmed keys with a review request.
+ * Treating either as sufficient is what lets one implementation serve both.
  */
-export function fieldsNeedingReview(terms: ExtractedTerms): TermField[] {
-  return (Object.keys(terms) as TermField[]).filter((field) => {
-    const extracted = terms[field];
-    return extracted.confidence < LOW_CONFIDENCE_THRESHOLD && !extracted.editedByHuman;
+export function fieldsNeedingReview(
+  terms: ExtractedTerms,
+  confirmed: ReadonlySet<string> = new Set(),
+): TermField[] {
+  return (Object.keys(terms) as TermField[]).filter((key) => {
+    const extracted = terms[key];
+    if (extracted.confidence >= LOW_CONFIDENCE_THRESHOLD) return false;
+    return !extracted.editedByHuman && !confirmed.has(key);
   });
 }
 
@@ -338,17 +357,23 @@ export interface MintGate {
 /**
  * The single question the review screen asks: may these terms be minted?
  *
- * Three independent gates, all of which must pass — an unverified issuer, an
- * inconsistent schedule, and an unconfirmed low-confidence field each stop the
- * mint on their own.
+ * Three independent gates. An unverified issuer, an inconsistent schedule, and
+ * an unconfirmed low-confidence field each stop the mint on their own.
  */
 export function mintGate(
   terms: ExtractedTerms,
   issuerVerified: boolean,
-  now: Date = new Date(),
+  options: {
+    /** Field keys a reviewer confirmed out of band, rather than on the field. */
+    confirmed?: ReadonlySet<string>;
+    /** Injected so the demo and tests get a stable answer. */
+    now?: Date;
+  } = {},
 ): MintGate {
+  const { confirmed = new Set<string>(), now = new Date() } = options;
+
   const validation = validateTerms(terms, now);
-  const unreviewedFields = fieldsNeedingReview(terms);
+  const unreviewedFields = fieldsNeedingReview(terms, confirmed);
   const blockers: string[] = [];
 
   if (!issuerVerified) {
@@ -361,14 +386,11 @@ export function mintGate(
   }
   if (unreviewedFields.length > 0) {
     blockers.push(
-      `${unreviewedFields.length} low-confidence ${unreviewedFields.length === 1 ? "field requires" : "fields require"} human verification.`,
+      `${unreviewedFields.length} low-confidence ${
+        unreviewedFields.length === 1 ? "field requires" : "fields require"
+      } human verification.`,
     );
   }
 
-  return {
-    canMint: blockers.length === 0,
-    validation,
-    unreviewedFields,
-    blockers,
-  };
+  return { canMint: blockers.length === 0, validation, unreviewedFields, blockers };
 }

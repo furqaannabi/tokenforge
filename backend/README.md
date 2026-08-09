@@ -1,19 +1,20 @@
 # TokenForge extraction service
 
 A legal document in, validated economic terms out. Hono on Bun, Prisma over
-Postgres, OpenAI for structured extraction.
+Postgres, Gemini for structured extraction through its OpenAI-compatible
+endpoint.
 
 ## Running it
 
 ```bash
-cp .env.example .env        # add OPENAI_API_KEY
+cp .env.example .env        # add GEMINI_API_KEY
 bun install
 bun run db:up               # Postgres in Docker
 bun run db:migrate
 bun run dev                 # http://localhost:8787
 ```
 
-Only extraction needs `OPENAI_API_KEY`. Uploading documents and reviewing
+Only extraction needs `GEMINI_API_KEY`. Uploading documents and reviewing
 extractions work without one.
 
 ## The pipeline
@@ -62,10 +63,6 @@ This service never holds a key or sends a transaction. The issuer's own wallet
 signs; `/mint` indexes what the chain already accepted.
 
 ## Known gaps
-
-**The validator is duplicated.** `web/lib/validator.ts` carries a copy of
-`src/validator.ts`. They must not drift — the intended fix is for the web app to
-import from here once the two packages share a workspace.
 
 **No PDF parsing yet.** `POST /documents` takes an already-extracted text layer.
 The OCR/text step in front of it does not exist.

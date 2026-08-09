@@ -1,0 +1,16 @@
+{
+  "name": "@tokenforge/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The extraction schema and deterministic validator, shared by the web app and the extraction service.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

@@ -18,8 +18,9 @@ import {
 import { useNotes } from "@/lib/notes";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
-import { mintGate, LOW_CONFIDENCE_THRESHOLD } from "@/lib/validator";
-import { FIELD_LABELS, money, shortDate } from "@/lib/format";
+import { mintGate, LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
+import { FIELD_LABELS } from "@tokenforge/core";
+import { money, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   CURRENCIES,
@@ -58,7 +59,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const terms = note?.terms;
 
   const gate = useMemo(
-    () => (terms ? mintGate(terms, issuer?.verified ?? false, DEMO_NOW) : null),
+    () => (terms ? mintGate(terms, issuer?.verified ?? false, { now: DEMO_NOW }) : null),
     [terms, issuer?.verified],
   );
 

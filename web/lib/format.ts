@@ -43,18 +43,3 @@ export function confidencePct(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
 
-/** Human label for a schema field key, used in issue lists and review cards. */
-export const FIELD_LABELS: Record<string, string> = {
-  borrower: "Borrower",
-  lender: "Lender",
-  principal: "Principal Amount",
-  currency: "Settlement Currency",
-  interestRatePct: "Interest Rate",
-  dayCount: "Day-Count Convention",
-  agreementDate: "Agreement Date",
-  maturityDate: "Maturity Date",
-  paymentFrequency: "Payment Frequency",
-  schedule: "Repayment Schedule",
-  covenants: "Covenants",
-  latePayment: "Late-Payment Terms",
-};

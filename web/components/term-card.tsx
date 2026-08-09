@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FIELD_LABELS } from "@/lib/format";
+import { FIELD_LABELS } from "@tokenforge/core";
 import { cn } from "@/lib/utils";
 import type { TermField } from "@/lib/types";
 
@@ -44,7 +44,8 @@ export function TermCard({
   options?: readonly string[];
   confidence: number;
   confirmed: boolean;
-  note?: string;
+  /** Null when the model had nothing to flag; absent on hand-built terms. */
+  note?: string | null;
   active: boolean;
   onHover: (field: TermField | null) => void;
   onChange: (next: string) => void;

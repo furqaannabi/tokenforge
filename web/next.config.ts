@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 /**
@@ -24,7 +25,15 @@ const X402_STUBS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  // @tokenforge/core ships TypeScript source rather than a build artifact, so
+  // that the schema and validator have exactly one definition shared with the
+  // extraction service. Next has to compile it like first-party code.
+  transpilePackages: ["@tokenforge/core"],
   turbopack: {
+    // @tokenforge/core is symlinked from ../packages/core, which sits outside
+    // this app. Turbopack refuses to resolve linked dependencies above its
+    // root, so the root has to be the directory containing both.
+    root: path.join(__dirname, ".."),
     resolveAlias: Object.fromEntries(
       X402_STUBS.map((specifier) => [specifier, "./lib/x402-stub.cjs"]),
     ),

@@ -8,7 +8,7 @@
  */
 
 import type { ExtractedTerms, TermField } from "./types";
-import { LOW_CONFIDENCE_THRESHOLD } from "./validator";
+import { LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
 
 export type HighlightTone = "verified" | "review";
 
