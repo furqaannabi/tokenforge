@@ -30,7 +30,18 @@ const BASE_URL =
   process.env.LLM_BASE_URL ??
   "https://generativelanguage.googleapis.com/v1beta/openai/";
 
-const MODEL = process.env.LLM_MODEL ?? "gemini-2.5-pro";
+/**
+ * An alias rather than a pinned version, deliberately.
+ *
+ * `gemini-2.5-pro` was the original default and returns 404: still listed by
+ * the models endpoint, but "no longer available to new users". A pinned model
+ * fails closed and takes extraction down with it, whereas the alias tracks
+ * whatever the current pro model is. The cost is that behaviour can shift
+ * without the code changing, which is why every extraction records the model
+ * that produced it — set LLM_MODEL to pin one when reproducibility matters
+ * more than staying alive.
+ */
+const MODEL = process.env.LLM_MODEL ?? "gemini-pro-latest";
 
 /**
  * Constructed on first use, not at import.

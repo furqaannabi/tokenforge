@@ -393,5 +393,16 @@ app.onError((err, c) => {
 
 export default {
   port: Number(process.env.PORT ?? 8787),
+
+  /**
+   * Bun closes idle requests after 10 seconds by default, which is far less
+   * than an extraction takes: two sequential model passes over a full
+   * agreement run to a minute or more, and the connection sits silent
+   * throughout. The default was cutting extractions off mid-flight.
+   *
+   * Seconds; Bun's ceiling is 255.
+   */
+  idleTimeout: 240,
+
   fetch: app.fetch,
 };
