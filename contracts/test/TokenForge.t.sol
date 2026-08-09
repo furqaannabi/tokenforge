@@ -7,7 +7,7 @@ import {NoteFactory} from "../src/NoteFactory.sol";
 import {RWANote} from "../src/RWANote.sol";
 import {RepaymentVault} from "../src/RepaymentVault.sol";
 import {Period, ScheduleLib} from "../src/Schedule.sol";
-import {MockUSDG} from "./mocks/MockUSDG.sol";
+import {MockUSDG} from "../src/mocks/MockUSDG.sol";
 
 /**
  * Shared fixture: the Meridian note from the demo documents.

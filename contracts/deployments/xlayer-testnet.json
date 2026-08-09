@@ -19,6 +19,13 @@
       "constructorArgs": {
         "registry": "0x57873ccC430f7709ed77dA7da1EC521CED877F59"
       }
+    },
+    "MockUSDG": {
+      "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",
+      "txHash": "0xe00ef28cdb79efa07a4f5c5705a66e59cb16c944968490ae905b3c2e0d55cc08",
+      "deployedAtBlock": 37816575,
+      "decimals": 6,
+      "warning": "TESTNET ONLY. Minting is unrestricted, so this token is worthless as money. On mainnet, point RepaymentVault at the real USDG instead."
     }
   },
   "notes": [
