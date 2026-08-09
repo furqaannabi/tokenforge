@@ -82,12 +82,17 @@ export function useUploadAndExtract() {
 
   return useMutation({
     mutationFn: async (input: {
-      filename: string;
+      file: File;
       text: string;
-      fileBase64?: string | null;
       uploadedBy?: string | null;
     }) => {
-      const { document } = await api.uploadDocument(input);
+      const { document } = await api.uploadDocument({
+        file: input.file,
+        filename: input.file.name,
+        text: input.text,
+        uploadedBy: input.uploadedBy ?? null,
+      });
+
       const extraction = await api.extract(document.id);
       return { document, extraction };
     },

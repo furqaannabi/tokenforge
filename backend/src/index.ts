@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
@@ -8,7 +8,12 @@ import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
 import { ConfigurationError } from "./errors";
 import { extractTerms } from "./extract";
-import { documentKey, documentUrl, putDocument, storageEnabled } from "./storage";
+import {
+  documentKey,
+  documentUrl,
+  putDocument,
+  storageEnabled,
+} from "./storage";
 import {
   extractedTermsSchema,
   fieldsNeedingReview,
@@ -53,12 +58,48 @@ const uploadSchema = z.object({
   /// Text layer used for extraction. Until PDF parsing exists, the caller
   /// supplies it.
   text: z.string().min(1),
-  /// The document itself, base64-encoded. Optional, but without it there is no
-  /// file to show a reviewer and nothing to store.
-  fileBase64: z.string().nullable().default(null),
   mimeType: z.string().default("application/pdf"),
   uploadedBy: z.string().nullable().default(null),
 });
+
+/**
+ * Reads the upload as either multipart or JSON.
+ *
+ * Multipart is the real path: the client posts the file itself, which travels
+ * as bytes rather than base64 and costs a third less to send. JSON without a
+ * file stays supported for text-only registration and for scripted callers
+ * that have no document to hand.
+ */
+async function readUpload(c: Context): Promise<{
+  body: z.infer<typeof uploadSchema>;
+  fileBytes: Uint8Array | null;
+}> {
+  const contentType = c.req.header("content-type") ?? "";
+
+  if (!contentType.includes("multipart/form-data")) {
+    return { body: uploadSchema.parse(await c.req.json()), fileBytes: null };
+  }
+
+  const form = await c.req.parseBody();
+  const file = form.file;
+  if (!(file instanceof File)) {
+    throw new HTTPException(400, {
+      message: "multipart upload requires a 'file' part.",
+    });
+  }
+
+  const body = uploadSchema.parse({
+    filename: (form.filename as string) || file.name,
+    text: form.text,
+    mimeType: file.type || (form.mimeType as string) || "application/pdf",
+    uploadedBy: (form.uploadedBy as string) || null,
+  });
+
+  return {
+    body,
+    fileBytes: new Uint8Array(await file.arrayBuffer()),
+  };
+}
 
 /**
  * Registers a source document, storing the file itself when one is supplied.
@@ -74,12 +115,11 @@ const uploadSchema = z.object({
  * file arriving twice is not a mistake worth blocking on.
  */
 app.post("/documents", async (c) => {
-  const body = uploadSchema.parse(await c.req.json());
+  const { body, fileBytes } = await readUpload(c);
 
-  const fileBytes = body.fileBase64
-    ? Uint8Array.from(Buffer.from(body.fileBase64, "base64"))
-    : null;
-
+  // The hash is computed here, over the bytes that arrived, and never accepted
+  // from the caller. It goes on-chain as the claim that a token corresponds to
+  // a specific file, so it has to be this service's own reading of it.
   const hashedBytes = fileBytes ?? toBytes(body.text);
   const contentHash = keccak256(hashedBytes);
 

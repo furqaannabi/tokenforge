@@ -95,10 +95,14 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
+    // FormData must set its own Content-Type so the multipart boundary is
+    // included; forcing application/json here would corrupt the upload.
+    const isFormData = init?.body instanceof FormData;
+
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
       },
     });
@@ -131,21 +135,49 @@ export const api = {
     request<{ documents: ApiDocument[] }>("/documents").then((r) => r.documents),
 
   /**
-   * Registers a document. `fileBase64` is what makes the content hash the
-   * file's own — without it the hash falls back to the text layer and cannot
-   * be verified against the original PDF.
+   * Registers an uploaded document. Pass the `storageKey` from
+   * `requestUploadUrl`; the service reads those bytes back to compute the
+   * content hash, so it never takes the caller's word for what was uploaded.
+   */
+  /**
+   * Registers a document, sending the file with it.
+   *
+   * Multipart rather than JSON: the file travels as bytes instead of base64,
+   * which is a third smaller and avoids holding an encoded copy in memory. The
+   * service hashes what it receives, so provenance never rests on the client's
+   * word about which document this is.
    */
   uploadDocument: (input: {
+    file?: File | null;
     filename: string;
     text: string;
-    fileBase64?: string | null;
-    mimeType?: string;
     uploadedBy?: string | null;
-  }) =>
-    request<{ document: ApiDocument; alreadyKnown: boolean }>("/documents", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+  }) => {
+    if (!input.file) {
+      return request<{ document: ApiDocument; alreadyKnown: boolean }>(
+        "/documents",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            filename: input.filename,
+            text: input.text,
+            uploadedBy: input.uploadedBy ?? null,
+          }),
+        },
+      );
+    }
+
+    const form = new FormData();
+    form.set("file", input.file);
+    form.set("filename", input.filename);
+    form.set("text", input.text);
+    if (input.uploadedBy) form.set("uploadedBy", input.uploadedBy);
+
+    return request<{ document: ApiDocument; alreadyKnown: boolean }>(
+      "/documents",
+      { method: "POST", body: form },
+    );
+  },
 
   documentUrl: (documentId: string) =>
     request<{ url: string }>(`/documents/${documentId}/url`).then((r) => r.url),
@@ -199,17 +231,3 @@ export const api = {
     }).then((r) => r.note),
 };
 
-/** Browser File to the base64 the upload endpoint expects. */
-export async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-
-  // Chunked rather than spread: a large PDF blows the argument limit of
-  // String.fromCharCode in one call.
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}

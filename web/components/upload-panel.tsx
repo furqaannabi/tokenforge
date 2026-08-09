@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ApiError, fileToBase64 } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useServiceHealth, useUploadAndExtract } from "@/lib/queries";
 import { useWallet } from "@/lib/wallet";
 import { money } from "@/lib/format";
@@ -52,9 +52,8 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
   const submit = async () => {
     if (!file || !text.trim()) return;
     const result = await upload.mutateAsync({
-      filename: file.name,
+      file,
       text,
-      fileBase64: await fileToBase64(file),
       uploadedBy: address ?? null,
     });
     router.push(`/review/${result.extraction.id}`);

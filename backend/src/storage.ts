@@ -60,10 +60,13 @@ function s3(): S3Client {
 
 /** Where a document with this content hash lives. */
 export function documentKey(contentHash: string, filename: string): string {
-  const extension = filename.includes(".")
+  return `documents/${contentHash}${extensionOf(filename)}`;
+}
+
+function extensionOf(filename: string): string {
+  return filename.includes(".")
     ? filename.slice(filename.lastIndexOf(".")).toLowerCase()
     : "";
-  return `documents/${contentHash}${extension}`;
 }
 
 /**
