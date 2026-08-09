@@ -21,11 +21,7 @@ import { ConfigurationError } from "./errors";
  */
 
 const BUCKET = process.env.R2_BUCKET;
-const ENDPOINT =
-  process.env.R2_ENDPOINT ??
-  (process.env.R2_ACCOUNT_ID
-    ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-    : undefined);
+const ENDPOINT = process.env.R2_ENDPOINT;
 
 /** Whether document storage is configured at all. */
 export const storageEnabled = Boolean(
@@ -46,7 +42,7 @@ function s3(): S3Client {
   if (!client) {
     if (!storageEnabled) {
       throw new ConfigurationError(
-        "Document storage is not configured. Set R2_BUCKET, R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in .env.",
+        "Document storage is not configured. Set R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in .env.",
       );
     }
     client = new S3Client({
