@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { WalletProvider } from "@/lib/wallet";
+import { Providers } from "@/components/providers";
 import { NotesProvider } from "@/lib/notes";
 import { TopNav } from "@/components/top-nav";
 import { cn } from "@/lib/utils";
@@ -31,12 +31,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={cn("dark h-full antialiased", inter.variable, jetbrainsMono.variable)}
     >
       <body className="flex min-h-full flex-col">
-        <WalletProvider>
+        <Providers>
           <NotesProvider>
             <TopNav />
             <main className="flex-1">{children}</main>
           </NotesProvider>
-        </WalletProvider>
+        </Providers>
       </body>
     </html>
   );

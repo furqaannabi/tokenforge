@@ -1,58 +1,49 @@
 "use client";
 
 /**
- * Mock wallet connection.
+ * The connected wallet, and what the registry says about it.
  *
- * Stands in for wagmi/viem until the contracts land. The one thing it models
- * faithfully is registry membership: `issuer.verified` is what gates the mint,
- * and connecting as the unverified wallet has to produce the same refusal the
- * on-chain `NoteFactory` would.
+ * Backed by wagmi rather than a mock. The one piece of judgement layered on top
+ * is `issuer.verified`, which resolves the connected address against the issuer
+ * registry — that flag is what gates minting, and connecting an address outside
+ * the registry has to produce the same refusal `NoteFactory` would.
+ *
+ * wagmi 3 deprecates `useAccount` in favour of `useConnection`, and the
+ * `disconnect` field of `useDisconnect` in favour of its `mutate`.
  */
 
-import { createContext, useContext, useMemo, useState } from "react";
-import { DEMO_WALLETS, MERIDIAN } from "./mock-data";
+import { useConnection, useDisconnect } from "wagmi";
+import { resolveIssuer } from "./registry";
+import { X_LAYER_TESTNET } from "./wagmi";
 import type { Issuer } from "./types";
 
-interface WalletState {
-  /** Null until connected. */
-  issuer: Issuer | null;
+export interface WalletState {
+  address?: `0x${string}`;
   connected: boolean;
-  connect: (issuer?: Issuer) => void;
+  /** True while wagmi restores a previous session. */
+  connecting: boolean;
+  /** Registry entry for the connected address, or a synthetic unverified one. */
+  issuer: Issuer | null;
+  chainId?: number;
+  /** Connected, but pointed at something other than X Layer testnet. */
+  wrongNetwork: boolean;
   disconnect: () => void;
-  /** Demo affordance: swap between the verified and unverified wallets. */
-  switchWallet: (address: Issuer["address"]) => void;
-  available: Issuer[];
-}
-
-const WalletContext = createContext<WalletState | null>(null);
-
-export function WalletProvider({ children }: { children: React.ReactNode }) {
-  // Pre-connected as the verified issuer so the happy path stays fast; the
-  // rejection case is reached deliberately, by switching wallets.
-  const [issuer, setIssuer] = useState<Issuer | null>(MERIDIAN);
-
-  const value = useMemo<WalletState>(
-    () => ({
-      issuer,
-      connected: issuer !== null,
-      connect: (next = MERIDIAN) => setIssuer(next),
-      disconnect: () => setIssuer(null),
-      switchWallet: (address) =>
-        setIssuer(DEMO_WALLETS.find((w) => w.address === address) ?? null),
-      available: DEMO_WALLETS,
-    }),
-    [issuer],
-  );
-
-  return (
-    <WalletContext.Provider value={value}>{children}</WalletContext.Provider>
-  );
 }
 
 export function useWallet(): WalletState {
-  const context = useContext(WalletContext);
-  if (!context) {
-    throw new Error("useWallet must be used inside a WalletProvider");
-  }
-  return context;
+  const connection = useConnection();
+  const { mutate: disconnect } = useDisconnect();
+
+  const { address, chainId, isConnected, isConnecting, isReconnecting } =
+    connection;
+
+  return {
+    address,
+    chainId,
+    connected: isConnected,
+    connecting: isConnecting || isReconnecting,
+    issuer: resolveIssuer(address),
+    wrongNetwork: isConnected && chainId !== Number(X_LAYER_TESTNET.id),
+    disconnect: () => disconnect(),
+  };
 }

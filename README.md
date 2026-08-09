@@ -1,3 +1,5 @@
+<img src="web/public/logo.png" alt="" width="80" />
+
 # TokenForge
 
 **Only verified issuers can turn real financial agreements into programmable onchain assets.**

@@ -1,13 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import {
-  BadgeCheck,
-  FileText,
-  ShieldOff,
-  Upload,
-} from "lucide-react";
+import { BadgeCheck, FileText, ShieldOff, Upload, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
+import { X_LAYER_TESTNET } from "@/lib/wagmi";
 import { useNotes } from "@/lib/notes";
 import { money, percent, monthYear, truncateHex } from "@/lib/format";
 import { FieldLabel, StatusBadge } from "@/components/primitives";
@@ -29,7 +25,7 @@ import {
 } from "@/components/ui/table";
 
 export default function IssuerDashboard() {
-  const { issuer } = useWallet();
+  const { issuer, connected } = useWallet();
   const { notes } = useNotes();
 
   const pending = notes.filter((note) => note.status === "review");
@@ -45,7 +41,9 @@ export default function IssuerDashboard() {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        {issuer?.verified ? (
+        {!connected ? (
+          <NotConnected />
+        ) : issuer?.verified ? (
           <UploadPanel documents={pending} />
         ) : (
           <IssuanceBlocked address={issuer?.address} />
@@ -167,6 +165,29 @@ function UploadPanel({
   );
 }
 
+function NotConnected() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect a wallet</CardTitle>
+        <CardDescription>
+          Issuing a note is an on-chain action signed by an authorized
+          representative, so a connected wallet comes first.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-dashed border-input px-6 py-10 text-center">
+          <Wallet className="mx-auto size-6 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium">No wallet connected</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Use the connect button above. The network is X Layer testnet.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
  * Refusal beat: an address outside the registry never reaches extraction. The
  * gate is enforced on-chain by NoteFactory; stopping here just avoids wasting
@@ -208,7 +229,7 @@ function IssuanceBlocked({ address }: { address?: string }) {
 }
 
 function IssuerPanel() {
-  const { issuer } = useWallet();
+  const { issuer, chainId, wrongNetwork } = useWallet();
   if (!issuer) return null;
 
   return (
@@ -236,7 +257,18 @@ function IssuerPanel() {
             </span>
           }
         />
-        <Row label="Network" value="X Layer Testnet" />
+        <Row
+          label="Network"
+          value={
+            wrongNetwork ? (
+              <span className="text-review">
+                Chain {chainId} — switch to X Layer testnet
+              </span>
+            ) : (
+              `${X_LAYER_TESTNET.name} (${chainId})`
+            )
+          }
+        />
         <Row
           label="Address"
           value={
