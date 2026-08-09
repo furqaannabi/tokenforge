@@ -69,6 +69,9 @@ export function extractionToNote(
       body: textToBlocks(extraction.document?.text ?? ""),
     },
     terms,
+    // Not part of the extraction: the issuer picks it on the review screen
+    // before minting. USDG is the default on X Layer.
+    currency: "USDG",
     paidPeriods: [],
     address: extraction.note?.noteAddress,
   };

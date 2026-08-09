@@ -14,6 +14,16 @@ import { z } from "zod";
  * has to check them anyway for values a human has edited.
  */
 
+/**
+ * Settlement currencies a note can pay coupons in.
+ *
+ * Deliberately not part of `extractedTermsSchema`. Which stablecoin a loan
+ * settles in is an issuance decision made when the note is minted, not a fact
+ * recorded in the agreement — a paper contract says "$", and asking a model to
+ * map that onto a token forces a guess on every document. It guessed, said so,
+ * and landed in the review queue every time, which teaches reviewers to click
+ * through the queue that exists to make them read.
+ */
 export const CURRENCIES = ["USDG", "USDC", "USDT"] as const;
 export const DAY_COUNTS = ["30/360", "ACT/360", "ACT/365"] as const;
 export const PAYMENT_FREQUENCIES = [
@@ -93,7 +103,6 @@ export const extractedTermsSchema = z.object({
   borrower: field(z.string()),
   lender: field(z.string()),
   principal: field(z.number()),
-  currency: field(z.enum(CURRENCIES)),
   interestRatePct: field(z.number()),
   dayCount: field(z.enum(DAY_COUNTS)),
   agreementDate: field(z.string()),
@@ -157,7 +166,6 @@ export const FIELD_LABELS: Record<TermField, string> = {
   borrower: "Borrower",
   lender: "Lender",
   principal: "Principal Amount",
-  currency: "Settlement Currency",
   interestRatePct: "Interest Rate",
   dayCount: "Day-Count Convention",
   agreementDate: "Agreement Date",

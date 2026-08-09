@@ -58,6 +58,12 @@ export interface Note {
   issuer: Issuer;
   document: SourceDocument;
   terms: import("@tokenforge/core").ExtractedTerms;
+  /**
+   * Settlement currency, chosen at issuance rather than read from the
+   * document. A paper agreement says "$"; which stablecoin it pays in is the
+   * issuer's decision at mint time.
+   */
+  currency: import("@tokenforge/core").Currency;
   /** Periods already settled on-chain, by period index. */
   paidPeriods: number[];
   /** Address of the deployed RWANote, once minted. */

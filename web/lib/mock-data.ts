@@ -112,6 +112,7 @@ const MERIDIAN_NOTE: Note = {
       },
     ],
   },
+  currency: "USDG",
   paidPeriods: [],
   terms: {
     borrower: {
@@ -128,11 +129,6 @@ const MERIDIAN_NOTE: Note = {
       value: 2_500_000,
       confidence: 0.99,
       sourceQuote: "$2,500,000.00",
-    },
-    currency: {
-      value: "USDG",
-      confidence: 0.97,
-      sourceQuote: "the principal sum of $2,500,000.00",
     },
     interestRatePct: {
       value: 8.5,
@@ -256,6 +252,7 @@ const HALCYON_NOTE: Note = {
       },
     ],
   },
+  currency: "USDG",
   paidPeriods: [],
   terms: {
     borrower: {
@@ -272,11 +269,6 @@ const HALCYON_NOTE: Note = {
       value: 750_000,
       confidence: 0.97,
       sourceQuote: "$750,000.00",
-    },
-    currency: {
-      value: "USDG",
-      confidence: 0.96,
-      sourceQuote: "The principal sum advanced under this Note is $750,000.00.",
     },
     interestRatePct: {
       value: 6,
@@ -366,6 +358,7 @@ const APEX_NOTE: Note = {
       },
     ],
   },
+  currency: "USDG",
   paidPeriods: [1],
   terms: {
     borrower: {
@@ -383,7 +376,6 @@ const APEX_NOTE: Note = {
       confidence: 0.99,
       sourceQuote: "$1,200,000.00",
     },
-    currency: { value: "USDG", confidence: 0.97, sourceQuote: "$1,200,000.00" },
     interestRatePct: {
       value: 7.25,
       confidence: 0.98,

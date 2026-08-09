@@ -79,12 +79,6 @@ const MERIDIAN_TERMS: ExtractedTerms = {
     sourceQuote: "$2,500,000.00",
     note: null,
   },
-  currency: {
-    value: "USDG",
-    confidence: 0.97,
-    sourceQuote: "the principal sum of $2,500,000.00",
-    note: null,
-  },
   interestRatePct: {
     value: 8.5,
     confidence: 0.98,
@@ -190,12 +184,6 @@ const HALCYON_TERMS: ExtractedTerms = {
     value: 750_000,
     confidence: 0.97,
     sourceQuote: "$750,000.00",
-    note: null,
-  },
-  currency: {
-    value: "USDG",
-    confidence: 0.96,
-    sourceQuote: "The principal sum advanced under this Note is $750,000.00.",
     note: null,
   },
   interestRatePct: {

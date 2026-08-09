@@ -132,12 +132,6 @@ export function validateTerms(
   const schedule = terms.schedule.value;
 
   // --- Enumerations -------------------------------------------------------
-  if (!CURRENCIES.includes(terms.currency.value)) {
-    block(
-      "currency",
-      `${terms.currency.value} is not a supported settlement currency.`,
-    );
-  }
   if (!DAY_COUNTS.includes(dayCount)) {
     block("dayCount", `${dayCount} is not a recognised day-count convention.`);
   }
@@ -321,6 +315,19 @@ function validateSchedule({
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Checks the settlement currency chosen at issuance.
+ *
+ * Separate from `validateTerms` because it validates a decision rather than an
+ * extraction: no document states which stablecoin a note pays in, so there is
+ * nothing here for a model to have got wrong.
+ */
+export function validateSettlementCurrency(currency: string): string | null {
+  return (CURRENCIES as readonly string[]).includes(currency)
+    ? null
+    : `${currency} is not a supported settlement currency.`;
 }
 
 // ---------------------------------------------------------------------------

@@ -53,7 +53,7 @@ export function NoteScreen({ noteId }: { noteId: string }) {
     (period) => period.status === "due" || period.status === "overdue",
   );
   const isIssuer = issuer?.address === note.issuer.address;
-  const currency = note.terms.currency.value;
+  const currency = note.currency;
 
   const handleSettle = (periodIndex: number) => {
     setSettling(periodIndex);

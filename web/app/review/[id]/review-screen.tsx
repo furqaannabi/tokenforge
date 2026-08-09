@@ -8,6 +8,13 @@ import { TermCard, type EditorKind } from "@/components/term-card";
 import { FieldLabel } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -28,6 +35,7 @@ import {
   CURRENCIES,
   DAY_COUNTS,
   PAYMENT_FREQUENCIES,
+  type Currency,
   type TermField,
 } from "@/lib/types";
 
@@ -38,7 +46,6 @@ const EDITORS: Array<{
   options?: readonly string[];
 }> = [
   { field: "principal", kind: "number" },
-  { field: "currency", kind: "select", options: CURRENCIES },
   { field: "interestRatePct", kind: "percent" },
   { field: "dayCount", kind: "select", options: DAY_COUNTS },
   { field: "agreementDate", kind: "date" },
@@ -58,6 +65,8 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const [minting, setMinting] = useState(false);
   // Below lg the two panes cannot sit side by side, so one shows at a time.
   const [pane, setPane] = useState<"document" | "terms">("terms");
+  // An issuance decision, not an extraction: no document states it.
+  const [currency, setCurrency] = useState<Currency>("USDG");
 
   /*
    * An id is either a local sample or an extraction the service produced.
@@ -239,6 +248,8 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
             </section>
           </div>
 
+          <SettlementCurrency value={currency} onChange={setCurrency} />
+
           <MintFooter
             gate={gate}
             minting={minting}
@@ -252,6 +263,44 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Settlement currency, chosen rather than extracted.
+ *
+ * Sits outside the term cards on purpose. Nothing in a loan agreement names a
+ * stablecoin — the paper says "$" — so presenting this as something read from
+ * the document would misrepresent where the value came from.
+ */
+function SettlementCurrency({
+  value,
+  onChange,
+}: {
+  value: Currency;
+  onChange: (next: Currency) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 sm:px-5">
+      <div>
+        <FieldLabel>Settlement currency</FieldLabel>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Chosen at issuance — not read from the document.
+        </p>
+      </div>
+      <Select value={value} onValueChange={(next) => onChange(next as Currency)}>
+        <SelectTrigger size="sm" className="w-32 font-mono">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CURRENCIES.map((option) => (
+            <SelectItem key={option} value={option} className="font-mono">
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 /** Mobile-only switch between the source document and the extracted terms. */
 function PaneToggle({
