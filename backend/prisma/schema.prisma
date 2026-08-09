@@ -30,6 +30,10 @@ model Document {
   /// Text layer used for extraction, from the PDF itself or OCR.
   text String
 
+  /// Object key in R2, content-addressed by `contentHash`. Null when only a
+  /// text layer was supplied, or when storage is not configured.
+  storageKey String?
+
   uploadedBy  String?
   createdAt   DateTime     @default(now())
   extractions Extraction[]

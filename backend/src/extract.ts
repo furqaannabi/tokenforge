@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { extractedTermsSchema, type ExtractedTerms } from "@tokenforge/core";
+import { ConfigurationError } from "./errors";
 
 /**
  * The AI core: a legal document in, economic terms with per-field confidence
@@ -39,9 +40,6 @@ const MODEL = process.env.LLM_MODEL ?? "gemini-2.5-pro";
  * no model at all. A missing key should fail extraction, nothing else.
  */
 let client: OpenAI | undefined;
-
-/** The service is misconfigured, as opposed to the request being bad. */
-export class ConfigurationError extends Error {}
 
 function llm(): OpenAI {
   if (!client) {

@@ -2,7 +2,7 @@
 
 A legal document in, validated economic terms out. Hono on Bun, Prisma over
 Postgres, Gemini for structured extraction through its OpenAI-compatible
-endpoint.
+endpoint, and Cloudflare R2 for the documents themselves.
 
 ## Running it
 
@@ -14,8 +14,10 @@ bun run db:migrate
 bun run dev                 # http://localhost:8787
 ```
 
-Only extraction needs `GEMINI_API_KEY`. Uploading documents and reviewing
-extractions work without one.
+Only extraction needs `GEMINI_API_KEY`, and only file storage needs the `R2_*`
+values. Without either, the rest of the service still runs — a missing key
+fails that one endpoint with a 503 explaining which value is absent, rather
+than refusing to start.
 
 ## The pipeline
 
@@ -52,7 +54,8 @@ vouch for a field.
 
 | | |
 |---|---|
-| `POST /documents` | Register a document. Deduplicated by keccak256 of its bytes — the same hash `NoteFactory` claims on-chain |
+| `POST /documents` | Register a document, storing the file in R2 when one is supplied. Deduplicated by keccak256 of its bytes — the same hash `NoteFactory` claims on-chain |
+| `GET /documents/:id/url` | Short-lived signed URL for the stored file |
 | `POST /documents/:id/extract` | Run the pipeline |
 | `GET /extractions/:id` | Extraction with its document and note |
 | `POST /extractions/:id/review` | Record corrections and confirmations, then re-validate |
@@ -64,8 +67,11 @@ signs; `/mint` indexes what the chain already accepted.
 
 ## Known gaps
 
-**No PDF parsing yet.** `POST /documents` takes an already-extracted text layer.
-The OCR/text step in front of it does not exist.
+**No PDF parsing yet.** `POST /documents` takes the file *and* an
+already-extracted text layer, because the OCR/text step in front of it does not
+exist. Upload without a file and the content hash falls back to hashing the
+text, which is internally consistent but cannot be verified against the original
+PDF — so on-chain provenance is only meaningful for uploads that include one.
 
 **Extraction is unverified against real documents.** The prompt and two-pass
 design are untested on anything but hand-written samples, and extraction quality

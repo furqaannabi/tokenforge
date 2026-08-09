@@ -6,7 +6,9 @@ import { keccak256, toBytes } from "viem";
 import { z } from "zod";
 import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
-import { ConfigurationError, extractTerms } from "./extract";
+import { ConfigurationError } from "./errors";
+import { extractTerms } from "./extract";
+import { documentKey, documentUrl, putDocument, storageEnabled } from "./storage";
 import {
   extractedTermsSchema,
   fieldsNeedingReview,
@@ -48,27 +50,54 @@ app.get("/health", (c) => c.json({ ok: true, service: "tokenforge-extraction" })
 
 const uploadSchema = z.object({
   filename: z.string().min(1),
+  /// Text layer used for extraction. Until PDF parsing exists, the caller
+  /// supplies it.
   text: z.string().min(1),
+  /// The document itself, base64-encoded. Optional, but without it there is no
+  /// file to show a reviewer and nothing to store.
+  fileBase64: z.string().nullable().default(null),
   mimeType: z.string().default("application/pdf"),
   uploadedBy: z.string().nullable().default(null),
 });
 
 /**
- * Registers a source document.
+ * Registers a source document, storing the file itself when one is supplied.
  *
- * The hash is keccak256 of the text bytes, matching what `NoteFactory` records
- * on-chain, and is unique here for the same reason the factory rejects a
- * repeat: one agreement must not be sold twice through two tokens. A re-upload
- * returns the existing document rather than erroring — the same file arriving
- * twice is not a mistake worth blocking on.
+ * The hash is keccak256 of the document's own bytes when the file is present,
+ * falling back to the text layer when it is not. That distinction matters: the
+ * hash is what `NoteFactory` writes on-chain to bind a token to the exact file
+ * it was minted from, so it has to be the file's hash and not a hash of some
+ * derived text. A text-only upload therefore produces a provenance record that
+ * is internally consistent but not verifiable against the original PDF.
+ *
+ * A re-upload returns the existing document rather than erroring — the same
+ * file arriving twice is not a mistake worth blocking on.
  */
 app.post("/documents", async (c) => {
   const body = uploadSchema.parse(await c.req.json());
-  const contentHash = keccak256(toBytes(body.text));
+
+  const fileBytes = body.fileBase64
+    ? Uint8Array.from(Buffer.from(body.fileBase64, "base64"))
+    : null;
+
+  const hashedBytes = fileBytes ?? toBytes(body.text);
+  const contentHash = keccak256(hashedBytes);
 
   const existing = await prisma.document.findUnique({ where: { contentHash } });
   if (existing) {
     return c.json({ document: existing, alreadyKnown: true });
+  }
+
+  // Store before recording. A row pointing at an object that failed to upload
+  // is worse than no row at all.
+  let storageKey: string | null = null;
+  if (fileBytes && storageEnabled) {
+    const stored = await putDocument(
+      documentKey(contentHash, body.filename),
+      fileBytes,
+      body.mimeType,
+    );
+    storageKey = stored.key;
   }
 
   const document = await prisma.document.create({
@@ -76,13 +105,35 @@ app.post("/documents", async (c) => {
       filename: body.filename,
       mimeType: body.mimeType,
       text: body.text,
-      byteSize: toBytes(body.text).length,
+      byteSize: hashedBytes.length,
       contentHash,
+      storageKey,
       uploadedBy: body.uploadedBy,
     },
   });
 
   return c.json({ document, alreadyKnown: false }, 201);
+});
+
+/**
+ * A short-lived URL for reading the stored document.
+ *
+ * The bucket stays private — loan agreements are not public, and a signed URL
+ * lets the review screen show one without the file being readable by anyone who
+ * guesses a hash.
+ */
+app.get("/documents/:id/url", async (c) => {
+  const document = await prisma.document.findUnique({
+    where: { id: c.req.param("id") },
+  });
+  if (!document) throw new HTTPException(404, { message: "Unknown document." });
+  if (!document.storageKey) {
+    throw new HTTPException(404, {
+      message: "This document was registered without a file, so there is nothing to download.",
+    });
+  }
+
+  return c.json({ url: await documentUrl(document.storageKey) });
 });
 
 app.get("/documents", async (c) => {
