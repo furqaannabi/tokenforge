@@ -1,0 +1,29 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/",
+]
+
+
+[profile.ci]
+verbosity = 3
+fuzz = { runs = 1000 }
+
+[fuzz]
+runs = 256
+
+# X Layer. Chain 1952 for testnet, verified against the RPC (eth_chainId
+# returns 0x7a0); 196 for mainnet. The commonly cited 195 is wrong.
+[rpc_endpoints]
+xlayer_testnet = "${XLAYER_TESTNET_RPC_URL}"
+xlayer = "${XLAYER_RPC_URL}"
+
+[etherscan]
+xlayer_testnet = { key = "${OKLINK_API_KEY}", chain = 1952, url = "https://www.oklink.com/api/v5/explorer/xlayer_test/api" }
