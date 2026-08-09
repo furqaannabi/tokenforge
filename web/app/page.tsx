@@ -7,6 +7,7 @@ import { X_LAYER_TESTNET } from "@/lib/wagmi";
 import { useNotes } from "@/lib/notes";
 import { money, percent, monthYear, truncateHex } from "@/lib/format";
 import { FieldLabel, StatusBadge } from "@/components/primitives";
+import { UploadPanel } from "@/components/upload-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
@@ -44,7 +45,7 @@ export default function IssuerDashboard() {
         {!connected ? (
           <NotConnected />
         ) : issuer?.verified ? (
-          <UploadPanel documents={pending} />
+          <UploadPanel samples={pending} />
         ) : (
           <IssuanceBlocked address={issuer?.address} />
         )}
@@ -105,63 +106,6 @@ export default function IssuerDashboard() {
         </Card>
       </section>
     </div>
-  );
-}
-
-/**
- * The happy path entry point. Extraction is not wired up yet, so rather than
- * fake a spinner over a real upload we hand the reviewer the sample documents
- * directly and say so.
- */
-function UploadPanel({
-  documents,
-}: {
-  documents: ReturnType<typeof useNotes>["notes"];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upload document</CardTitle>
-        <CardDescription>
-          A PDF of the executed agreement. The source file is hashed and the
-          hash is written on-chain, binding the token to this exact document.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg border border-dashed border-input px-6 py-10 text-center">
-          <Upload className="mx-auto size-6 text-muted-foreground" />
-          <p className="mt-3 text-sm font-medium">Drag and drop a PDF here</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Extraction service not yet connected — use a sample document below.
-          </p>
-        </div>
-
-        <div>
-          <FieldLabel>Sample documents</FieldLabel>
-          <ul className="mt-2 space-y-2">
-            {documents.map((note) => (
-              <li key={note.id}>
-                <Link
-                  href={`/review/${note.id}`}
-                  className="flex items-center gap-3 rounded border border-border bg-background px-3 py-2.5 transition-colors hover:border-input"
-                >
-                  <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {note.document.filename}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {note.issuer.name} · {money(note.terms.principal.value)}
-                    </span>
-                  </span>
-                  <StatusBadge status={note.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

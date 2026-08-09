@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNotes } from "@/lib/notes";
+import { useExtraction, useReviewExtraction } from "@/lib/queries";
+import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
 import { mintGate, LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
@@ -51,11 +53,25 @@ const STEPS = ["Upload", "Review Terms", "Approve", "Mint"] as const;
 export function ReviewScreen({ noteId }: { noteId: string }) {
   const router = useRouter();
   const { getNote, confirmField, mint } = useNotes();
-  const { issuer } = useWallet();
+  const { issuer, address } = useWallet();
   const [activeField, setActiveField] = useState<TermField | null>(null);
   const [minting, setMinting] = useState(false);
 
-  const note = getNote(noteId);
+  /*
+   * An id is either a local sample or an extraction the service produced.
+   * Samples are checked first and short-circuit the query, so the demo
+   * documents keep working whether or not the service is running.
+   */
+  const localNote = getNote(noteId);
+  const remote = useExtraction(localNote ? undefined : noteId);
+  const review = useReviewExtraction(localNote ? undefined : noteId);
+
+  const note = useMemo(
+    () =>
+      localNote ??
+      (remote.data ? extractionToNote(remote.data, address) : undefined),
+    [localNote, remote.data, address],
+  );
   const terms = note?.terms;
 
   const gate = useMemo(
@@ -63,11 +79,32 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
     [terms, issuer?.verified],
   );
 
+  if (!localNote && remote.isPending) return <ReviewLoading />;
+  if (!localNote && remote.isError) {
+    return <ReviewUnavailable message={(remote.error as Error).message} />;
+  }
   if (!note || !terms || !gate) return null;
 
+  /**
+   * Corrections go to whichever side owns the terms. The service re-validates
+   * server-side, so a correction that breaks the arithmetic is caught there
+   * rather than only in the browser.
+   */
   const setField = (field: TermField, raw: string, kind: EditorKind) => {
     const value = kind === "number" || kind === "percent" ? Number(raw) : raw;
-    confirmField(noteId, field, value);
+    if (localNote) {
+      confirmField(noteId, field, value);
+    } else {
+      review.mutate({ terms: { [field]: value }, reviewedBy: address ?? null });
+    }
+  };
+
+  const confirmAsExtracted = (field: TermField) => {
+    if (localNote) {
+      confirmField(noteId, field);
+    } else {
+      review.mutate({ confirmed: [field], reviewedBy: address ?? null });
+    }
   };
 
   const handleMint = () => {
@@ -132,7 +169,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                     active={activeField === field}
                     onHover={setActiveField}
                     onChange={(next) => setField(field, next, kind)}
-                    onConfirm={() => confirmField(noteId, field)}
+                    onConfirm={() => confirmAsExtracted(field)}
                   />
                 );
               })}
@@ -145,7 +182,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                   <Button
                     variant="outline"
                     size="xs"
-                    onClick={() => confirmField(noteId, "schedule")}
+                    onClick={() => confirmAsExtracted("schedule")}
                     className="border-review/40 text-review hover:bg-review/10 hover:text-review"
                   >
                     Confirm schedule
@@ -205,6 +242,25 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+function ReviewLoading() {
+  return (
+    <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Loading extraction…
+      </p>
+    </div>
+  );
+}
+
+function ReviewUnavailable({ message }: { message: string }) {
+  return (
+    <div className="mx-auto max-w-[600px] px-6 py-16 text-center">
+      <h1 className="text-xl font-semibold">Extraction unavailable</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
 
 function Stepper({ current }: { current: number }) {
   return (
