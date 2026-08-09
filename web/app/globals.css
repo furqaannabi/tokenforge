@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * TokenForge design tokens.
+ *
+ * Deep navy and slate, rendered dark. Depth comes from tonal layers and 1px
+ * outlines, never shadows.
+ *
+ * There is one palette here, expressed in shadcn's variable names, plus three
+ * semantic accents. Each accent has exactly one job and is never decorative:
+ *
+ *   verified (emerald) — registered issuer, high confidence, settled on-chain
+ *   review   (amber)   — low confidence, awaiting human verification, pending
+ *   impaired (red)     — missed payment, failed validation, reverted mint
+ */
+
+@theme inline {
+  --font-heading: var(--font-inter);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Semantic accents */
+  --color-verified: var(--verified);
+  --color-review: var(--review);
+  --color-impaired: var(--impaired);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Dark-only for now. The palette lives on both selectors so the page renders
+ * correctly from the first paint, while the `dark` class on <html> is what
+ * switches shadcn's own `dark:` variants on.
+ */
+:root,
+.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
+
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+
+  /* A light primary reads as the action on a near-black canvas. */
+  --primary: #f8fafc;
+  --primary-foreground: #020617;
+
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+
+  --destructive: #ef4444;
+  --border: #1e293b;
+  --input: #334155;
+  --ring: #10b981;
+
+  --verified: #10b981;
+  --review: #f59e0b;
+  --impaired: #ef4444;
+
+  /* Soft rounding — enough to take the edge off, not enough to feel casual. */
+  --radius: 0.25rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/* Financial figures must align vertically in columns. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
