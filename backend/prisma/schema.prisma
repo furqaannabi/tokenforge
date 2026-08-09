@@ -1,0 +1,116 @@
+// TokenForge extraction service.
+//
+// The database records how a set of on-chain terms came to exist: which
+// document they were read from, what the model produced, what the deterministic
+// validator said about it, and who signed off. Once a note is minted its terms
+// are immutable on-chain — this is the audit trail explaining them.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A source agreement. One document produces at most one note, which
+/// `NoteFactory` also enforces on-chain by claiming the hash.
+model Document {
+  id        String   @id @default(cuid())
+  filename  String
+  mimeType  String   @default("application/pdf")
+  byteSize  Int
+
+  /// keccak256 of the file bytes, written on-chain for provenance. Unique here
+  /// for the same reason the factory rejects a repeat: one agreement must not
+  /// be sold twice through two tokens.
+  contentHash String @unique
+
+  /// Text layer used for extraction, from the PDF itself or OCR.
+  text String
+
+  uploadedBy  String?
+  createdAt   DateTime     @default(now())
+  extractions Extraction[]
+
+  @@index([createdAt])
+}
+
+enum ExtractionStatus {
+  /// Model call in flight.
+  PENDING
+  /// Extracted, but at least one field is below the confidence threshold.
+  NEEDS_REVIEW
+  /// The validator found an inconsistency. Unmintable regardless of review.
+  INVALID
+  /// Consistent and fully reviewed. Ready for an issuer to approve.
+  VALIDATED
+  /// Minted on-chain.
+  MINTED
+  /// Abandoned by a reviewer.
+  REJECTED
+}
+
+/// One pass of the extraction pipeline over one document.
+///
+/// Kept as a record rather than overwritten, so a re-run can be compared
+/// against what a human previously saw and approved.
+model Extraction {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// Model identifier, so results stay attributable after an upgrade.
+  model     String
+  status    ExtractionStatus @default(PENDING)
+
+  /// ExtractedTerms: every field with its value, confidence, and source quote.
+  terms Json
+
+  /// Validator findings. Empty array means internally consistent.
+  issues Json @default("[]")
+
+  /// Mirrors the validator's verdict, denormalised so the queue can filter on
+  /// it without parsing `issues`.
+  consistent Boolean @default(false)
+
+  /// Field keys still awaiting human confirmation.
+  unreviewedFields String[] @default([])
+
+  /// Cost and latency, for judging whether the pipeline is affordable at scale.
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  note Note?
+
+  @@index([documentId, createdAt])
+  @@index([status])
+}
+
+/// The on-chain result. Written after `NoteFactory.mintNote` confirms.
+model Note {
+  id           String     @id @default(cuid())
+  extractionId String     @unique
+  extraction   Extraction @relation(fields: [extractionId], references: [id])
+
+  chainId      Int
+  noteAddress  String
+  vaultAddress String
+  issuerAddress String
+  txHash       String @unique
+  blockNumber  BigInt
+
+  name   String
+  symbol String
+
+  mintedAt DateTime @default(now())
+
+  @@unique([chainId, noteAddress])
+  @@index([issuerAddress])
+}

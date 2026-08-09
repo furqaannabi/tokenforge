@@ -1,0 +1,35 @@
+# Local Postgres for the extraction service.
+#
+#   docker compose up -d
+#   bunx prisma migrate dev
+#
+# Credentials are deliberately trivial and the port is bound to loopback only —
+# this is a development database holding sample documents, not anything real.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: tokenforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tokenforge
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Postgres 18 expects a single mount at /var/lib/postgresql and keeps its
+      # data in a versioned subdirectory beneath it. Mounting the older
+      # /var/lib/postgresql/data path makes the image refuse to start.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Prisma migrate fails confusingly against a server that is still starting,
+      # so wait until it genuinely accepts connections.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tokenforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres-data:
