@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { NextConfig } from "next";
 
 /**
@@ -30,10 +29,10 @@ const nextConfig: NextConfig = {
   // extraction service. Next has to compile it like first-party code.
   transpilePackages: ["@tokenforge/core"],
   turbopack: {
-    // @tokenforge/core is symlinked from ../packages/core, which sits outside
-    // this app. Turbopack refuses to resolve linked dependencies above its
-    // root, so the root has to be the directory containing both.
-    root: path.join(__dirname, ".."),
+    // No `root` override here. It was needed when web/ was its own pnpm root
+    // and @tokenforge/core sat outside it, but pointing the root above the app
+    // made Vercel resolve build output to web/web/.next and fail. The workspace
+    // at the repository root now gives Turbopack the correct root on its own.
     resolveAlias: Object.fromEntries(
       X402_STUBS.map((specifier) => [specifier, "./lib/x402-stub.cjs"]),
     ),

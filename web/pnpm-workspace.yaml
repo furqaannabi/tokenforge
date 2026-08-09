@@ -1,7 +1,0 @@
-allowBuilds:
-  # Its postinstall only warns about version drift between @reown packages.
-  # Audited: no network or subprocess calls, so there is nothing to gain by
-  # running it and no reason to grant script execution.
-  '@reown/appkit': false
-  sharp: false
-  unrs-resolver: false

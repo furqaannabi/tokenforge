@@ -1,0 +1,11 @@
+{
+  "name": "tokenforge",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "description": "Workspace root. The Next.js app and the shared core package are pnpm workspace members; contracts/ is Foundry and backend/ runs on Bun with its own lockfile.",
+  "scripts": {
+    "build": "pnpm --filter web build",
+    "dev": "pnpm --filter web dev",
+    "typecheck": "pnpm -r --filter ./web --filter ./packages/* exec tsc --noEmit"
+  }
+}

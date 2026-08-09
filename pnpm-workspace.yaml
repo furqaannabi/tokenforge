@@ -1,0 +1,21 @@
+# pnpm workspace for the Next.js app and the shared package it consumes.
+#
+# `backend` is deliberately absent: it runs on Bun with its own lockfile, and
+# reaches @tokenforge/core through a file: dependency. Only the packages pnpm
+# installs belong here.
+#
+# The workspace exists so Next resolves @tokenforge/core as an ordinary
+# workspace dependency. Without it, web/ was its own pnpm root and the shared
+# package sat outside — which needed a link: dependency and a turbopack.root
+# override, and that override broke Vercel's build output resolution.
+packages:
+  - web
+  - packages/*
+
+allowBuilds:
+  # @reown/appkit's postinstall only warns about version drift between @reown
+  # packages. Audited: no network or subprocess calls, so there is nothing to
+  # gain by running it and no reason to grant script execution.
+  '@reown/appkit': false
+  sharp: false
+  unrs-resolver: false
