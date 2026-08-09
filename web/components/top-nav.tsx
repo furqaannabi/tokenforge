@@ -26,22 +26,31 @@ export function TopNav() {
   return (
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 sm:gap-6 sm:px-6">
-        <Link href="/" className="flex items-center gap-2.5">
+        {/*
+          Everything in this bar is shrink-0. Without it the brand, the links
+          and the connect button add up to more than a phone's width, and flex
+          resolves that by compressing the text until the wordmark and the
+          links run into each other. The wordmark is the one item that can go:
+          the logo carries the brand on its own at that size.
+        */}
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <Image
             src="/logo.png"
-            alt=""
+            alt="TokenForge"
             width={28}
             height={28}
-            className="rounded-md"
+            className="shrink-0 rounded-md"
             priority
           />
-          <span className="text-base font-bold tracking-tight">TokenForge</span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground sm:inline">
+          <span className="hidden text-base font-bold tracking-tight sm:inline">
+            TokenForge
+          </span>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground lg:inline">
             Institutional RWA
           </span>
         </Link>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex shrink-0 items-center gap-1">
           {LINKS.map((link) => {
             const active =
               link.href === "/"
@@ -64,7 +73,7 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           {wrongNetwork ? (
             <Stamp tone="review">
               <TriangleAlert />
