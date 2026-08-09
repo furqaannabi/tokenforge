@@ -32,9 +32,9 @@ export default function IssuerDashboard() {
   const pending = notes.filter((note) => note.status === "review");
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-8">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Issue a note</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Issue a note</h1>
         <p className="mt-1 text-muted-foreground">
           Upload a loan agreement, invoice, or bond term sheet. Terms are
           extracted, validated, and reviewed before anything is minted.

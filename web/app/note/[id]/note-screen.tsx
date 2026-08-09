@@ -65,7 +65,7 @@ export function NoteScreen({ noteId }: { noteId: string }) {
   };
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-8">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
       <Link
         href="/"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -75,11 +75,11 @@ export function NoteScreen({ noteId }: { noteId: string }) {
 
       <header className="mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight">{note.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{note.name}</h1>
           <Stamp tone="neutral">{note.symbol}</Stamp>
           <StatusBadge status={impaired ? "impaired" : note.status} />
         </div>
-        <p className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground">
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           Issued by {note.issuer.name}
           {note.issuer.verified ? (
             <BadgeCheck className="size-4 text-verified" />

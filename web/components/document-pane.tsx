@@ -18,16 +18,23 @@ export function DocumentPane({
   terms,
   activeField,
   onFieldHover,
+  className,
 }: {
   document: SourceDocument;
   terms: ExtractedTerms;
   activeField: TermField | null;
   onFieldHover: (field: TermField | null) => void;
+  className?: string;
 }) {
   const highlights = highlightsFor(terms);
 
   return (
-    <div className="flex min-h-0 flex-col border-r border-border">
+    <div
+      className={cn(
+        "min-h-0 flex-col border-border lg:border-r",
+        className,
+      )}
+    >
       <div className="flex items-center gap-2 border-b border-border bg-card px-5 py-3">
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <span className="truncate text-sm font-medium">

@@ -56,6 +56,8 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const { issuer, address } = useWallet();
   const [activeField, setActiveField] = useState<TermField | null>(null);
   const [minting, setMinting] = useState(false);
+  // Below lg the two panes cannot sit side by side, so one shows at a time.
+  const [pane, setPane] = useState<"document" | "terms">("terms");
 
   /*
    * An id is either a local sample or an extraction the service produced.
@@ -122,8 +124,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
     !terms.schedule.editedByHuman;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
       <Stepper current={1} />
+      <PaneToggle pane={pane} onChange={setPane} />
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-2">
         <DocumentPane
@@ -131,10 +134,17 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
           terms={terms}
           activeField={activeField}
           onFieldHover={setActiveField}
+          className={cn(pane === "document" ? "flex" : "hidden", "lg:flex")}
         />
 
-        <div className="flex min-h-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+        <div
+          className={cn(
+            "min-h-0 flex-col",
+            pane === "terms" ? "flex" : "hidden",
+            "lg:flex",
+          )}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5 sm:py-6">
             <header className="mb-4">
               <h1 className="text-xl font-semibold">Extracted terms</h1>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -243,9 +253,37 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 
 // ---------------------------------------------------------------------------
 
+/** Mobile-only switch between the source document and the extracted terms. */
+function PaneToggle({
+  pane,
+  onChange,
+}: {
+  pane: "document" | "terms";
+  onChange: (next: "document" | "terms") => void;
+}) {
+  return (
+    <div className="flex border-b border-border bg-card lg:hidden">
+      {(["document", "terms"] as const).map((option) => (
+        <button
+          key={option}
+          onClick={() => onChange(option)}
+          className={cn(
+            "flex-1 px-4 py-2.5 font-mono text-xs uppercase tracking-[0.05em] transition-colors",
+            pane === option
+              ? "border-b-2 border-verified text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          {option === "document" ? "Document" : "Extracted terms"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ReviewLoading() {
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+    <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center">
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" /> Loading extraction…
       </p>
@@ -264,12 +302,12 @@ function ReviewUnavailable({ message }: { message: string }) {
 
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="flex items-center gap-3 border-b border-border bg-card px-6 py-3">
+    <ol className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
       {STEPS.map((step, index) => {
         const done = index < current;
         const active = index === current;
         return (
-          <li key={step} className="flex items-center gap-3">
+          <li key={step} className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span
               className={cn(
                 "flex size-5 items-center justify-center rounded-full font-mono text-[10px] font-semibold",
@@ -283,13 +321,15 @@ function Stepper({ current }: { current: number }) {
             <span
               className={cn(
                 "font-mono text-xs uppercase tracking-[0.05em]",
-                active ? "text-foreground" : "text-muted-foreground",
+                // Only the current step is named on a narrow screen; the rest
+                // are numbered dots, which is enough to show progress.
+                active ? "text-foreground" : "hidden text-muted-foreground sm:inline",
               )}
             >
               {step}
             </span>
             {index < STEPS.length - 1 ? (
-              <span className="h-px w-8 bg-border sm:w-16" />
+              <span className="h-px w-4 bg-border sm:w-12 lg:w-16" />
             ) : null}
           </li>
         );
@@ -348,7 +388,7 @@ function MintFooter({
   issuerVerified: boolean;
 }) {
   return (
-    <div className="border-t border-border bg-card px-5 py-4">
+    <div className="border-t border-border bg-card px-4 py-3 sm:px-5 sm:py-4">
       {gate.canMint ? null : (
         <ul className="mb-3 space-y-1.5">
           {gate.blockers.map((blocker, index) => (

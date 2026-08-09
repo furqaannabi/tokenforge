@@ -25,7 +25,7 @@ export function TopNav() {
 
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-8 px-6">
+      <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <Image
             src="/logo.png"
@@ -52,7 +52,7 @@ export function TopNav() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "rounded px-3 py-1.5 text-sm transition-colors",
+                  "rounded px-2 py-1.5 text-sm transition-colors sm:px-3",
                   active
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -64,21 +64,22 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           {wrongNetwork ? (
             <Stamp tone="review">
-              <TriangleAlert /> Wrong network
+              <TriangleAlert />
+              <span className="hidden sm:inline">Wrong network</span>
             </Stamp>
           ) : null}
 
           {connected && issuer ? (
             <>
               {issuer.verified ? (
-                <Stamp tone="verified">
+                <Stamp tone="verified" className="hidden sm:inline-flex">
                   <BadgeCheck /> Verified Issuer
                 </Stamp>
               ) : (
-                <Stamp tone="impaired">
+                <Stamp tone="impaired" className="hidden sm:inline-flex">
                   <ShieldOff /> Unregistered
                 </Stamp>
               )}
@@ -107,7 +108,11 @@ function AppKitConnect({ connecting }: { connecting: boolean }) {
   const { open } = useAppKit();
   return (
     <Button size="sm" onClick={() => open()} disabled={connecting}>
-      <Wallet /> {connecting ? "Connecting…" : "Connect wallet"}
+      <Wallet />
+      <span className="hidden sm:inline">
+        {connecting ? "Connecting…" : "Connect wallet"}
+      </span>
+      <span className="sm:hidden">{connecting ? "…" : "Connect"}</span>
     </Button>
   );
 }
@@ -132,7 +137,11 @@ function InjectedConnect({ connecting }: { connecting: boolean }) {
           : "No browser wallet detected. Set NEXT_PUBLIC_REOWN_PROJECT_ID to enable WalletConnect."
       }
     >
-      <Wallet /> {connecting ? "Connecting…" : "Connect wallet"}
+      <Wallet />
+      <span className="hidden sm:inline">
+        {connecting ? "Connecting…" : "Connect wallet"}
+      </span>
+      <span className="sm:hidden">{connecting ? "…" : "Connect"}</span>
     </Button>
   );
 }
