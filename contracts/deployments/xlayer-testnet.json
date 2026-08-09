@@ -1,0 +1,28 @@
+{
+  "network": "X Layer Testnet",
+  "chainId": 1952,
+  "rpcUrl": "https://xlayertestrpc.okx.com",
+  "explorer": "https://www.oklink.com/xlayer-test",
+  "deployedAtBlock": 37806496,
+  "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+  "contracts": {
+    "IssuerRegistry": {
+      "address": "0x57873ccC430f7709ed77dA7da1EC521CED877F59",
+      "txHash": "0x7c80bb2a38a76a344cbed1207734b2a7712ed2918d87a6ad300bc5f379a33fc0",
+      "constructorArgs": {
+        "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
+      }
+    },
+    "NoteFactory": {
+      "address": "0x4E19A6C2B37c799E6BC8eb682889f33C6d97760A",
+      "txHash": "0xff525fcab613947fb29b12fc03974766a0e023ebd5cdccee7a7e16c3e8dbdba0",
+      "constructorArgs": {
+        "registry": "0x57873ccC430f7709ed77dA7da1EC521CED877F59"
+      }
+    }
+  },
+  "notes": [
+    "RWANote and RepaymentVault are not listed here: one pair is deployed per agreement, by NoteFactory.mintNote. Read them from the factory's NoteMinted events or its deployments() view.",
+    "Chain 1952 was confirmed against the RPC (eth_chainId returns 0x7a0). The 195 figure that circulates for X Layer testnet is wrong."
+  ]
+}

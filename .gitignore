@@ -9,6 +9,9 @@ node_modules/
 .env
 .env.*
 !.env.example
+*.password
+.keystore-password
+keystore/
 
 # Build output
 dist/

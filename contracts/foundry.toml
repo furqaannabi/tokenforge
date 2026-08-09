@@ -25,5 +25,18 @@ runs = 256
 xlayer_testnet = "${XLAYER_TESTNET_RPC_URL}"
 xlayer = "${XLAYER_RPC_URL}"
 
-[etherscan]
-xlayer_testnet = { key = "${OKLINK_API_KEY}", chain = 1952, url = "https://www.oklink.com/api/v5/explorer/xlayer_test/api" }
+# OKLink is not Etherscan-compatible, so verification goes through its own
+# plugin endpoint rather than an [etherscan] entry. The trailing path segment is
+# OKLink's chainShortName: XLAYER_TESTNET for 1952, XLAYER for 196.
+#
+#   forge verify-contract <address> src/NoteFactory.sol:NoteFactory \
+#     --verifier oklink \
+#     --verifier-url https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin/XLAYER_TESTNET \
+#     --watch
+#
+# X Layer's own guide passes no API key for the oklink verifier — the key it
+# mentions is for Etherscan verification only. If a request is rejected as
+# unauthorised, add `--etherscan-api-key $OKLINK_API_KEY`.
+#
+# OKLink needs about a minute after deployment before it will accept a
+# verification request for a new address, so pair this with --watch.
