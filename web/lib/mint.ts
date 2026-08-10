@@ -1,6 +1,7 @@
 "use client";
 
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useState } from "react";
+import { usePublicClient, useWriteContract } from "wagmi";
 import { decodeEventLog } from "viem";
 import { CHAIN_ID, addresses, noteFactoryAbi } from "./contracts";
 import { buildMintArgs } from "./contracts/mint";
@@ -24,35 +25,25 @@ export interface MintResult {
 }
 
 export function useMintNote() {
-  const { writeContractAsync, data: hash, isPending, error, reset } =
-    useWriteContract();
-  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
 
-  /**
-   * The note and vault addresses are not knowable before the transaction —
-   * the factory creates both — so they are read back from the `NoteMinted`
-   * event once it confirms.
-   */
-  const minted = extractMinted(receipt.data?.logs);
+  const [phase, setPhase] = useState<"idle" | "signing" | "confirming">("idle");
 
   return {
-    hash,
-    error,
-    reset,
-    isSigning: isPending,
-    isConfirming: receipt.isLoading,
-    isConfirmed: receipt.isSuccess,
-    result:
-      minted && receipt.data
-        ? {
-            hash: receipt.data.transactionHash,
-            note: minted.note,
-            vault: minted.vault,
-            blockNumber: receipt.data.blockNumber,
-          }
-        : undefined,
+    isSigning: phase === "signing",
+    isConfirming: phase === "confirming",
 
-    mint: (input: {
+    /**
+     * Signs, waits, and returns what the chain created.
+     *
+     * Deliberately resolves on confirmation rather than on broadcast. The note
+     * and vault addresses are not knowable beforehand — the factory deploys
+     * both — so they are read out of the `NoteMinted` event. An earlier version
+     * returned the hash immediately, which meant the caller had nothing to
+     * record and the mint never reached the service at all.
+     */
+    mint: async (input: {
       terms: ExtractedTerms;
       name: string;
       symbol: string;
@@ -60,29 +51,58 @@ export function useMintNote() {
       currency: Currency;
       documentHash: `0x${string}`;
       supplyTokens: number;
-    }) => {
+    }): Promise<MintResult> => {
       if (!addresses.noteFactory || !addresses.usdg) {
         throw new Error(
           "Contract addresses are not configured. See contracts/deployments/xlayer-testnet.json.",
         );
       }
+      if (!publicClient) {
+        throw new Error(`No RPC client for chain ${CHAIN_ID}.`);
+      }
 
       const args = buildMintArgs({ ...input, currencyAddress: addresses.usdg });
 
-      return writeContractAsync({
-        abi: noteFactoryAbi,
-        address: addresses.noteFactory,
-        functionName: "mintNote",
-        args: [args],
-        chainId: CHAIN_ID,
-      });
+      try {
+        setPhase("signing");
+        const hash = await writeContractAsync({
+          abi: noteFactoryAbi,
+          address: addresses.noteFactory,
+          functionName: "mintNote",
+          args: [args],
+          chainId: CHAIN_ID,
+        });
+
+        setPhase("confirming");
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+        if (receipt.status !== "success") {
+          throw new Error("The mint transaction reverted.");
+        }
+
+        const minted = findNoteMinted(receipt.logs);
+        if (!minted) {
+          throw new Error(
+            "The transaction confirmed but emitted no NoteMinted event.",
+          );
+        }
+
+        return {
+          hash,
+          note: minted.note,
+          vault: minted.vault,
+          blockNumber: receipt.blockNumber,
+        };
+      } finally {
+        setPhase("idle");
+      }
     },
   };
 }
 
-function extractMinted(logs?: readonly { data: `0x${string}`; topics: readonly `0x${string}`[] }[]) {
-  if (!logs) return undefined;
-
+function findNoteMinted(
+  logs: readonly { data: `0x${string}`; topics: readonly `0x${string}`[] }[],
+) {
   for (const log of logs) {
     try {
       const decoded = decodeEventLog({
@@ -98,8 +118,8 @@ function extractMinted(logs?: readonly { data: `0x${string}`; topics: readonly `
         return { note: args.note, vault: args.vault };
       }
     } catch {
-      // Logs from the note and vault deployments sit in the same receipt and
-      // do not decode against this ABI. Skipping them is expected.
+      // The note and vault deployments log into the same receipt and do not
+      // decode against this ABI. Skipping them is expected.
     }
   }
   return undefined;

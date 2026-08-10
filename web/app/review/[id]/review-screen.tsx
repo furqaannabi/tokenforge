@@ -30,11 +30,11 @@ import {
 } from "@/lib/queries";
 import { useMintNote } from "@/lib/mint";
 import { SUPPLY_TOKENS, localNoteId } from "@/lib/issuance";
+import { CHAIN_ID } from "@/lib/contracts";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
 import { mintGate, LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
-import { FIELD_LABELS } from "@tokenforge/core";
 import { money, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -139,7 +139,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const handleMint = async () => {
     setMintError(null);
     try {
-      const hash = await minting.mint({
+      const result = await minting.mint({
         terms,
         name: note.name,
         symbol: note.symbol,
@@ -149,10 +149,15 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         supplyTokens: SUPPLY_TOKENS,
       });
 
-      // Local samples have no server-side record to update.
-      if (!localNote) {
-        await recordMint.mutateAsync({ hash });
-      }
+      // Only now that the chain has confirmed, and the factory has told us
+      // which contracts it created.
+      await recordMint.mutateAsync({
+        ...result,
+        issuer: address!,
+        chainId: CHAIN_ID,
+        name: note.name,
+        symbol: note.symbol,
+      });
 
       mint(noteId);
       router.push(`/note/${noteId}`);

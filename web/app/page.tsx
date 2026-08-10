@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, FileText, ShieldOff, Upload, Wallet } from "lucide-react";
+import { BadgeCheck, ShieldOff, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { X_LAYER_TESTNET } from "@/lib/wagmi";
 import { useNotes } from "@/lib/notes";

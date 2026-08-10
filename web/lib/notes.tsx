@@ -11,7 +11,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { SEED_NOTES } from "./mock-data";
-import type { ExtractedTerms, Note, TermField } from "./types";
+import type { Note, TermField } from "./types";
 
 interface NotesState {
   notes: Note[];

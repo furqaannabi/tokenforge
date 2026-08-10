@@ -40,6 +40,23 @@ import {
  */
 const asJson = (value: unknown) => value as Prisma.InputJsonValue;
 
+/**
+ * Makes a Prisma row safe to serialise.
+ *
+ * `Note.blockNumber` is a BigInt, and `JSON.stringify` refuses to encode one —
+ * so any response carrying a note threw, which meant recording a mint silently
+ * broke every later read of that extraction. Converting to a string keeps the
+ * value exact; a block number is well past what a JS number holds precisely,
+ * which is why it is a BigInt in the first place.
+ */
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item) =>
+      typeof item === "bigint" ? item.toString() : item,
+    ),
+  ) as T;
+}
+
 const app = new Hono();
 
 app.use("*", logger());
@@ -352,7 +369,7 @@ app.get("/extractions/:id", async (c) => {
     include: { document: true, note: true },
   });
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
-  return c.json({ extraction });
+  return c.json({ extraction: jsonSafe(extraction) });
 });
 
 // ---------------------------------------------------------------------------
@@ -520,7 +537,7 @@ app.post("/extractions/:id/mint", async (c) => {
     data: { status: "MINTED" },
   });
 
-  return c.json({ note: { ...note, blockNumber: note.blockNumber.toString() } }, 201);
+  return c.json({ note: jsonSafe(note) }, 201);
 });
 
 // ---------------------------------------------------------------------------

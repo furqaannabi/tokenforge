@@ -245,11 +245,29 @@ export function useRecordMintedNote(isLocalSample: boolean, extractionId: string
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { hash: string }) => {
+    mutationFn: async (input: {
+      hash: string;
+      note: string;
+      vault: string;
+      issuer: string;
+      blockNumber: bigint;
+      chainId: number;
+      name: string;
+      symbol: string;
+    }) => {
+      // Local samples have no server-side record to attach a mint to.
       if (isLocalSample) return null;
-      // The receipt is fetched by the mint hook; this only forwards what the
-      // service needs to index it.
-      return input.hash;
+
+      return api.recordMint(extractionId, {
+        chainId: input.chainId,
+        noteAddress: input.note,
+        vaultAddress: input.vault,
+        issuerAddress: input.issuer,
+        txHash: input.hash,
+        blockNumber: input.blockNumber.toString(),
+        name: input.name,
+        symbol: input.symbol,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

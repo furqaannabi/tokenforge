@@ -41,6 +41,15 @@ export function NoteScreen({ noteId }: { noteId: string }) {
   const { issuer } = useWallet();
   const [settling, setSettling] = useState<number | null>(null);
 
+  /*
+   * Every hook runs before the first early return. A minted note is looked up
+   * on-chain, and the status it returns is what decides which branch below
+   * renders — so calling this after a return changed the hook count between
+   * renders the moment a note went from review to live, which is precisely
+   * when someone is looking at this page.
+   */
+  const onChain = useNoteAddresses(noteId);
+
   const note = getNote(noteId);
   if (!note) return null;
 
@@ -56,12 +65,6 @@ export function NoteScreen({ noteId }: { noteId: string }) {
   );
   const isIssuer = issuer?.address === note.issuer.address;
 
-  /*
-   * A minted note reads its live state from the chain. The local record below
-   * is what the app knew at review time and cannot show amortization, so the
-   * on-chain panel takes precedence wherever both could be displayed.
-   */
-  const onChain = useNoteAddresses(noteId);
   const currency = note.currency;
 
   const handleSettle = (periodIndex: number) => {
