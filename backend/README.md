@@ -1,8 +1,8 @@
 # TokenForge extraction service
 
 A legal document in, validated economic terms out. Hono on Bun, Prisma over
-Postgres, Gemini for structured extraction through its OpenAI-compatible
-endpoint, and Cloudflare R2 for the documents themselves.
+Postgres, Gemini for reading documents, and Cloudflare R2 for the documents
+themselves.
 
 ## Running it
 
@@ -23,7 +23,7 @@ than refusing to start.
 
 ```text
 PDF
-    ↓  parse        text layer via pdf.js; a scan is refused, not guessed at
+    ↓  parse        text layer via pdf.js, or Gemini transcribes a scan
 document text
     ↓  extract      two model passes: read, then audit its own output
 terms + confidence
@@ -89,11 +89,10 @@ signs; `/mint` indexes what the chain already accepted.
 
 ## Known gaps
 
-**Scanned PDFs need OCR.** The text layer is read out of an uploaded PDF, but a
-photographed or faxed agreement has no text layer at all. That is reported as a
-422 naming the problem rather than passed on as an empty document — which would
-otherwise reach the model and come back as an extraction full of confidently
-absent fields.
+**Scans go through the model twice.** A photographed agreement has no text
+layer, so Gemini reads the pages as images and transcribes them, and only then
+does extraction run. That is two calls where a digital PDF needs one, and the
+transcription is trusted without a second reader checking it.
 
 **Large files pass through the service.** Multipart keeps the bytes off a base64
 round trip, but they still land in this process's memory. Fine at agreement

@@ -2,9 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { FileText, Loader2, TriangleAlert, Upload } from "lucide-react";
-import { FieldLabel, Stamp, StatusBadge } from "@/components/primitives";
+import { Loader2, TriangleAlert, Upload } from "lucide-react";
+import { Stamp } from "@/components/primitives";
 import { FIELD_LABELS, LOW_CONFIDENCE_THRESHOLD, type TermField } from "@tokenforge/core";
 import { confidencePct } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,8 +18,6 @@ import {
 import { ApiError } from "@/lib/api";
 import { useServiceHealth, useUploadAndExtract } from "@/lib/queries";
 import { useWallet } from "@/lib/wallet";
-import { money } from "@/lib/format";
-import type { Note } from "@/lib/types";
 
 /**
  * Live progress while the model works.
@@ -71,7 +68,7 @@ function ExtractionProgress({
  * this reads text files directly and asks for a paste when handed a PDF —
  * stating the limitation rather than silently extracting nothing.
  */
-export function UploadPanel({ samples }: { samples: Note[] }) {
+export function UploadPanel() {
   const router = useRouter();
   const { address } = useWallet();
   const health = useServiceHealth();
@@ -213,30 +210,6 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
           )}
         </Button>
 
-        <div>
-          <FieldLabel>Sample documents</FieldLabel>
-          <ul className="mt-2 space-y-2">
-            {samples.map((note) => (
-              <li key={note.id}>
-                <Link
-                  href={`/review/${note.id}`}
-                  className="flex items-center gap-3 rounded border border-border bg-background px-3 py-2.5 transition-colors hover:border-input"
-                >
-                  <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {note.document.filename}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {note.issuer.name} · {money(note.terms.principal.value)}
-                    </span>
-                  </span>
-                  <StatusBadge status={note.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
       </CardContent>
     </Card>
   );

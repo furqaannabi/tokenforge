@@ -241,7 +241,7 @@ export function useReviewExtraction(extractionId: string | undefined) {
  * them: the factory creates both, so nothing off-chain knows them until the
  * transaction lands.
  */
-export function useRecordMintedNote(isLocalSample: boolean, extractionId: string) {
+export function useRecordMintedNote(extractionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -255,9 +255,6 @@ export function useRecordMintedNote(isLocalSample: boolean, extractionId: string
       name: string;
       symbol: string;
     }) => {
-      // Local samples have no server-side record to attach a mint to.
-      if (isLocalSample) return null;
-
       return api.recordMint(extractionId, {
         chainId: input.chainId,
         noteAddress: input.note,

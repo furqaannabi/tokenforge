@@ -10,6 +10,7 @@ import { prisma } from "./db";
 import { ConfigurationError } from "./errors";
 import { extractTerms } from "./extract";
 import { NoTextLayerError, extractPdfText } from "./pdf";
+import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import {
   documentKey,
@@ -155,9 +156,11 @@ async function resolveText(
     return parsed.text;
   } catch (error) {
     if (error instanceof NoTextLayerError) {
-      // A scan is a legitimate document, not a malformed request — say what is
-      // missing rather than failing as though the upload were broken.
-      throw new HTTPException(422, { message: error.message });
+      // A scan has no text layer to read, so the model reads the pages as
+      // images and writes one. Everything downstream — the validator, the
+      // review pane, quote matching — then works exactly as it does for a
+      // digital PDF, because a transcription is a text layer.
+      return transcribePdf(fileBytes);
     }
     throw error;
   }

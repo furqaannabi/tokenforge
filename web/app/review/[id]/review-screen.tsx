@@ -22,14 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useNotes } from "@/lib/notes";
 import {
   useExtraction,
   useRecordMintedNote,
   useReviewExtraction,
 } from "@/lib/queries";
 import { useMintNote } from "@/lib/mint";
-import { SUPPLY_TOKENS, localNoteId } from "@/lib/issuance";
+import { SUPPLY_TOKENS } from "@/lib/issuance";
 import { CHAIN_ID } from "@/lib/contracts";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
@@ -42,6 +41,7 @@ import {
   DAY_COUNTS,
   PAYMENT_FREQUENCIES,
   type Currency,
+  type PaymentPeriod,
   type TermField,
 } from "@/lib/types";
 
@@ -65,31 +65,22 @@ const STEPS = ["Upload", "Review Terms", "Approve", "Mint"] as const;
 
 export function ReviewScreen({ noteId }: { noteId: string }) {
   const router = useRouter();
-  const { getNote, confirmField, mint } = useNotes();
   const { issuer, address } = useWallet();
   const [activeField, setActiveField] = useState<TermField | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
   const minting = useMintNote();
-  const recordMint = useRecordMintedNote(localNoteId(noteId), noteId);
+  const recordMint = useRecordMintedNote(noteId);
   // Below lg the two panes cannot sit side by side, so one shows at a time.
   const [pane, setPane] = useState<"document" | "terms">("terms");
   // An issuance decision, not an extraction: no document states it.
   const [currency, setCurrency] = useState<Currency>("USDG");
 
-  /*
-   * An id is either a local sample or an extraction the service produced.
-   * Samples are checked first and short-circuit the query, so the demo
-   * documents keep working whether or not the service is running.
-   */
-  const localNote = getNote(noteId);
-  const remote = useExtraction(localNote ? undefined : noteId);
-  const review = useReviewExtraction(localNote ? undefined : noteId);
+  const remote = useExtraction(noteId);
+  const review = useReviewExtraction(noteId);
 
   const note = useMemo(
-    () =>
-      localNote ??
-      (remote.data ? extractionToNote(remote.data, address) : undefined),
-    [localNote, remote.data, address],
+    () => (remote.data ? extractionToNote(remote.data, address) : undefined),
+    [remote.data, address],
   );
   const terms = note?.terms;
 
@@ -98,33 +89,23 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
     [terms, issuer?.verified],
   );
 
-  if (!localNote && remote.isPending) return <ReviewLoading />;
-  if (!localNote && remote.isError) {
+  if (remote.isPending) return <ReviewLoading />;
+  if (remote.isError) {
     return <ReviewUnavailable message={(remote.error as Error).message} />;
   }
   if (!note || !terms || !gate) return null;
 
   /**
-   * Corrections go to whichever side owns the terms. The service re-validates
-   * server-side, so a correction that breaks the arithmetic is caught there
-   * rather than only in the browser.
+   * Corrections go to the service, which re-validates. A change that breaks
+   * the arithmetic is caught there rather than only in the browser.
    */
   const setField = (field: TermField, raw: string, kind: EditorKind) => {
     const value = kind === "number" || kind === "percent" ? Number(raw) : raw;
-    if (localNote) {
-      confirmField(noteId, field, value);
-    } else {
-      review.mutate({ terms: { [field]: value }, reviewedBy: address ?? null });
-    }
+    review.mutate({ terms: { [field]: value }, reviewedBy: address ?? null });
   };
 
-  const confirmAsExtracted = (field: TermField) => {
-    if (localNote) {
-      confirmField(noteId, field);
-    } else {
-      review.mutate({ confirmed: [field], reviewedBy: address ?? null });
-    }
-  };
+  const confirmAsExtracted = (field: TermField) =>
+    review.mutate({ confirmed: [field], reviewedBy: address ?? null });
 
   /**
    * Signs the mint with the connected wallet.
@@ -159,7 +140,6 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         symbol: note.symbol,
       });
 
-      mint(noteId);
       router.push(`/note/${noteId}`);
     } catch (cause) {
       setMintError((cause as Error).message);
@@ -263,7 +243,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schedule.map((period) => (
+              {schedule.map((period: PaymentPeriod) => (
                       <TableRow key={period.index}>
                         <TableCell className="tnum font-mono text-xs text-muted-foreground">
                           {period.index}

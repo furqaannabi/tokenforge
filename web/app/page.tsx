@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { BadgeCheck, ShieldOff, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { X_LAYER_TESTNET } from "@/lib/wagmi";
-import { useNotes } from "@/lib/notes";
-import { money, percent, monthYear, truncateHex } from "@/lib/format";
-import { FieldLabel, StatusBadge } from "@/components/primitives";
+import { useDocuments } from "@/lib/queries";
+import { truncateHex } from "@/lib/format";
+import { FieldLabel } from "@/components/primitives";
 import { UploadPanel } from "@/components/upload-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -27,9 +26,7 @@ import {
 
 export default function IssuerDashboard() {
   const { issuer, connected } = useWallet();
-  const { notes } = useNotes();
-
-  const pending = notes.filter((note) => note.status === "review");
+  const documents = useDocuments();
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
@@ -45,7 +42,7 @@ export default function IssuerDashboard() {
         {!connected ? (
           <NotConnected />
         ) : issuer?.verified ? (
-          <UploadPanel samples={pending} />
+          <UploadPanel />
         ) : (
           <IssuanceBlocked address={issuer?.address} />
         )}
@@ -53,54 +50,51 @@ export default function IssuerDashboard() {
       </div>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Your notes</h2>
+        <h2 className="mb-3 text-lg font-semibold">Your documents</h2>
         <Card className="py-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Principal</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead>Maturity</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Contract</TableHead>
+                <TableHead>Document</TableHead>
+                <TableHead className="text-right">Size</TableHead>
+                <TableHead>Uploaded</TableHead>
+                <TableHead className="text-right">Content hash</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {notes.map((note) => (
-                <TableRow key={note.id}>
-                  <TableCell>
-                    <Link
-                      href={
-                        note.status === "review"
-                          ? `/review/${note.id}`
-                          : `/note/${note.id}`
-                      }
-                      className="font-medium hover:text-verified"
-                    >
-                      {note.name}
-                    </Link>
-                    <span className="ml-2 font-mono text-xs text-muted-foreground">
-                      {note.symbol}
-                    </span>
-                  </TableCell>
-                  <TableCell className="tnum text-right">
-                    {money(note.terms.principal.value)}
-                  </TableCell>
-                  <TableCell className="tnum text-right">
-                    {percent(note.terms.interestRatePct.value)}
-                  </TableCell>
-                  <TableCell className="tnum">
-                    {monthYear(note.terms.maturityDate.value)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={note.status} />
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                    {note.address ? truncateHex(note.address, 6, 4) : "—"}
+              {documents.data?.length ? (
+                documents.data.map((document) => (
+                  <TableRow key={document.id}>
+                    <TableCell className="font-medium">
+                      {document.filename}
+                    </TableCell>
+                    <TableCell className="tnum text-right">
+                      {(document.byteSize / 1024).toFixed(0)} KB
+                    </TableCell>
+                    <TableCell className="tnum">
+                      {new Date(document.createdAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                      {truncateHex(document.contentHash, 8, 6)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="py-8 text-center text-sm text-muted-foreground"
+                  >
+                    {documents.isError
+                      ? "The extraction service is unreachable."
+                      : "Nothing uploaded yet."}
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </Card>

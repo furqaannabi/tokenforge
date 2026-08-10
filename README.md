@@ -83,6 +83,7 @@ The model extracted the *stated* rate rather than quietly reconciling it, and th
 packages/core   Extraction schema and deterministic validator — one copy,
                 imported by both the web app and the service
 backend         Hono on Bun · Prisma over Postgres · Gemini · R2
+                PDFs parsed on upload; scans transcribed by the model
 web             Next.js · wagmi/viem · Reown AppKit
 contracts       Foundry · deployed and verified on X Layer testnet
 ```
@@ -149,7 +150,6 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 Stated plainly, because a demo can hide these:
 
-- **No OCR.** A PDF's text layer is read on upload, but a scanned agreement has none. That is refused with an explanation rather than guessed at.
 - **Nothing has been signed from a browser.** Mint, repay, and claim are all wired to the contracts and signed by the connected wallet, and the whole lifecycle has been exercised on testnet through the deployed factory — but by a scripted signer, not a browser wallet.
 - **No note exists on-chain.** The mint → deposit → claim lifecycle has only ever run in Foundry, not on testnet.
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
