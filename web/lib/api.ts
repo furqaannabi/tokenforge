@@ -231,7 +231,8 @@ export const api = {
   uploadDocument: (input: {
     file?: File | null;
     filename: string;
-    text: string;
+    /** Omit for a PDF: the service reads the text layer out of it. */
+    text?: string;
     uploadedBy?: string | null;
   }) => {
     if (!input.file) {
@@ -241,7 +242,7 @@ export const api = {
           method: "POST",
           body: JSON.stringify({
             filename: input.filename,
-            text: input.text,
+            text: input.text ?? "",
             uploadedBy: input.uploadedBy ?? null,
           }),
         },
@@ -251,7 +252,7 @@ export const api = {
     const form = new FormData();
     form.set("file", input.file);
     form.set("filename", input.filename);
-    form.set("text", input.text);
+    if (input.text) form.set("text", input.text);
     if (input.uploadedBy) form.set("uploadedBy", input.uploadedBy);
 
     return request<{ document: ApiDocument; alreadyKnown: boolean }>(

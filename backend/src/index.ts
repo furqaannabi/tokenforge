@@ -9,6 +9,7 @@ import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
 import { ConfigurationError } from "./errors";
 import { extractTerms } from "./extract";
+import { NoTextLayerError, extractPdfText } from "./pdf";
 import { issuers } from "./issuers";
 import {
   documentKey,
@@ -61,9 +62,9 @@ app.route("/issuers", issuers);
 
 const uploadSchema = z.object({
   filename: z.string().min(1),
-  /// Text layer used for extraction. Until PDF parsing exists, the caller
-  /// supplies it.
-  text: z.string().min(1),
+  /// Text layer used for extraction. Read from the PDF when one is uploaded,
+  /// so a caller only supplies this for formats we cannot parse.
+  text: z.string().default(""),
   mimeType: z.string().default("application/pdf"),
   uploadedBy: z.string().nullable().default(null),
 });
@@ -108,6 +109,44 @@ async function readUpload(c: Context): Promise<{
 }
 
 /**
+ * The text a model will read.
+ *
+ * Parsed from the PDF when one was uploaded, because asking a person to paste
+ * the contents of the document they just handed over is not a product. A
+ * caller-supplied value still wins: it is the escape hatch for formats this
+ * cannot parse, and for a scan whose text came from somewhere else.
+ */
+async function resolveText(
+  body: z.infer<typeof uploadSchema>,
+  fileBytes: Uint8Array | null,
+): Promise<string> {
+  if (body.text.trim()) return body.text;
+
+  if (!fileBytes) {
+    throw new HTTPException(400, {
+      message: "Provide a file to parse, or the text layer directly.",
+    });
+  }
+
+  if (!body.mimeType.includes("pdf")) {
+    // Anything else that arrived as bytes is almost certainly already text.
+    return new TextDecoder().decode(fileBytes);
+  }
+
+  try {
+    const parsed = await extractPdfText(fileBytes);
+    return parsed.text;
+  } catch (error) {
+    if (error instanceof NoTextLayerError) {
+      // A scan is a legitimate document, not a malformed request — say what is
+      // missing rather than failing as though the upload were broken.
+      throw new HTTPException(422, { message: error.message });
+    }
+    throw error;
+  }
+}
+
+/**
  * Registers a source document, storing the file itself when one is supplied.
  *
  * The hash is keccak256 of the document's own bytes when the file is present,
@@ -122,11 +161,12 @@ async function readUpload(c: Context): Promise<{
  */
 app.post("/documents", async (c) => {
   const { body, fileBytes } = await readUpload(c);
+  const text = await resolveText(body, fileBytes);
 
   // The hash is computed here, over the bytes that arrived, and never accepted
   // from the caller. It goes on-chain as the claim that a token corresponds to
   // a specific file, so it has to be this service's own reading of it.
-  const hashedBytes = fileBytes ?? toBytes(body.text);
+  const hashedBytes = fileBytes ?? toBytes(text);
   const contentHash = keccak256(hashedBytes);
 
   const existing = await prisma.document.findUnique({ where: { contentHash } });
@@ -150,7 +190,7 @@ app.post("/documents", async (c) => {
     data: {
       filename: body.filename,
       mimeType: body.mimeType,
-      text: body.text,
+      text,
       byteSize: hashedBytes.length,
       contentHash,
       storageKey,

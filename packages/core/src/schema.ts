@@ -175,3 +175,44 @@ export const FIELD_LABELS: Record<TermField, string> = {
   covenants: "Covenants",
   latePayment: "Late-Payment Terms",
 };
+
+/**
+ * Finds a quoted span in a document, tolerating whitespace differences.
+ *
+ * A PDF's text layer carries the line breaks of the printed page, so a clause
+ * routinely arrives split mid-sentence — or, with a fixed-width render, mid-word.
+ * A model quoting that clause reproduces it as prose. Comparing the two
+ * literally then fails on documents that are perfectly fine.
+ *
+ * So whitespace is treated as elastic on both sides: any run of it matches any
+ * other, and a break between two characters of a word matches none at all. The
+ * document itself is never rewritten — every quote still points at real text,
+ * which is what makes the provenance claim worth anything.
+ *
+ * @returns The `[start, end)` range in `text`, or null when genuinely absent.
+ */
+export function findQuote(
+  text: string,
+  quote: string,
+): [number, number] | null {
+  const trimmed = quote.trim();
+  if (!trimmed) return null;
+
+  const exact = text.indexOf(trimmed);
+  if (exact !== -1) return [exact, exact + trimmed.length];
+
+  // Every character of the quote, with optional whitespace allowed between
+  // each — which covers both a wrapped sentence and a word broken across lines.
+  const pattern = trimmed
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split("")
+        .map((char) => char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("\\s*"),
+    )
+    .join("\\s+");
+
+  const match = new RegExp(pattern).exec(text);
+  return match ? [match.index, match.index + match[0].length] : null;
+}

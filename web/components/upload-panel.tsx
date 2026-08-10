@@ -79,24 +79,39 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [text, setText] = useState("");
 
   const serviceDown = health.isError;
-  const isPdf = file?.type === "application/pdf";
 
-  const handleFile = async (picked: File) => {
-    setFile(picked);
-    // A PDF's bytes are not its text; anything else we can read as-is.
-    if (picked.type !== "application/pdf") {
-      setText(await picked.text());
+  const [rejected, setRejected] = useState<string | null>(null);
+
+  /**
+   * PDFs only.
+   *
+   * The service reads the text layer out of the file, so there is nothing to
+   * do here but hand it over. Refusing other formats up front is kinder than
+   * uploading something that will fail on the far side — and the document that
+   * gets hashed onto the chain should be the executed agreement, not a
+   * transcription of it.
+   */
+  const handleFile = (picked: File) => {
+    const isPdf =
+      picked.type === "application/pdf" ||
+      picked.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      setRejected(`${picked.name} is not a PDF.`);
+      setFile(null);
+      return;
     }
+
+    setRejected(null);
+    setFile(picked);
   };
 
   const submit = async () => {
-    if (!file || !text.trim()) return;
+    if (!file) return;
     const result = await upload.mutateAsync({
       file,
-      text,
       uploadedBy: address ?? null,
     });
     router.push(`/review/${result.extraction.id}`);
@@ -134,27 +149,27 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
           onDrop={(event) => {
             event.preventDefault();
             const dropped = event.dataTransfer.files[0];
-            if (dropped) void handleFile(dropped);
+            if (dropped) handleFile(dropped);
           }}
           className="rounded-lg border border-dashed border-input px-6 py-8 text-center"
         >
           <Upload className="mx-auto size-6 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium">
-            {file ? file.name : "Drag and drop a document"}
+            {file ? file.name : "Drag and drop the signed PDF"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {file
               ? `${(file.size / 1024).toFixed(0)} KB`
-              : "PDF, or a .txt / .md file"}
+              : "PDF — the text layer is read out of it"}
           </p>
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.txt,.md,text/plain,application/pdf"
+            accept="application/pdf,.pdf"
             className="hidden"
             onChange={(event) => {
               const picked = event.target.files?.[0];
-              if (picked) void handleFile(picked);
+              if (picked) handleFile(picked);
             }}
           />
           <Button
@@ -167,22 +182,11 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
           </Button>
         </div>
 
-        {isPdf ? (
-          <div className="space-y-2">
-            <FieldLabel>Text layer</FieldLabel>
-            <p className="text-xs text-muted-foreground">
-              PDF parsing is not wired up yet, so the text has to be pasted. The
-              PDF itself is still stored and hashed — only the extraction input
-              comes from here.
-            </p>
-            <textarea
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              rows={6}
-              placeholder="Paste the agreement text…"
-              className="w-full rounded border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
+        {rejected ? (
+          <p className="flex items-start gap-1.5 text-xs text-review">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+            {rejected} Upload the executed agreement as a PDF.
+          </p>
         ) : null}
 
         {upload.isError ? (
@@ -197,7 +201,7 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
 
         <Button
           className="w-full"
-          disabled={!file || !text.trim() || upload.isPending || serviceDown}
+          disabled={!file || upload.isPending || serviceDown}
           onClick={() => void submit()}
         >
           {upload.isPending ? (

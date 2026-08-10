@@ -22,6 +22,8 @@ than refusing to start.
 ## The pipeline
 
 ```text
+PDF
+    ↓  parse        text layer via pdf.js; a scan is refused, not guessed at
 document text
     ↓  extract      two model passes: read, then audit its own output
 terms + confidence
@@ -87,11 +89,11 @@ signs; `/mint` indexes what the chain already accepted.
 
 ## Known gaps
 
-**No PDF parsing yet.** `POST /documents` takes the file *and* an
-already-extracted text layer, because the OCR/text step in front of it does not
-exist. Upload without a file and the content hash falls back to hashing the
-text, which is internally consistent but cannot be verified against the original
-PDF — so on-chain provenance is only meaningful for uploads that include one.
+**Scanned PDFs need OCR.** The text layer is read out of an uploaded PDF, but a
+photographed or faxed agreement has no text layer at all. That is reported as a
+422 naming the problem rather than passed on as an empty document — which would
+otherwise reach the model and come back as an extraction full of confidently
+absent fields.
 
 **Large files pass through the service.** Multipart keeps the bytes off a base64
 round trip, but they still land in this process's memory. Fine at agreement

@@ -8,7 +8,7 @@
  */
 
 import type { ExtractedTerms, TermField } from "./types";
-import { LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
+import { LOW_CONFIDENCE_THRESHOLD, findQuote } from "@tokenforge/core";
 
 export type HighlightTone = "verified" | "review";
 
@@ -60,9 +60,11 @@ export function segmentBlock(text: string, highlights: Highlight[]): Segment[] {
   );
 
   for (const highlight of byLength) {
-    const start = text.indexOf(highlight.quote);
-    if (start === -1) continue;
-    const end = start + highlight.quote.length;
+    // Whitespace-tolerant, so a clause wrapped across lines in a PDF still
+    // highlights. See findQuote for why the document is never rewritten.
+    const range = findQuote(text, highlight.quote);
+    if (!range) continue;
+    const [start, end] = range;
 
     const overlaps = matches.some(
       (match) => start < match.end && end > match.start,

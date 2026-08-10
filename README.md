@@ -19,7 +19,7 @@ TokenForge puts an LLM on that critical path. Remove the model and there is no p
 ```text
 Company is verified and admitted to the issuer registry
         ↓
-Verified issuer uploads loan document      → stored in R2, hashed
+Verified issuer uploads the signed PDF     → stored in R2, hashed, text read out
         ↓
 AI extracts terms with per-field confidence
         ↓
@@ -147,7 +147,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 Stated plainly, because a demo can hide these:
 
-- **No PDF text extraction.** `POST /documents` stores and hashes the file, but the text layer for extraction has to be supplied alongside it. There is no OCR step.
+- **No OCR.** A PDF's text layer is read on upload, but a scanned agreement has none. That is refused with an explanation rather than guessed at.
 - **Nothing has been signed from a browser.** Mint, repay, and claim are all wired to the contracts and signed by the connected wallet, and the whole lifecycle has been exercised on testnet through the deployed factory — but by a scripted signer, not a browser wallet.
 - **No note exists on-chain.** The mint → deposit → claim lifecycle has only ever run in Foundry, not on testnet.
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.

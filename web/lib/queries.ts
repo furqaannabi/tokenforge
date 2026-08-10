@@ -177,7 +177,8 @@ export function useUploadAndExtract() {
   const mutation = useMutation({
     mutationFn: async (input: {
       file: File;
-      text: string;
+      /** Only for formats the service cannot parse. */
+      text?: string;
       uploadedBy?: string | null;
     }) => {
       setStage("Uploading the document");

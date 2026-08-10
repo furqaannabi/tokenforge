@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
-import { extractedTermsSchema, type ExtractedTerms } from "@tokenforge/core";
+import {
+  extractedTermsSchema,
+  findQuote,
+  type ExtractedTerms,
+} from "@tokenforge/core";
 import { ConfigurationError } from "./errors";
 
 /**
@@ -83,7 +87,11 @@ Rules:
 
 5. Dates are ISO YYYY-MM-DD. Rates are percent, so 8.5 means 8.50%. Amounts are plain numbers with no separators or symbols.
 
-6. If a field is genuinely absent, use a neutral value, set confidence near 0, and explain in the note. Never guess to fill a gap.`;
+6. If a field is genuinely absent, use a neutral value, set confidence near 0, and explain in the note. Never guess to fill a gap.
+
+7. The text is a PDF's text layer, so line breaks are artifacts of the printed page rather than the document's meaning. A clause can wrap mid-sentence, and a word can be split across two lines. Read through those breaks: "NORTHB\nRIDGE CREDIT PARTNERS" is one name, not two words.
+
+   This affects the value, not the quote. Give the value as the document reads it — the reconstructed name, the whole sentence — while sourceQuote stays copied from the text in front of you, line break included. Quotes are matched allowing for whitespace, so a wrapped quote still resolves. Do not lower confidence for a break you were able to read through.`;
 
 const VERIFICATION_PROMPT = `You are auditing an extraction you just produced, now shown beside the source document.
 
@@ -274,7 +282,9 @@ function reconcileQuotes(
   for (const key of Object.keys(checked) as (keyof ExtractedTerms)[]) {
     const field = checked[key];
     if (!field.sourceQuote) continue;
-    if (documentText.includes(field.sourceQuote)) continue;
+    // Whitespace-tolerant: a PDF wraps clauses at the page edge, and a quote
+    // split across a line is still a real citation.
+    if (findQuote(documentText, field.sourceQuote)) continue;
 
     // Cap rather than zero it: the value may well be right, but nothing here
     // can confirm where it came from.
