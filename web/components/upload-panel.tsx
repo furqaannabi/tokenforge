@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileText, Loader2, TriangleAlert, Upload } from "lucide-react";
-import { FieldLabel, StatusBadge } from "@/components/primitives";
+import { FieldLabel, Stamp, StatusBadge } from "@/components/primitives";
+import { FIELD_LABELS, LOW_CONFIDENCE_THRESHOLD, type TermField } from "@tokenforge/core";
+import { confidencePct } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +21,47 @@ import { useServiceHealth, useUploadAndExtract } from "@/lib/queries";
 import { useWallet } from "@/lib/wallet";
 import { money } from "@/lib/format";
 import type { Note } from "@/lib/types";
+
+/**
+ * Live progress while the model works.
+ *
+ * Two passes over a full agreement take about a minute. Showing each term as
+ * it lands turns that from an unexplained wait into something legible — and it
+ * shows the confidence arriving with the value, which is the point the product
+ * is making.
+ */
+function ExtractionProgress({
+  stage,
+  fields,
+}: {
+  stage: string | null;
+  fields: Array<{ field: string; confidence: number }>;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <p className="flex items-center gap-2 text-sm">
+        <Loader2 className="size-3.5 animate-spin text-verified" />
+        {stage ?? "Working"}
+      </p>
+
+      {fields.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {fields.map(({ field, confidence }) => (
+            <li key={field}>
+              <Stamp tone={confidence < LOW_CONFIDENCE_THRESHOLD ? "review" : "verified"}>
+                {FIELD_LABELS[field as TermField] ?? field} {confidencePct(confidence)}
+              </Stamp>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Terms appear here as they are read.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * The upload entry point.
@@ -150,6 +193,8 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
           </Alert>
         ) : null}
 
+        {upload.isPending ? <ExtractionProgress stage={upload.stage} fields={upload.fields} /> : null}
+
         <Button
           className="w-full"
           disabled={!file || !text.trim() || upload.isPending || serviceDown}
@@ -157,7 +202,7 @@ export function UploadPanel({ samples }: { samples: Note[] }) {
         >
           {upload.isPending ? (
             <>
-              <Loader2 className="animate-spin" /> Extracting terms…
+              <Loader2 className="animate-spin" /> Extracting…
             </>
           ) : (
             "Upload and extract"

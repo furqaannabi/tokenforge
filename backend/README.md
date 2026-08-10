@@ -34,7 +34,8 @@ status
 The three stages answer different questions and fail independently:
 
 - **Extraction** produces values, per-field confidence, and the verbatim clause
-  each value came from. A second pass audits the first against the source, since
+  each value came from. It streams: the partial parse means a term can be
+  reported the moment it completes rather than a minute later in one lump. A second pass audits the first against the source, since
   a model asked for a number and a certainty in one breath tends to justify the
   number it just wrote.
 - **The validator** is rules, not AI. It checks that dates are ordered, the
@@ -75,6 +76,7 @@ Buckets stay private. Reading goes through a short-lived signed URL.
 | `POST /documents` | Register a document. Send it as multipart with a `file` part and the service stores it in R2; deduplicated by keccak256 of its bytes, the same hash `NoteFactory` claims on-chain |
 | `GET /documents/:id/url` | Short-lived signed URL for the stored file |
 | `POST /documents/:id/extract` | Run the pipeline |
+| `POST /documents/:id/extract/stream` | The same, reported as server-sent events: each stage, and each term as it finishes parsing |
 | `GET /extractions/:id` | Extraction with its document and note |
 | `POST /extractions/:id/review` | Record corrections and confirmations, then re-validate |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |

@@ -40,6 +40,16 @@ export interface ApiIssuerApplication {
   createdAt: string;
 }
 
+/** Progress reported while an extraction runs. */
+export type ExtractionStreamEvent =
+  | {
+      type: "stage";
+      stage: "extracting" | "auditing" | "validating";
+      message: string;
+    }
+  | { type: "field"; field: string; value: unknown; confidence: number }
+  | { type: "usage"; promptTokens: number; completionTokens: number };
+
 export type ExtractionStatus =
   | "PENDING"
   | "NEEDS_REVIEW"
@@ -252,6 +262,67 @@ export const api = {
 
   documentUrl: (documentId: string) =>
     request<{ url: string }>(`/documents/${documentId}/url`).then((r) => r.url),
+
+  /**
+   * Runs extraction, reporting progress as it goes.
+   *
+   * Server-sent events over `fetch` rather than `EventSource`, which cannot
+   * issue a POST. Extraction is a minute of work, so the alternative is a
+   * spinner that looks identical to a hang.
+   */
+  extractStreaming: async (
+    documentId: string,
+    onEvent: (event: ExtractionStreamEvent) => void,
+  ): Promise<ApiExtraction> => {
+    const response = await fetch(
+      `${BASE_URL}/documents/${documentId}/extract/stream`,
+      { method: "POST" },
+    ).catch(() => {
+      throw new ApiError(0, `Cannot reach the extraction service at ${BASE_URL}.`);
+    });
+
+    if (!response.ok || !response.body) {
+      const body = await response.json().catch(() => null);
+      throw new ApiError(response.status, body?.error ?? "Extraction failed.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let extraction: ApiExtraction | undefined;
+    let failure: string | undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are separated by a blank line; a partial frame stays in the
+      // buffer until the rest of it arrives.
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const name = frame.match(/^event:\s*(.+)$/m)?.[1]?.trim();
+        const raw = frame
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("");
+        if (!name || !raw) continue;
+
+        const payload = JSON.parse(raw);
+        if (name === "done") extraction = payload.extraction;
+        else if (name === "failed") failure = payload.message;
+        else onEvent(payload as ExtractionStreamEvent);
+      }
+    }
+
+    if (failure) throw new ApiError(500, failure);
+    if (!extraction) throw new ApiError(500, "The stream ended without a result.");
+    return extraction;
+  },
 
   extract: (documentId: string) =>
     request<{ extraction: ApiExtraction }>(`/documents/${documentId}/extract`, {

@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { streamSSE } from "hono/streaming";
 import { HTTPException } from "hono/http-exception";
 import { keccak256, toBytes } from "viem";
 import { z } from "zod";
@@ -240,6 +241,69 @@ app.post("/documents/:id/extract", async (c) => {
   });
 
   return c.json({ extraction }, 201);
+});
+
+/**
+ * The same pipeline, reported as it happens.
+ *
+ * Extraction is two model passes over a full agreement and takes about a
+ * minute. Behind a single spinner that is indistinguishable from a hang, so
+ * this streams the stages and each term as it finishes parsing — the reviewer
+ * watches the document resolve rather than waiting on nothing.
+ *
+ * The work and the result are identical to POST /documents/:id/extract; only
+ * the reporting differs.
+ */
+app.post("/documents/:id/extract/stream", async (c) => {
+  const document = await prisma.document.findUnique({
+    where: { id: c.req.param("id") },
+  });
+  if (!document) throw new HTTPException(404, { message: "Unknown document." });
+
+  return streamSSE(c, async (stream) => {
+    const send = (event: string, data: unknown) =>
+      stream.writeSSE({ event, data: JSON.stringify(data) });
+
+    try {
+      const result = await extractTerms(document.text, (event) => {
+        void send(event.type, event);
+      });
+
+      const validation = validateTerms(result.terms);
+      const unreviewed = fieldsNeedingReview(result.terms);
+      const status = !validation.consistent
+        ? "INVALID"
+        : unreviewed.length > 0
+          ? "NEEDS_REVIEW"
+          : "VALIDATED";
+
+      const extraction = await prisma.extraction.create({
+        data: {
+          documentId: document.id,
+          model: result.model,
+          status,
+          terms: asJson(result.terms),
+          issues: asJson(validation.issues),
+          consistent: validation.consistent,
+          unreviewedFields: unreviewed,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          latencyMs: result.latencyMs,
+        },
+      });
+
+      await send("done", { extraction });
+    } catch (error) {
+      // The stream is already open, so a thrown error would surface as a
+      // truncated response rather than a status code. Say what happened.
+      await send("failed", {
+        message:
+          error instanceof ConfigurationError
+            ? error.message
+            : (error as Error).message,
+      });
+    }
+  });
 });
 
 app.get("/extractions/:id", async (c) => {

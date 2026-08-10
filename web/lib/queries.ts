@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -163,12 +164,25 @@ export function useDocumentUrl(documentId: string | undefined) {
 export function useUploadAndExtract() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  /*
+   * Progress lives in component state rather than the mutation, because it
+   * changes many times during a single call and React Query has nowhere
+   * sensible to put intermediate results.
+   */
+  const [stage, setStage] = useState<string | null>(null);
+  const [fields, setFields] = useState<
+    Array<{ field: string; confidence: number }>
+  >([]);
+
+  const mutation = useMutation({
     mutationFn: async (input: {
       file: File;
       text: string;
       uploadedBy?: string | null;
     }) => {
+      setStage("Uploading the document");
+      setFields([]);
+
       const { document } = await api.uploadDocument({
         file: input.file,
         filename: input.file.name,
@@ -176,14 +190,29 @@ export function useUploadAndExtract() {
         uploadedBy: input.uploadedBy ?? null,
       });
 
-      const extraction = await api.extract(document.id);
+      const extraction = await api.extractStreaming(document.id, (event) => {
+        if (event.type === "stage") setStage(event.message);
+        if (event.type === "field") {
+          setFields((current) => {
+            // The audit pass reports the same fields again, with revised
+            // confidence. Replace rather than append.
+            const rest = current.filter((f) => f.field !== event.field);
+            return [...rest, { field: event.field, confidence: event.confidence }];
+          });
+        }
+      });
+
+      setStage(null);
       return { document, extraction };
     },
     onSuccess: ({ extraction }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents });
       queryClient.setQueryData(queryKeys.extraction(extraction.id), extraction);
     },
+    onError: () => setStage(null),
   });
+
+  return Object.assign(mutation, { stage, fields });
 }
 
 /** Records a reviewer's corrections and confirmations. */

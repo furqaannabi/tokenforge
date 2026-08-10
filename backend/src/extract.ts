@@ -96,6 +96,18 @@ Re-examine every field and revise confidence to what you would stand behind on a
 
 Where a check fails, lower that field's confidence and say why in the note. Return the same values unless one is plainly wrong — this pass is about calibrating certainty, not rewriting the extraction. Raising confidence is allowed when a value checks out cleanly.`;
 
+/**
+ * Progress from a streaming extraction.
+ *
+ * `field` fires as each term finishes parsing, which is what makes the wait
+ * legible: a reviewer watches the document resolve into terms instead of
+ * staring at a spinner for a minute.
+ */
+export type ExtractionEvent =
+  | { type: "stage"; stage: "extracting" | "auditing" | "validating"; message: string }
+  | { type: "field"; field: string; value: unknown; confidence: number }
+  | { type: "usage"; promptTokens: number; completionTokens: number };
+
 export interface ExtractionResult {
   terms: ExtractedTerms;
   model: string;
@@ -106,35 +118,44 @@ export interface ExtractionResult {
 
 /**
  * @param documentText Text layer of the source document.
+ * @param onEvent Optional progress sink. Extraction takes about a minute
+ *        across two model passes, so a caller that can report progress should.
  */
 export async function extractTerms(
   documentText: string,
+  onEvent?: (event: ExtractionEvent) => void,
 ): Promise<ExtractionResult> {
   const startedAt = Date.now();
-  const response_format = zodResponseFormat(
-    extractedTermsSchema,
-    "extracted_terms",
-  );
 
-  const first = await llm().chat.completions.parse({
-    model: MODEL,
-    messages: [
+  onEvent?.({
+    type: "stage",
+    stage: "extracting",
+    message: "Reading the document",
+  });
+
+  const first = await runPass(
+    [
       { role: "system", content: EXTRACTION_PROMPT },
       { role: "user", content: documentText },
     ],
-    response_format,
-  });
+    onEvent,
+  );
 
-  const draft = first.choices[0]?.message.parsed;
+  const draft = first.parsed;
   if (!draft) {
     throw new Error(
-      `Extraction returned no parsed output (finish reason: ${first.choices[0]?.finish_reason ?? "unknown"}).`,
+      `Extraction returned no parsed output (finish reason: ${first.finishReason}).`,
     );
   }
 
-  const second = await llm().chat.completions.parse({
-    model: MODEL,
-    messages: [
+  onEvent?.({
+    type: "stage",
+    stage: "auditing",
+    message: "Checking the extraction against the source",
+  });
+
+  const second = await runPass(
+    [
       { role: "system", content: VERIFICATION_PROMPT },
       { role: "user", content: documentText },
       {
@@ -142,22 +163,97 @@ export async function extractTerms(
         content: `Extraction to audit:\n\n${JSON.stringify(draft, null, 2)}`,
       },
     ],
-    response_format,
-  });
+    onEvent,
+  );
 
   // A failed audit is not a failed extraction: keep the first pass rather than
   // losing the whole result because the second call came back unparseable.
-  const verified = second.choices[0]?.message.parsed ?? draft;
+  const verified = second.parsed ?? draft;
+
+  onEvent?.({
+    type: "stage",
+    stage: "validating",
+    message: "Checking the terms are internally consistent",
+  });
 
   return {
     terms: reconcileQuotes(verified, documentText),
     model: MODEL,
-    promptTokens:
-      (first.usage?.prompt_tokens ?? 0) + (second.usage?.prompt_tokens ?? 0),
-    completionTokens:
-      (first.usage?.completion_tokens ?? 0) +
-      (second.usage?.completion_tokens ?? 0),
+    promptTokens: first.promptTokens + second.promptTokens,
+    completionTokens: first.completionTokens + second.completionTokens,
     latencyMs: Date.now() - startedAt,
+  };
+}
+
+/**
+ * One model pass, streamed.
+ *
+ * Streaming is not for speed — the wall time is the same — but for the
+ * partial parse. Each delta carries the object as far as it has been read, so
+ * fields can be reported the moment they complete rather than a minute later
+ * in one lump.
+ */
+async function runPass(
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  onEvent?: (event: ExtractionEvent) => void,
+): Promise<{
+  parsed: ExtractedTerms | null;
+  finishReason: string;
+  promptTokens: number;
+  completionTokens: number;
+}> {
+  const stream = llm().chat.completions.stream({
+    model: MODEL,
+    messages,
+    // Built here rather than passed in, so the parsed type flows through
+    // instead of widening to unknown at the call site.
+    response_format: zodResponseFormat(extractedTermsSchema, "extracted_terms"),
+    // A stream omits usage unless asked. Without this the token counts
+    // recorded against every extraction are zero, and the cost of running
+    // the pipeline becomes unmeasurable.
+    stream_options: { include_usage: true },
+  });
+
+  const reported = new Set<string>();
+
+  stream.on("content.delta", ({ parsed }) => {
+    if (!onEvent || !parsed || typeof parsed !== "object") return;
+
+    for (const [field, raw] of Object.entries(parsed as Record<string, unknown>)) {
+      if (reported.has(field)) continue;
+
+      // A field counts as arrived once its confidence has been read: the
+      // value alone can still be a half-parsed string.
+      const candidate = raw as { value?: unknown; confidence?: unknown };
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        typeof candidate.confidence === "number"
+      ) {
+        reported.add(field);
+        onEvent({
+          type: "field",
+          field,
+          value: candidate.value,
+          confidence: candidate.confidence,
+        });
+      }
+    }
+  });
+
+  const completion = await stream.finalChatCompletion();
+
+  onEvent?.({
+    type: "usage",
+    promptTokens: completion.usage?.prompt_tokens ?? 0,
+    completionTokens: completion.usage?.completion_tokens ?? 0,
+  });
+
+  return {
+    parsed: completion.choices[0]?.message.parsed ?? null,
+    finishReason: completion.choices[0]?.finish_reason ?? "unknown",
+    promptTokens: completion.usage?.prompt_tokens ?? 0,
+    completionTokens: completion.usage?.completion_tokens ?? 0,
   };
 }
 
