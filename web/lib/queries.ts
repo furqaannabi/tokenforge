@@ -13,6 +13,7 @@ import {
   type ApiExtraction,
   type ApiIssuerApplication,
   type ApplicationStatus,
+  type ExtractionStatus,
 } from "./api";
 
 /**
@@ -26,6 +27,8 @@ export const queryKeys = {
   health: ["health"] as const,
   documents: ["documents"] as const,
   extraction: (id: string) => ["extraction", id] as const,
+  extractions: (status?: ExtractionStatus) =>
+    ["extractions", status ?? "all"] as const,
   documentUrl: (id: string) => ["document-url", id] as const,
   applications: (status?: ApplicationStatus) =>
     ["applications", status ?? "all"] as const,
@@ -130,6 +133,15 @@ export function useDocuments(): UseQueryResult<ApiDocument[]> {
   });
 }
 
+/** Everything uploaded, with where it has got to. */
+export function useExtractions(status?: ExtractionStatus) {
+  return useQuery({
+    queryKey: queryKeys.extractions(status),
+    queryFn: () => api.listExtractions(status),
+    retry: false,
+  });
+}
+
 export function useExtraction(
   id: string | undefined,
 ): UseQueryResult<ApiExtraction> {
@@ -208,6 +220,7 @@ export function useUploadAndExtract() {
     },
     onSuccess: ({ extraction }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents });
+      queryClient.invalidateQueries({ queryKey: ["extractions"] });
       queryClient.setQueryData(queryKeys.extraction(extraction.id), extraction);
     },
     onError: () => setStage(null),

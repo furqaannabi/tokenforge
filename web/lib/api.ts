@@ -89,6 +89,15 @@ export interface ApiExtraction {
   note?: ApiNote | null;
 }
 
+/**
+ * A list row. Identical to a full extraction except that the document arrives
+ * without its `text` — the list endpoint omits it deliberately, since a page of
+ * rows would otherwise carry a hundred loan agreements' worth of prose.
+ */
+export interface ApiExtractionSummary extends Omit<ApiExtraction, "document"> {
+  document?: Pick<ApiDocument, "id" | "filename" | "contentHash">;
+}
+
 export interface ApiNote {
   id: string;
   extractionId: string;
@@ -329,6 +338,12 @@ export const api = {
     request<{ extraction: ApiExtraction }>(`/documents/${documentId}/extract`, {
       method: "POST",
     }).then((r) => r.extraction),
+
+  /** The work queue, newest first. */
+  listExtractions: (status?: ExtractionStatus) =>
+    request<{ extractions: ApiExtractionSummary[] }>(
+      `/extractions${status ? `?status=${status}` : ""}`,
+    ).then((r) => r.extractions),
 
   getExtraction: (extractionId: string) =>
     request<{ extraction: ApiExtraction }>(`/extractions/${extractionId}`).then(

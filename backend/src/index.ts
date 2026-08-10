@@ -366,6 +366,29 @@ app.post("/documents/:id/extract/stream", async (c) => {
   });
 });
 
+/**
+ * The work queue: extractions newest first, each with enough to act on.
+ *
+ * What a person needs from a list like this is which documents are waiting on
+ * them and which are finished, so the status and the terms come along rather
+ * than requiring a fetch per row.
+ */
+app.get("/extractions", async (c) => {
+  const status = c.req.query("status");
+
+  const extractions = await prisma.extraction.findMany({
+    where: status ? { status: status as never } : undefined,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      document: { select: { id: true, filename: true, contentHash: true } },
+      note: true,
+    },
+  });
+
+  return c.json({ extractions: jsonSafe(extractions) });
+});
+
 app.get("/extractions/:id", async (c) => {
   const extraction = await prisma.extraction.findUnique({
     where: { id: c.req.param("id") },

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { FieldLabel, HexValue, Stamp } from "@/components/primitives";
 import { OnChainNote } from "@/components/onchain-note";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useExtraction } from "@/lib/queries";
+import { useDocumentUrl, useExtraction } from "@/lib/queries";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { percent, monthYear, money } from "@/lib/format";
@@ -22,6 +22,7 @@ import { percent, monthYear, money } from "@/lib/format";
 export function NoteScreen({ noteId }: { noteId: string }) {
   const { address } = useWallet();
   const extraction = useExtraction(noteId);
+  const pdf = useDocumentUrl(extraction.data?.document?.id);
 
   if (extraction.isPending) {
     return (
@@ -102,9 +103,20 @@ export function NoteScreen({ noteId }: { noteId: string }) {
             label="Source document hash"
             value={record.document?.contentHash ?? "—"}
           />
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <FileText className="size-3.5 shrink-0" />
             {record.document?.filename ?? "Unknown document"}
+            {pdf.data ? (
+              <a
+                href={pdf.data}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
+                <ExternalLink className="size-3.5" />
+                View PDF
+              </a>
+            ) : null}
           </p>
           <div className="flex items-baseline justify-between gap-4 border-t border-border pt-3">
             <FieldLabel>Extracted by</FieldLabel>

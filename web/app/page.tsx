@@ -3,9 +3,11 @@
 import { BadgeCheck, ShieldOff, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { X_LAYER_TESTNET } from "@/lib/wagmi";
-import { useDocuments } from "@/lib/queries";
-import { truncateHex } from "@/lib/format";
-import { FieldLabel } from "@/components/primitives";
+import { useExtractions } from "@/lib/queries";
+import { money, percent, monthYear, truncateHex } from "@/lib/format";
+import Link from "next/link";
+import { FieldLabel, Stamp } from "@/components/primitives";
+import type { ApiExtractionSummary } from "@/lib/api";
 import { UploadPanel } from "@/components/upload-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -26,7 +28,11 @@ import {
 
 export default function IssuerDashboard() {
   const { issuer, connected } = useWallet();
-  const documents = useDocuments();
+  // One request, split two ways: what still needs a person, and what is done.
+  const extractions = useExtractions();
+  const pending =
+    extractions.data?.filter((e) => e.status !== "MINTED") ?? [];
+  const notes = extractions.data?.filter((e) => e.status === "MINTED") ?? [];
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
@@ -49,49 +55,65 @@ export default function IssuerDashboard() {
         <IssuerPanel />
       </div>
 
+      {pending.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="mb-1 text-lg font-semibold">Awaiting mint</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Extracted but not yet on-chain. Nothing is minted until the terms
+            pass validation and an authorized representative signs.
+          </p>
+          <Card className="py-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Document</TableHead>
+                  <TableHead className="text-right">Principal</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead>Maturity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map((extraction) => (
+                  <PendingRow key={extraction.id} extraction={extraction} />
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </section>
+      ) : null}
+
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Your documents</h2>
+        <h2 className="mb-3 text-lg font-semibold">Your notes</h2>
         <Card className="py-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Document</TableHead>
-                <TableHead className="text-right">Size</TableHead>
-                <TableHead>Uploaded</TableHead>
-                <TableHead className="text-right">Content hash</TableHead>
+                <TableHead>Note</TableHead>
+                <TableHead className="text-right">Principal</TableHead>
+                <TableHead className="text-right">Rate</TableHead>
+                <TableHead>Maturity</TableHead>
+                <TableHead>Token</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {documents.data?.length ? (
-                documents.data.map((document) => (
-                  <TableRow key={document.id}>
-                    <TableCell className="font-medium">
-                      {document.filename}
-                    </TableCell>
-                    <TableCell className="tnum text-right">
-                      {(document.byteSize / 1024).toFixed(0)} KB
-                    </TableCell>
-                    <TableCell className="tnum">
-                      {new Date(document.createdAt).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                      {truncateHex(document.contentHash, 8, 6)}
-                    </TableCell>
-                  </TableRow>
+              {notes.length ? (
+                notes.map((extraction) => (
+                  <NoteRow key={extraction.id} extraction={extraction} />
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={6}
                     className="py-8 text-center text-sm text-muted-foreground"
                   >
-                    {documents.isError
+                    {extractions.isError
                       ? "The extraction service is unreachable."
-                      : "Nothing uploaded yet."}
+                      : extractions.isPending
+                        ? "Loading…"
+                        : "No notes minted yet."}
                   </TableCell>
                 </TableRow>
               )}
@@ -100,6 +122,99 @@ export default function IssuerDashboard() {
         </Card>
       </section>
     </div>
+  );
+}
+
+/**
+ * One extraction still waiting on someone.
+ *
+ * The action is always review, including for `INVALID`: the reviewer needs to
+ * see *why* the validator refused it, and that screen is where the reasons and
+ * the source clauses are. Minting happens there too, once the gate opens.
+ */
+function PendingRow({ extraction }: { extraction: ApiExtractionSummary }) {
+  const { terms, status } = extraction;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        {extraction.document?.filename ?? "Document"}
+      </TableCell>
+      <TableCell className="tnum text-right">
+        {money(terms.principal.value)}
+      </TableCell>
+      <TableCell className="tnum text-right">
+        {percent(terms.interestRatePct.value)}
+      </TableCell>
+      <TableCell className="tnum">
+        {monthYear(terms.maturityDate.value)}
+      </TableCell>
+      <TableCell>
+        <Stamp
+          tone={
+            status === "INVALID"
+              ? "impaired"
+              : status === "VALIDATED"
+                ? "verified"
+                : "review"
+          }
+        >
+          {status === "NEEDS_REVIEW"
+            ? "Needs review"
+            : status === "VALIDATED"
+              ? "Ready to mint"
+              : status.charAt(0) + status.slice(1).toLowerCase()}
+        </Stamp>
+      </TableCell>
+      <TableCell className="text-right">
+        <Link
+          href={`/review/${extraction.id}`}
+          className="text-sm hover:text-verified"
+        >
+          {status === "VALIDATED" ? "Mint" : "Review"}
+        </Link>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/**
+ * One minted note.
+ *
+ * Everything here is settled: the terms were reviewed, the mint was signed, and
+ * a token exists. The row links to the note page, which reads live state from
+ * the chain — balances amortize as principal comes back, so the figures below
+ * describe the loan as written, not what is outstanding today.
+ */
+function NoteRow({ extraction }: { extraction: ApiExtractionSummary }) {
+  const { terms, note } = extraction;
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        {note?.name ?? extraction.document?.filename ?? "Note"}
+      </TableCell>
+      <TableCell className="tnum text-right">
+        {money(terms.principal.value)}
+      </TableCell>
+      <TableCell className="tnum text-right">
+        {percent(terms.interestRatePct.value)}
+      </TableCell>
+      <TableCell className="tnum">
+        {monthYear(terms.maturityDate.value)}
+      </TableCell>
+      <TableCell>
+        <Stamp tone="neutral">{note?.symbol ?? "—"}</Stamp>
+      </TableCell>
+      <TableCell className="text-right">
+        <Link
+          href={`/note/${extraction.id}`}
+          className="text-sm hover:text-verified"
+        >
+          View
+        </Link>
+      </TableCell>
+    </TableRow>
   );
 }
 

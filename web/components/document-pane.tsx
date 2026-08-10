@@ -1,7 +1,8 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { ExternalLink, FileText } from "lucide-react";
 import { highlightsFor, segmentBlock } from "@/lib/highlight";
+import { useDocumentUrl } from "@/lib/queries";
 import { truncateHex } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ExtractedTerms, SourceDocument, TermField } from "@/lib/types";
@@ -27,6 +28,9 @@ export function DocumentPane({
   className?: string;
 }) {
   const highlights = highlightsFor(terms);
+  // The pane renders extracted text; the PDF itself is what was signed, and a
+  // reviewer checking a suspect clause should be able to open it.
+  const pdf = useDocumentUrl(document.id);
 
   return (
     <div
@@ -43,6 +47,17 @@ export function DocumentPane({
         <code className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
           {truncateHex(document.hash, 8, 6)}
         </code>
+        {pdf.data ? (
+          <a
+            href={pdf.data}
+            target="_blank"
+            rel="noreferrer"
+            className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ExternalLink className="size-3.5" />
+            <span className="hidden sm:inline">PDF</span>
+          </a>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">

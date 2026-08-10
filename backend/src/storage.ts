@@ -102,13 +102,27 @@ export async function putDocument(
 }
 
 /**
- * A time-limited URL for reading a document.
+ * A URL for reading a document.
  *
- * The bucket stays private: loan agreements are not public documents, and a
- * signed URL means the review screen can display one without the bucket being
- * readable by anyone who guesses a hash.
+ * Two modes, and the difference matters. With `R2_PUBLIC_URL` set, the bucket
+ * is served from a custom domain and the URL is permanent — convenient for a
+ * demo, but it means anyone holding the link can read the agreement, and keys
+ * are content hashes rather than secrets. Without it the bucket stays private
+ * and this returns a five-minute signed URL, which is the right default for
+ * documents nobody intended to publish.
  */
-export function documentUrl(key: string, expiresInSeconds = 300): Promise<string> {
+export async function documentUrl(
+  key: string,
+  expiresInSeconds = 300,
+): Promise<string> {
+  const publicBase = process.env.R2_PUBLIC_URL;
+  if (publicBase) {
+    return `${publicBase.replace(/\/$/, "")}/${key
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+  }
+
   return getSignedUrl(
     s3(),
     new GetObjectCommand({ Bucket: BUCKET, Key: key }),

@@ -62,6 +62,7 @@ export function extractionToNote(
       jurisdiction: "—",
     },
     document: {
+      id: extraction.document?.id,
       filename: extraction.document?.filename ?? "document.pdf",
       hash:
         (extraction.document?.contentHash as `0x${string}`) ??

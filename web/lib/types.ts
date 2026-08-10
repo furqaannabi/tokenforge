@@ -32,6 +32,8 @@ export type {
 } from "@tokenforge/core";
 
 export interface SourceDocument {
+  /** Service-side id, used to resolve a URL for the stored PDF. */
+  id?: string;
   filename: string;
   /** keccak256 of the file bytes, recorded on-chain by NoteFactory. */
   hash: `0x${string}`;
