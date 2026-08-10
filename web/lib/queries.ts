@@ -6,7 +6,13 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import { api, type ApiDocument, type ApiExtraction } from "./api";
+import {
+  api,
+  type ApiDocument,
+  type ApiExtraction,
+  type ApiIssuerApplication,
+  type ApplicationStatus,
+} from "./api";
 
 /**
  * React Query bindings for the extraction service.
@@ -20,7 +26,84 @@ export const queryKeys = {
   documents: ["documents"] as const,
   extraction: (id: string) => ["extraction", id] as const,
   documentUrl: (id: string) => ["document-url", id] as const,
+  applications: (status?: ApplicationStatus) =>
+    ["applications", status ?? "all"] as const,
+  applicationForWallet: (address?: string) =>
+    ["application", address ?? ""] as const,
 };
+
+// --- Issuer onboarding -----------------------------------------------------
+
+export function useApplications(status?: ApplicationStatus) {
+  return useQuery({
+    queryKey: queryKeys.applications(status),
+    queryFn: () => api.listApplications(status),
+    retry: false,
+  });
+}
+
+/** The connected wallet's own application, if it has one. */
+export function useMyApplication(address?: string) {
+  return useQuery<ApiIssuerApplication | null>({
+    queryKey: queryKeys.applicationForWallet(address),
+    queryFn: () =>
+      api.applicationForWallet(address!).catch((error) => {
+        // Never having applied is a normal state, not a failure.
+        if (error?.status === 404) return null;
+        throw error;
+      }),
+    enabled: Boolean(address),
+    retry: false,
+  });
+}
+
+export function useApply() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.apply,
+    onSuccess: (application) => {
+      queryClient.setQueryData(
+        queryKeys.applicationForWallet(application.walletAddress),
+        application,
+      );
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+    },
+  });
+}
+
+/**
+ * Records an admission after the chain has confirmed it.
+ *
+ * Deliberately not the thing that admits anyone — that already happened, signed
+ * by the admin's wallet. This only marks the queue.
+ */
+export function useRecordAdmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      txHash: string;
+      decidedBy?: string | null;
+    }) => api.recordAdmission(input.id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+    },
+  });
+}
+
+export function useRejectApplication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      decidedBy?: string | null;
+      decisionNote?: string | null;
+    }) => api.rejectApplication(input.id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+    },
+  });
+}
 
 /**
  * Whether the service is reachable.

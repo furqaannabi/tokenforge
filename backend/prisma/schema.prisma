@@ -14,6 +14,59 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ApplicationStatus {
+  /// Submitted, awaiting a registry admin.
+  PENDING
+  /// Admitted on-chain. `admitTxHash` is the transaction that did it.
+  APPROVED
+  /// Turned down. `decisionNote` says why.
+  REJECTED
+  /// Pulled by the applicant before a decision.
+  WITHDRAWN
+}
+
+/// A company asking to be admitted to the issuer registry.
+///
+/// Everything here is off-chain. `IssuerRegistry` stores only an address, a
+/// name and a jurisdiction, because that is all the contract needs to enforce
+/// who may mint — the corporate detail behind an admission, and the record of
+/// applications that were refused, have no business on a public chain.
+///
+/// This service never admits anyone. Admission is a transaction signed by the
+/// registry admin's own wallet; `admitTxHash` records the one that did it.
+model IssuerApplication {
+  id String @id @default(cuid())
+
+  /// The address that will mint if admitted. Lowercased, so a checksum
+  /// difference cannot produce two applications for one wallet.
+  walletAddress String @unique
+
+  companyName        String
+  jurisdiction       String
+  registrationNumber String?
+  contactEmail       String
+  website            String?
+
+  /// Free text from the applicant: what they intend to tokenize.
+  description String?
+
+  status ApplicationStatus @default(PENDING)
+
+  /// Set on approval or rejection.
+  decisionNote String?
+  decidedAt    DateTime?
+  /// The admin address that decided, for the audit trail.
+  decidedBy    String?
+
+  /// The on-chain admission, once it has been signed and confirmed.
+  admitTxHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
 /// A source agreement. One document produces at most one note, which
 /// `NoteFactory` also enforces on-chain by claiming the hash.
 model Document {

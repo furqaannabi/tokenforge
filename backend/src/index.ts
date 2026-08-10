@@ -8,6 +8,7 @@ import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
 import { ConfigurationError } from "./errors";
 import { extractTerms } from "./extract";
+import { issuers } from "./issuers";
 import {
   documentKey,
   documentUrl,
@@ -48,6 +49,10 @@ app.use(
 );
 
 app.get("/health", (c) => c.json({ ok: true, service: "tokenforge-extraction" }));
+
+// Issuer onboarding. Applications only — admission is signed on-chain by the
+// registry admin's own wallet, never by this service.
+app.route("/issuers", issuers);
 
 // ---------------------------------------------------------------------------
 // Documents

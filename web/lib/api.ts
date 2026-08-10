@@ -17,6 +17,29 @@ import type {
 const BASE_URL =
   process.env.NEXT_PUBLIC_EXTRACTION_API_URL ?? "http://localhost:8787";
 
+export type ApplicationStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "WITHDRAWN";
+
+export interface ApiIssuerApplication {
+  id: string;
+  walletAddress: `0x${string}`;
+  companyName: string;
+  jurisdiction: string;
+  registrationNumber: string | null;
+  contactEmail: string;
+  website: string | null;
+  description: string | null;
+  status: ApplicationStatus;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  admitTxHash: `0x${string}` | null;
+  createdAt: string;
+}
+
 export type ExtractionStatus =
   | "PENDING"
   | "NEEDS_REVIEW"
@@ -130,6 +153,54 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean; service: string }>("/health"),
+
+  // --- Issuer onboarding ---------------------------------------------------
+  // Applications are off-chain paperwork. Admission itself is a transaction the
+  // admin's wallet signs against IssuerRegistry, never a call to this service.
+
+  apply: (input: {
+    walletAddress: string;
+    companyName: string;
+    jurisdiction: string;
+    registrationNumber?: string | null;
+    contactEmail: string;
+    website?: string | null;
+    description?: string | null;
+  }) =>
+    request<{ application: ApiIssuerApplication }>("/issuers/applications", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.application),
+
+  listApplications: (status?: ApplicationStatus) =>
+    request<{ applications: ApiIssuerApplication[] }>(
+      `/issuers/applications${status ? `?status=${status}` : ""}`,
+    ).then((r) => r.applications),
+
+  /** Where a given wallet stands. 404 when it has never applied. */
+  applicationForWallet: (address: string) =>
+    request<{ application: ApiIssuerApplication }>(
+      `/issuers/applications/by-wallet/${address}`,
+    ).then((r) => r.application),
+
+  /** Records an admission the chain has already confirmed. */
+  recordAdmission: (
+    id: string,
+    input: { txHash: string; decidedBy?: string | null; decisionNote?: string | null },
+  ) =>
+    request<{ application: ApiIssuerApplication }>(
+      `/issuers/applications/${id}/admitted`,
+      { method: "POST", body: JSON.stringify(input) },
+    ).then((r) => r.application),
+
+  rejectApplication: (
+    id: string,
+    input: { decidedBy?: string | null; decisionNote?: string | null },
+  ) =>
+    request<{ application: ApiIssuerApplication }>(
+      `/issuers/applications/${id}/reject`,
+      { method: "POST", body: JSON.stringify(input) },
+    ).then((r) => r.application),
 
   listDocuments: () =>
     request<{ documents: ApiDocument[] }>("/documents").then((r) => r.documents),

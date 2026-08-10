@@ -3,17 +3,17 @@
 /**
  * The connected wallet, and what the registry says about it.
  *
- * Backed by wagmi rather than a mock. The one piece of judgement layered on top
- * is `issuer.verified`, which resolves the connected address against the issuer
- * registry — that flag is what gates minting, and connecting an address outside
- * the registry has to produce the same refusal `NoteFactory` would.
+ * `verified` comes from `IssuerRegistry` on-chain, not from a list this app
+ * keeps. That is the whole point of the gate: `NoteFactory` reverts for
+ * addresses the registry does not recognise, so the interface has to be reading
+ * the same source rather than a copy that can drift.
  *
  * wagmi 3 deprecates `useAccount` in favour of `useConnection`, and the
  * `disconnect` field of `useDisconnect` in favour of its `mutate`.
  */
 
 import { useConnection, useDisconnect } from "wagmi";
-import { resolveIssuer } from "./registry";
+import { useIsRegisteredIssuer, useIssuerInfo } from "./registry";
 import { X_LAYER_TESTNET } from "./wagmi";
 import type { Issuer } from "./types";
 
@@ -22,6 +22,8 @@ export interface WalletState {
   connected: boolean;
   /** True while wagmi restores a previous session. */
   connecting: boolean;
+  /** True while the registry read is in flight — distinct from "not verified". */
+  checkingRegistry: boolean;
   /** Registry entry for the connected address, or a synthetic unverified one. */
   issuer: Issuer | null;
   chainId?: number;
@@ -37,12 +39,28 @@ export function useWallet(): WalletState {
   const { address, chainId, isConnected, isConnecting, isReconnecting } =
     connection;
 
+  const registry = useIsRegisteredIssuer(address);
+  const info = useIssuerInfo(address);
+
+  const onChain = info.data as
+    | { name: string; jurisdiction: string; registered: boolean }
+    | undefined;
+
   return {
     address,
     chainId,
     connected: isConnected,
     connecting: isConnecting || isReconnecting,
-    issuer: resolveIssuer(address),
+    checkingRegistry: registry.isLoading,
+    issuer: address
+      ? {
+          // The registry records a name only for issuers it admitted.
+          name: onChain?.name || "Unregistered Wallet",
+          address,
+          verified: registry.verified,
+          jurisdiction: onChain?.jurisdiction || "—",
+        }
+      : null,
     wrongNetwork: isConnected && chainId !== Number(X_LAYER_TESTNET.id),
     disconnect: () => disconnect(),
   };

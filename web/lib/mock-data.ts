@@ -47,14 +47,6 @@ export const APEX: Issuer = {
   jurisdiction: "Delaware, USA",
 };
 
-/** Not in the registry. Any mint from this address reverts in NoteFactory. */
-export const UNVERIFIED: Issuer = {
-  name: "Unregistered Wallet",
-  address: "0x4B8e2A6d0F3c9B7e1D5a8C2f6B0e3D9a7C1f4B8e",
-  verified: false,
-  jurisdiction: "Unknown",
-};
-
 // ---------------------------------------------------------------------------
 // 1. Meridian — the happy path. Clean document, one low-confidence field.
 // ---------------------------------------------------------------------------
@@ -432,10 +424,10 @@ const APEX_NOTE: Note = {
   },
 };
 
+/*
+ * Registry membership is not listed here. It is read from IssuerRegistry
+ * on-chain — see lib/registry.ts. A second list in the app would drift the
+ * moment an admin admitted someone.
+ */
 export const SEED_NOTES: Note[] = [MERIDIAN_NOTE, HALCYON_NOTE, APEX_NOTE];
 
-/** Registry members, as the admin portal would list them. */
-export const REGISTERED_ISSUERS: Issuer[] = [MERIDIAN, HALCYON, APEX];
-
-/** Wallets the demo can connect as. */
-export const DEMO_WALLETS: Issuer[] = [MERIDIAN, UNVERIFIED];

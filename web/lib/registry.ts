@@ -1,63 +1,127 @@
-import { REGISTERED_ISSUERS } from "./mock-data";
-import type { Issuer } from "./types";
+"use client";
+
+import { useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import {
+  CHAIN_ID,
+  addresses,
+  contractsConfigured,
+  issuerRegistryAbi,
+} from "./contracts";
 
 /**
- * Registry membership.
+ * Registry membership, read from the chain.
  *
- * This is a stand-in for `IssuerRegistry.isRegisteredIssuer(address)` and is
- * deliberately shaped like that call, so swapping it for a `useReadContract`
- * once the registry is deployed touches only this file.
+ * `NoteFactory` reverts for any address `IssuerRegistry` does not recognise, so
+ * the interface reads that same contract rather than keeping its own list. A
+ * local allowlist would drift the moment an admin admitted someone, and would
+ * drift in the direction that looks worst: showing a wallet as verified that
+ * the chain would refuse.
  *
- * Until then membership resolves against the demo fixtures plus any addresses
- * in NEXT_PUBLIC_DEMO_VERIFIED_ISSUERS — which is how you make your own wallet
- * a verified issuer while running the demo.
+ * Admission is a write signed by the admin's own wallet. Nothing here goes
+ * through a server, because a server that could admit issuers would become a
+ * second registry and the on-chain one would stop being the answer.
  */
 
-function envIssuers(): Issuer[] {
-  const raw = process.env.NEXT_PUBLIC_DEMO_VERIFIED_ISSUERS;
-  if (!raw) return [];
-
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => /^0x[0-9a-fA-F]{40}$/.test(entry))
-    .map((address) => ({
-      name: "Demo Issuer",
-      address: address as `0x${string}`,
-      verified: true,
-      jurisdiction: "Delaware, USA",
-    }));
-}
-
-function allIssuers(): Issuer[] {
-  return [...REGISTERED_ISSUERS, ...envIssuers()];
-}
-
-export function isRegisteredIssuer(address?: string): boolean {
-  if (!address) return false;
-  return allIssuers().some(
-    (issuer) => issuer.address.toLowerCase() === address.toLowerCase(),
-  );
-}
-
-/**
- * The registry entry for a connected address, or a synthetic unverified one.
- *
- * Returning an issuer either way keeps the refusal path concrete: the UI can
- * name the address it is rejecting instead of showing an empty state.
- */
-export function resolveIssuer(address?: string): Issuer | null {
-  if (!address) return null;
-
-  const match = allIssuers().find(
-    (issuer) => issuer.address.toLowerCase() === address.toLowerCase(),
-  );
-  if (match) return match;
+export function useIsRegisteredIssuer(address?: `0x${string}`) {
+  const query = useReadContract({
+    abi: issuerRegistryAbi,
+    address: addresses.issuerRegistry,
+    functionName: "isRegisteredIssuer",
+    args: address ? [address] : undefined,
+    chainId: CHAIN_ID,
+    query: { enabled: Boolean(address && contractsConfigured) },
+  });
 
   return {
-    name: "Unregistered Wallet",
-    address: address as `0x${string}`,
-    verified: false,
-    jurisdiction: "Unknown",
+    ...query,
+    /** Never optimistic: unknown reads as not registered. */
+    verified: query.data === true,
+  };
+}
+
+/** The address permitted to admit and revoke issuers. */
+export function useRegistryAdmin() {
+  return useReadContract({
+    abi: issuerRegistryAbi,
+    address: addresses.issuerRegistry,
+    functionName: "admin",
+    chainId: CHAIN_ID,
+    query: { enabled: contractsConfigured },
+  });
+}
+
+/** Whether the connected wallet is that admin. */
+export function useIsRegistryAdmin(address?: `0x${string}`) {
+  const { data: admin, ...rest } = useRegistryAdmin();
+  return {
+    ...rest,
+    admin,
+    isAdmin:
+      Boolean(address) &&
+      Boolean(admin) &&
+      admin!.toLowerCase() === address!.toLowerCase(),
+  };
+}
+
+/** On-chain record for an issuer: name, jurisdiction, admission timestamp. */
+export function useIssuerInfo(address?: `0x${string}`) {
+  return useReadContract({
+    abi: issuerRegistryAbi,
+    address: addresses.issuerRegistry,
+    functionName: "issuerInfo",
+    args: address ? [address] : undefined,
+    chainId: CHAIN_ID,
+    query: { enabled: Boolean(address && contractsConfigured) },
+  });
+}
+
+/**
+ * Admits an issuer, signed by the admin's wallet.
+ *
+ * Two steps that are easy to conflate: `writeContract` resolves when the wallet
+ * has broadcast, `isConfirmed` when the chain has accepted. Recording the
+ * admission off-chain before confirmation would mark an application approved on
+ * the strength of a transaction that could still revert.
+ */
+export function useAdmitIssuer() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+
+  return {
+    hash,
+    error,
+    isSigning: isPending,
+    isConfirming: receipt.isLoading,
+    isConfirmed: receipt.isSuccess,
+    receipt: receipt.data,
+    admit: (issuer: `0x${string}`, name: string, jurisdiction: string) =>
+      writeContractAsync({
+        abi: issuerRegistryAbi,
+        address: addresses.issuerRegistry!,
+        functionName: "admitIssuer",
+        args: [issuer, name, jurisdiction],
+        chainId: CHAIN_ID,
+      }),
+  };
+}
+
+export function useRevokeIssuer() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+
+  return {
+    hash,
+    error,
+    isSigning: isPending,
+    isConfirming: receipt.isLoading,
+    isConfirmed: receipt.isSuccess,
+    revoke: (issuer: `0x${string}`) =>
+      writeContractAsync({
+        abi: issuerRegistryAbi,
+        address: addresses.issuerRegistry!,
+        functionName: "revokeIssuer",
+        args: [issuer],
+        chainId: CHAIN_ID,
+      }),
   };
 }
