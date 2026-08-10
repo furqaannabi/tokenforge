@@ -18,6 +18,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -262,6 +263,33 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                       </TableRow>
                     ))}
                   </TableBody>
+                  {/*
+                    Totals, because the whole principal sits in one row of a
+                    schedule that can run to dozens. A reviewer checking that
+                    the terms hang together should not have to scroll for it,
+                    and these two figures are exactly what the validator
+                    reconciles against the stated principal and rate.
+                  */}
+                  <TableFooter>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={2}>
+                        <FieldLabel>
+                          {schedule.length} payment
+                          {schedule.length === 1 ? "" : "s"}
+                        </FieldLabel>
+                      </TableCell>
+                      <TableCell className="tnum text-right font-mono text-xs">
+                        {money(
+                          schedule.reduce((sum, p) => sum + p.principal, 0),
+                        )}
+                      </TableCell>
+                      <TableCell className="tnum text-right font-mono text-xs">
+                        {money(
+                          schedule.reduce((sum, p) => sum + p.interest, 0),
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
               </div>
             </section>

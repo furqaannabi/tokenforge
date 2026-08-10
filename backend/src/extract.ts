@@ -26,9 +26,11 @@ Rules:
 
 1. Copy sourceQuote verbatim from the document, character for character. It is matched against the document to highlight the clause in a review interface, so a paraphrase silently breaks the link. Never invent or normalise a quote.
 
-2. Report confidence honestly and use the whole range. Confidence is not a formality — fields below 0.9 are routed to a human, and that routing is the point. Be specific in the note about what was ambiguous.
+2. Confidence is a claim about how the value was obtained, not about how plausible it looks. Fields below 0.9 are routed to a human, and that routing is the point.
 
-   Lower confidence when: the document states a figure two ways, defers to a value it never gives, uses a term of art without defining it, or when you inferred a value rather than read it.
+   Reserve 1.0 for a value you copied from a single unambiguous clause — a stated principal, a stated rate, a stated date. If you assembled the value from several places, derived it from a cadence, normalised it into a different form, or judged which of two readings was meant, it does not belong at 1.0 however confident you feel. A twelve-row schedule built from a list of dates is assembled work; so is a covenant list gathered from a section.
+
+   Use 0.9 to 0.99 for a value read from one place but requiring interpretation. Use 0.5 to 0.9 where the document is ambiguous, states a figure two ways, or defers to a value it never gives. Below 0.5 where you inferred rather than read.
 
    Do NOT lower confidence merely because a value seems unusual. An 18% rate that the document states plainly is a high-confidence extraction of an expensive loan.
 
@@ -52,6 +54,10 @@ Re-examine every field and revise confidence to what you would stand behind on a
 - Does the schedule reproduce the stated rate and principal, roughly?
 - Does anything in the document contradict the value extracted?
 - Was any value inferred rather than read?
+
+Then apply the standard for 1.0 strictly, because the first pass tends not to. 1.0 means the value was copied from a single unambiguous clause and nothing was decided. Anything assembled from several places, derived from a stated cadence, normalised into another form, or chosen between two readings caps at 0.99 no matter how sure it seems — a schedule built from a list of dates and a covenant list gathered from a section are both assembled work.
+
+A pass that returns every field at 1.0 has not audited anything. If that is what you are about to do, look again at which values you actually constructed rather than read.
 
 Where a check fails, lower that field's confidence and say why in the note. Return the same values unless one is plainly wrong — this pass is about calibrating certainty, not rewriting the extraction. Raising confidence is allowed when a value checks out cleanly.`;
 
