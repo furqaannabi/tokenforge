@@ -45,3 +45,4 @@ export { issuerRegistryAbi } from "./issuer-registry";
 export { noteFactoryAbi } from "./noteFactory";
 export { rwaNoteAbi } from "./rwaNote";
 export { repaymentVaultAbi } from "./repaymentVault";
+export { erc20Abi } from "./erc20";

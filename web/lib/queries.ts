@@ -229,6 +229,21 @@ export function useRecordMintedNote(isLocalSample: boolean, extractionId: string
   });
 }
 
+/**
+ * The note and vault addresses for a minted note, if there are any.
+ *
+ * Sourced from the service's record of the mint rather than guessed: the
+ * factory creates both contracts, so their addresses are only knowable from
+ * the transaction that created them.
+ */
+export function useNoteAddresses(extractionId: string) {
+  const extraction = useExtraction(extractionId);
+  const note = extraction.data?.note;
+
+  if (!note) return undefined;
+  return { note: note.noteAddress, vault: note.vaultAddress };
+}
+
 export function useRecordMint(extractionId: string | undefined) {
   const queryClient = useQueryClient();
 

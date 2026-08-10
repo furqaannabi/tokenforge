@@ -27,6 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNotes } from "@/lib/notes";
+import { OnChainNote } from "@/components/onchain-note";
+import { useNoteAddresses } from "@/lib/queries";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
 import { couponTotals, impairment, scheduleWithStatus } from "@/lib/schedule";
@@ -53,6 +55,13 @@ export function NoteScreen({ noteId }: { noteId: string }) {
     (period) => period.status === "due" || period.status === "overdue",
   );
   const isIssuer = issuer?.address === note.issuer.address;
+
+  /*
+   * A minted note reads its live state from the chain. The local record below
+   * is what the app knew at review time and cannot show amortization, so the
+   * on-chain panel takes precedence wherever both could be displayed.
+   */
+  const onChain = useNoteAddresses(noteId);
   const currency = note.currency;
 
   const handleSettle = (periodIndex: number) => {
@@ -87,6 +96,16 @@ export function NoteScreen({ noteId }: { noteId: string }) {
           · {note.issuer.jurisdiction}
         </p>
       </header>
+
+      {onChain ? (
+        <div className="mb-8">
+          <OnChainNote
+            note={onChain.note}
+            vault={onChain.vault}
+            currency={note.currency}
+          />
+        </div>
+      ) : null}
 
       {impaired ? (
         <div className="mb-6 flex items-start gap-3 rounded-lg border border-impaired/40 bg-impaired/10 p-4">

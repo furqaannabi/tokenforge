@@ -34,5 +34,12 @@
   "notes": [
     "RWANote and RepaymentVault are not listed here: one pair is deployed per agreement, by NoteFactory.mintNote. Read them from the factory's NoteMinted events or its deployments() view.",
     "Chain 1952 was confirmed against the RPC (eth_chainId returns 0x7a0). The 195 figure that circulates for X Layer testnet is wrong."
-  ]
+  ],
+  "demoNote": {
+    "note": "0x58312Cd745B214Dcab5728c31204B1DEDF5B0B35",
+    "vault": "0x6A22eeAa78088085099C17AfdDdc9714F3324cD5",
+    "terms": "1,000 USDG at 10% over the term; five instalments of 200 principal + 20 interest",
+    "supply": "1,000 tokens",
+    "note_": "Minted through the deployed factory to exercise the flow on a real network. One period has settled: supply fell from 1,000 to 800 tokens while shares stayed at 1,000, and 220 USDG became claimable."
+  }
 }

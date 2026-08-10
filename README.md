@@ -99,6 +99,15 @@ contracts       Foundry · deployed and verified on X Layer testnet
 
 `RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json).
 
+One note is live for demonstration — 1,000 USDG at 10%, five instalments — with a period already settled:
+
+| | |
+|---|---|
+| [`RWANote`](https://www.oklink.com/xlayer-test/address/0x58312cd745b214dcab5728c31204b1dedf5b0b35) | `0x58312Cd745B214Dcab5728c31204B1DEDF5B0B35` |
+| [`RepaymentVault`](https://www.oklink.com/xlayer-test/address/0x6a22eeaa78088085099c17afdddc9714f3324cd5) | `0x6A22eeAa78088085099C17AfdDdc9714F3324cD5` |
+
+After that first repayment, on-chain: `totalSupply` 1,000 → 800 tokens, `sharesOf` unchanged at 1,000, `principalIndex` 0.8, and 220 USDG claimable.
+
 **X Layer testnet is chain 1952**, confirmed against the RPC — `eth_chainId` returns `0x7a0` on both `xlayertestrpc.okx.com` and `testrpc.xlayer.tech`. The 195 figure that circulates is wrong. Mainnet is 196.
 
 ## Running it
@@ -139,7 +148,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 Stated plainly, because a demo can hide these:
 
 - **No PDF text extraction.** `POST /documents` stores and hashes the file, but the text layer for extraction has to be supplied alongside it. There is no OCR step.
-- **No note has been minted from the UI.** The mint is wired to `NoteFactory` and signed by the connected wallet, but it has only been exercised in tests — signing needs a real wallet in a browser.
+- **Nothing has been signed from a browser.** Mint, repay, and claim are all wired to the contracts and signed by the connected wallet, and the whole lifecycle has been exercised on testnet through the deployed factory — but by a scripted signer, not a browser wallet.
 - **No note exists on-chain.** The mint → deposit → claim lifecycle has only ever run in Foundry, not on testnet.
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
 
