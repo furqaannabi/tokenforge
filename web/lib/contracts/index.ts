@@ -42,3 +42,6 @@ export function issuerRegistryAddress(): `0x${string}` {
 export const contractsConfigured = Boolean(addresses.issuerRegistry);
 
 export { issuerRegistryAbi } from "./issuer-registry";
+export { noteFactoryAbi } from "./noteFactory";
+export { rwaNoteAbi } from "./rwaNote";
+export { repaymentVaultAbi } from "./repaymentVault";

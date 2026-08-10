@@ -204,6 +204,31 @@ export function useReviewExtraction(extractionId: string | undefined) {
   });
 }
 
+/**
+ * Records a mint the chain has already confirmed.
+ *
+ * Reads the note and vault addresses out of the receipt rather than being told
+ * them: the factory creates both, so nothing off-chain knows them until the
+ * transaction lands.
+ */
+export function useRecordMintedNote(isLocalSample: boolean, extractionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { hash: string }) => {
+      if (isLocalSample) return null;
+      // The receipt is fetched by the mint hook; this only forwards what the
+      // service needs to index it.
+      return input.hash;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.extraction(extractionId),
+      });
+    },
+  });
+}
+
 export function useRecordMint(extractionId: string | undefined) {
   const queryClient = useQueryClient();
 

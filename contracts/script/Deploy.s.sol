@@ -58,3 +58,29 @@ contract AdmitIssuer is Script {
         console.log("admitted", issuer);
     }
 }
+
+/**
+ * @notice Deploys a fresh `NoteFactory` against an existing registry.
+ *
+ * `NoteFactory` embeds the bytecode of the note and vault it creates, so any
+ * change to those requires a new factory — while `IssuerRegistry` keeps its
+ * admitted issuers. Redeploying the registry alongside would discard them for
+ * no reason.
+ *
+ * Usage:
+ *   REGISTRY=0x... forge script script/Deploy.s.sol:DeployFactory \
+ *     --rpc-url xlayer_testnet --account tokenforge-deployer --broadcast
+ */
+contract DeployFactory is Script {
+    function run() external returns (NoteFactory factory) {
+        IssuerRegistry registry = IssuerRegistry(vm.envAddress("REGISTRY"));
+
+        vm.startBroadcast();
+        factory = new NoteFactory(registry);
+        vm.stopBroadcast();
+
+        console.log("chain id       ", block.chainid);
+        console.log("IssuerRegistry ", address(registry));
+        console.log("NoteFactory    ", address(factory));
+    }
+}

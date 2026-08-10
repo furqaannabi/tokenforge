@@ -94,7 +94,7 @@ contracts       Foundry · deployed and verified on X Layer testnet
 | Contract | Address | |
 |---|---|---|
 | `IssuerRegistry` | [`0x57873ccC430f7709ed77dA7da1EC521CED877F59`](https://www.oklink.com/xlayer-test/address/0x57873ccc430f7709ed77da7da1ec521ced877f59) | Verified |
-| `NoteFactory` | [`0x4E19A6C2B37c799E6BC8eb682889f33C6d97760A`](https://www.oklink.com/xlayer-test/address/0x4e19a6c2b37c799e6bc8eb682889f33c6d97760a) | Verified |
+| `NoteFactory` | [`0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357`](https://www.oklink.com/xlayer-test/address/0xc430c8ee28aaacbabfe06cdb6a6900ce616dd357) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
 `RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json).
@@ -139,7 +139,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 Stated plainly, because a demo can hide these:
 
 - **No PDF text extraction.** `POST /documents` stores and hashes the file, but the text layer for extraction has to be supplied alongside it. There is no OCR step.
-- **The web app does not call the contracts.** Upload, extraction, and review are wired to the service; minting is still a local state transition rather than a transaction. The contracts are deployed and tested, but nothing has been minted from the UI.
+- **No note has been minted from the UI.** The mint is wired to `NoteFactory` and signed by the connected wallet, but it has only been exercised in tests — signing needs a real wallet in a browser.
 - **No note exists on-chain.** The mint → deposit → claim lifecycle has only ever run in Foundry, not on testnet.
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
 

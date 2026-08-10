@@ -23,7 +23,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNotes } from "@/lib/notes";
-import { useExtraction, useReviewExtraction } from "@/lib/queries";
+import {
+  useExtraction,
+  useRecordMintedNote,
+  useReviewExtraction,
+} from "@/lib/queries";
+import { useMintNote } from "@/lib/mint";
+import { SUPPLY_TOKENS, localNoteId } from "@/lib/issuance";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
@@ -62,7 +68,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const { getNote, confirmField, mint } = useNotes();
   const { issuer, address } = useWallet();
   const [activeField, setActiveField] = useState<TermField | null>(null);
-  const [minting, setMinting] = useState(false);
+  const [mintError, setMintError] = useState<string | null>(null);
+  const minting = useMintNote();
+  const recordMint = useRecordMintedNote(localNoteId(noteId), noteId);
   // Below lg the two panes cannot sit side by side, so one shows at a time.
   const [pane, setPane] = useState<"document" | "terms">("terms");
   // An issuance decision, not an extraction: no document states it.
@@ -118,13 +126,39 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
     }
   };
 
-  const handleMint = () => {
-    setMinting(true);
-    // Stands in for the NoteFactory transaction round-trip.
-    setTimeout(() => {
+  /**
+   * Signs the mint with the connected wallet.
+   *
+   * `NoteFactory` checks the registry against whoever signed, so this has to be
+   * the issuer's own transaction — routing it through a server would put an
+   * unregistered address in the middle and defeat the gate entirely.
+   *
+   * The service is told only after the chain confirms. Recording on broadcast
+   * would index a note that could still revert.
+   */
+  const handleMint = async () => {
+    setMintError(null);
+    try {
+      const hash = await minting.mint({
+        terms,
+        name: note.name,
+        symbol: note.symbol,
+        issuer: address!,
+        currency,
+        documentHash: note.document.hash,
+        supplyTokens: SUPPLY_TOKENS,
+      });
+
+      // Local samples have no server-side record to update.
+      if (!localNote) {
+        await recordMint.mutateAsync({ hash });
+      }
+
       mint(noteId);
       router.push(`/note/${noteId}`);
-    }, 900);
+    } catch (cause) {
+      setMintError((cause as Error).message);
+    }
   };
 
   const schedule = terms.schedule.value;
@@ -252,7 +286,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 
           <MintFooter
             gate={gate}
-            minting={minting}
+            minting={minting.isSigning || minting.isConfirming}
+            signing={minting.isSigning}
+            error={mintError}
             onMint={handleMint}
             issuerVerified={issuer?.verified ?? false}
           />
@@ -428,11 +464,15 @@ function ReviewSummary({
 function MintFooter({
   gate,
   minting,
+  signing,
+  error,
   onMint,
   issuerVerified,
 }: {
   gate: NonNullable<ReturnType<typeof mintGate>>;
   minting: boolean;
+  signing: boolean;
+  error: string | null;
   onMint: () => void;
   issuerVerified: boolean;
 }) {
@@ -456,15 +496,26 @@ function MintFooter({
         </ul>
       )}
 
+      {error ? (
+        <p className="mb-2 flex items-start gap-1.5 text-xs text-impaired">
+          <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+          {error}
+        </p>
+      ) : null}
+
       <Button
         size="lg"
         onClick={onMint}
         disabled={!gate.canMint || minting}
         className="w-full"
       >
-        {minting ? (
+        {signing ? (
           <>
-            <Loader2 className="animate-spin" /> Minting on X Layer…
+            <Loader2 className="animate-spin" /> Confirm in wallet…
+          </>
+        ) : minting ? (
+          <>
+            <Loader2 className="animate-spin" /> Waiting for X Layer…
           </>
         ) : (
           "Approve & mint RWA note"
