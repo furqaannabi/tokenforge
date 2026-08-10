@@ -131,7 +131,9 @@ cd ../contracts
 forge test                        # 66 tests
 ```
 
-The seed loads both sample documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
+The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
+
+For the full pipeline, [samples/](samples/) has four PDFs to upload — the happy path, the contradictory note that should be refused, an amortizing loan, and an invoice.
 
 ## Scope and honesty statement
 
