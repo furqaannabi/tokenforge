@@ -1,0 +1,59 @@
+# TokenForge contracts
+
+Foundry. Deployed and verified on X Layer testnet — addresses in
+[deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
+
+```bash
+forge test          # 55 tests
+forge coverage      # 97% of lines, 78% of branches
+```
+
+| Contract | |
+|---|---|
+| `IssuerRegistry` | Who may issue. Admission, revocation, per-issuer representatives, two-step admin handover |
+| `NoteFactory` | The only supported way on-chain. Enforces registry membership, claims the document hash, deploys note and vault atomically |
+| `RWANote` | ERC-20 with immutable terms, impairment state, and a transfer restriction hook |
+| `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, impairment and cure |
+| `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
+
+## Three decisions worth knowing
+
+**Distribution uses an accumulator, not per-period snapshots.** The note calls
+`syncHolder` for both parties before any balance change, so a coupon lands with
+whoever held the tokens while it accrued. Selling straight after a deposit does
+not forfeit it; buying straight after one does not capture it.
+
+**The vault refuses to deploy against a schedule that does not reproduce the
+note's committed `scheduleHash`.** That is what stops the terms a human approved
+being swapped for different ones between review and deployment.
+
+**Revoking an issuer does not touch notes already issued.** Their terms are
+immutable and their holders' claims should survive the issuer losing the right
+to create more.
+
+## Testing
+
+The fixture is the Meridian note from the demo documents — $2.5M at 8.50%,
+twelve $53,125 quarterly coupons — the same figures the TypeScript validator
+reproduces, so a divergence between the two halves of the product shows up as a
+failing test rather than a mystery.
+
+The mock settlement currency is 6 decimals against the note's 18 on purpose. A
+same-decimals token would hide a decimals error in the distribution math.
+
+## Deploying
+
+```bash
+cast wallet import tokenforge-deployer --interactive
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url xlayer_testnet --account tokenforge-deployer --broadcast
+```
+
+Verification goes through OKLink's plugin endpoint rather than an `[etherscan]`
+entry, and needs **no API key**. Flags are documented in `foundry.toml`. OKLink
+wants about a minute after deployment before it will accept a new address, so
+pair it with `--watch`.
+
+`MockUSDG` is testnet only — minting is unrestricted, which makes it worthless
+as money. Its deploy script refuses to broadcast on chain 196, where the real
+USDG exists and a freely mintable impostor would be actively harmful.

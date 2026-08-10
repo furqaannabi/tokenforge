@@ -50,11 +50,29 @@ The three stages answer different questions and fail independently:
 confirmation helps. `NEEDS_REVIEW` means they hang together but someone must
 vouch for a field.
 
+## Storage
+
+Documents go to Cloudflare R2, which speaks the S3 API — nothing in
+`src/storage.ts` is R2-specific beyond the endpoint and `region: "auto"`, so
+`R2_ENDPOINT` points the same code at S3 or MinIO.
+
+The client posts the file to this service and the service does the put, so the
+bucket needs no CORS rule and the credentials stay server-side. Objects are
+keyed by the hash of their own bytes, which makes re-uploads idempotent and
+means the key a document sits under is the value written on-chain: someone
+holding only the chain can find the file it refers to.
+
+The hash is always computed here, over the bytes that arrived, and never
+accepted from the caller — it is the claim that a token corresponds to a
+specific document.
+
+Buckets stay private. Reading goes through a short-lived signed URL.
+
 ## Endpoints
 
 | | |
 |---|---|
-| `POST /documents` | Register a document, storing the file in R2 when one is supplied. Deduplicated by keccak256 of its bytes — the same hash `NoteFactory` claims on-chain |
+| `POST /documents` | Register a document. Send it as multipart with a `file` part and the service stores it in R2; deduplicated by keccak256 of its bytes, the same hash `NoteFactory` claims on-chain |
 | `GET /documents/:id/url` | Short-lived signed URL for the stored file |
 | `POST /documents/:id/extract` | Run the pipeline |
 | `GET /extractions/:id` | Extraction with its document and note |
@@ -73,6 +91,13 @@ exist. Upload without a file and the content hash falls back to hashing the
 text, which is internally consistent but cannot be verified against the original
 PDF — so on-chain provenance is only meaningful for uploads that include one.
 
-**Extraction is unverified against real documents.** The prompt and two-pass
-design are untested on anything but hand-written samples, and extraction quality
-on genuine agreements is the project's central risk.
+**Large files pass through the service.** Multipart keeps the bytes off a base64
+round trip, but they still land in this process's memory. Fine at agreement
+sizes; anything much larger wants presigned direct-to-bucket uploads, which
+would need a CORS rule on the bucket in exchange.
+
+**Extraction quality is barely measured.** The pipeline runs against Gemini for
+real and behaves correctly on both sample documents, but two hand-written
+samples are not evidence about genuine agreements — which remains the project's
+central risk. Confidence varies run to run and does produce mid-range values;
+whether it is *well* calibrated is unknown.
