@@ -4,8 +4,8 @@ Foundry. Deployed and verified on X Layer testnet — addresses in
 [deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
 
 ```bash
-forge test          # 55 tests
-forge coverage      # 97% of lines, 78% of branches
+forge test          # 66 tests
+forge coverage      # 96% of lines, 76% of branches
 ```
 
 | Contract | |
@@ -13,7 +13,7 @@ forge coverage      # 97% of lines, 78% of branches
 | `IssuerRegistry` | Who may issue. Admission, revocation, per-issuer representatives, two-step admin handover |
 | `NoteFactory` | The only supported way on-chain. Enforces registry membership, claims the document hash, deploys note and vault atomically |
 | `RWANote` | ERC-20 with immutable terms, impairment state, and a transfer restriction hook |
-| `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, impairment and cure |
+| `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure |
 | `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
 
 ## Three decisions worth knowing
@@ -26,6 +26,25 @@ not forfeit it; buying straight after one does not capture it.
 **The vault refuses to deploy against a schedule that does not reproduce the
 note's committed `scheduleHash`.** That is what stops the terms a human approved
 being swapped for different ones between review and deployment.
+
+**Balances amortize; supply tracks outstanding principal.** `RWANote` stores
+*shares*, and `balanceOf` is a share multiplied by the fraction of principal
+still owed. Repay 10% of a 1,000 USDG loan and a 100-token holder is left with
+90 — the repaid portion is retired without anyone burning anything.
+
+That burn has to be simultaneous to be fair. If holders retired tokens
+individually, whoever redeemed last would collect a larger share of the next
+payment, because their unburned tokens still represent principal they had
+already been credited. Two identical positions would earn differently purely on
+timing.
+
+Distribution therefore runs on shares, not balances: a share is a fixed slice of
+the loan, while a balance is what that slice is currently worth. Coupons are
+claimed separately and whenever the holder likes.
+
+One trade-off worth knowing: the `Transfer` event carries the share amount, not
+the balance amount, because it is emitted by the inherited ERC-20 accounting.
+Read `sharesOf` alongside it. This is the usual cost of a rebasing token.
 
 **Revoking an issuer does not touch notes already issued.** Their terms are
 immutable and their holders' claims should survive the issuer losing the right

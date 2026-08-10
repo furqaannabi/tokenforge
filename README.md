@@ -119,7 +119,7 @@ cp .env.example .env.local        # addresses are in the deployments JSON
 pnpm dev                          # :3000
 
 cd ../contracts
-forge test                        # 55 tests
+forge test                        # 66 tests
 ```
 
 The seed loads both sample documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
@@ -132,7 +132,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 **Partially stubbed:** issuer verification. The `IssuerRegistry` and its on-chain enforcement are real — an unregistered address genuinely cannot mint — but admission to the registry is a manual off-chain decision here, not a KYB integration.
 
-**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, and the repayment logic with 55 passing tests.
+**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, and the repayment logic with 66 passing tests.
 
 ## What is not built yet
 

@@ -42,8 +42,15 @@ contract RepaymentVault is ReentrancyGuard {
     /// @notice Index of the earliest period not yet settled.
     uint256 public nextPeriod;
 
-    /// @dev Cumulative settlement currency paid per token, scaled by 1e18.
-    uint256 public accPerToken;
+    /**
+     * @dev Cumulative settlement currency paid per *share*, scaled by 1e18.
+     *
+     * Per share rather than per token, because a token's value amortizes as
+     * principal comes back while a share is a fixed slice of the loan. Dividing
+     * by a shrinking supply would pay latecomers more than prompt holders for
+     * the same position.
+     */
+    uint256 public accPerShare;
 
     mapping(address holder => uint256) private _checkpoint;
     mapping(address holder => uint256) private _accrued;
@@ -113,8 +120,8 @@ contract RepaymentVault is ReentrancyGuard {
         uint256 index = nextPeriod;
         if (index >= _schedule.length) revert AllPeriodsSettled();
 
-        uint256 supply = note.totalSupply();
-        if (supply == 0) revert NoSupply();
+        uint256 shares = note.totalShares();
+        if (shares == 0) revert NoSupply();
 
         Period memory period = _schedule[index];
         amount = period.principal + period.interest;
@@ -122,10 +129,14 @@ contract RepaymentVault is ReentrancyGuard {
         currency.safeTransferFrom(msg.sender, address(this), amount);
         totalDeposited += amount;
 
-        accPerToken += (amount * ACC_PRECISION) / supply;
+        accPerShare += (amount * ACC_PRECISION) / shares;
         nextPeriod = index + 1;
 
-        emit PeriodSettled(index, amount, accPerToken);
+        // Principal returned shrinks every balance in step. Interest does not:
+        // it is a payment on the loan, not a repayment of it.
+        if (period.principal > 0) note.amortize(period.principal);
+
+        emit PeriodSettled(index, amount, accPerShare);
 
         if (nextPeriod == _schedule.length) {
             note.setStatus(RWANote.Status.Matured);
@@ -172,11 +183,11 @@ contract RepaymentVault is ReentrancyGuard {
     }
 
     function _sync(address holder) internal {
-        uint256 acc = accPerToken;
+        uint256 acc = accPerShare;
         uint256 checkpoint = _checkpoint[holder];
         if (acc != checkpoint) {
             _accrued[holder] +=
-                (note.balanceOf(holder) * (acc - checkpoint)) / ACC_PRECISION;
+                (note.sharesOf(holder) * (acc - checkpoint)) / ACC_PRECISION;
             _checkpoint[holder] = acc;
         }
     }
@@ -197,7 +208,7 @@ contract RepaymentVault is ReentrancyGuard {
     /// @notice Settlement currency a holder could claim right now.
     function claimable(address holder) external view returns (uint256) {
         uint256 pending =
-            (note.balanceOf(holder) * (accPerToken - _checkpoint[holder])) / ACC_PRECISION;
+            (note.sharesOf(holder) * (accPerShare - _checkpoint[holder])) / ACC_PRECISION;
         return _accrued[holder] + pending;
     }
 

@@ -141,6 +141,103 @@ contract RWANote is ERC20 {
     // Lifecycle
     // -----------------------------------------------------------------------
 
+    // -----------------------------------------------------------------------
+    // Amortization
+    // -----------------------------------------------------------------------
+
+    /**
+     * @notice Principal returned to holders so far.
+     * @dev Drives `principalIndex`, and with it every balance.
+     */
+    uint256 public principalRepaid;
+
+    event Amortized(uint256 principalRepaid, uint256 index);
+
+    error RepaysMoreThanPrincipal(uint256 repaid, uint256 principal);
+
+    /**
+     * @notice Records principal returned, shrinking every balance in step.
+     *
+     * @dev Called by the vault as each period settles. Balances fall for all
+     *      holders at once, which is the only way partial redemption can be
+     *      fair: if holders burned individually, whoever redeemed last would
+     *      collect a larger share of the next payment, because their unburned
+     *      tokens still represent principal they had already been credited.
+     *
+     *      Shares are untouched — they are the ownership record, and the vault
+     *      distributes against them. Only the value each share represents
+     *      changes.
+     */
+    function amortize(uint256 amount) external {
+        if (msg.sender != vault) revert NotVault();
+
+        uint256 repaid = principalRepaid + amount;
+        if (repaid > principal) {
+            revert RepaysMoreThanPrincipal(repaid, principal);
+        }
+
+        principalRepaid = repaid;
+        emit Amortized(repaid, principalIndex());
+    }
+
+    /**
+     * @notice Outstanding principal as a fraction of the original, scaled 1e18.
+     *
+     * One token is worth this fraction of what it was at issuance. It reaches
+     * zero when the loan is fully repaid, at which point every balance is zero
+     * — the tokens are spent, without anyone needing to burn them.
+     */
+    function principalIndex() public view returns (uint256) {
+        if (principalRepaid >= principal) return 0;
+        return ((principal - principalRepaid) * INDEX_SCALE) / principal;
+    }
+
+    // -----------------------------------------------------------------------
+    // Share-based balances
+    // -----------------------------------------------------------------------
+
+    /**
+     * @dev The inherited ERC-20 storage holds *shares*, not balances. A share
+     *      is a fixed fraction of the loan and never changes except by
+     *      transfer; a balance is what that share is currently worth, and
+     *      falls as principal comes back.
+     *
+     *      Consequence worth knowing: the `Transfer` event carries the share
+     *      amount rather than the balance amount, because it is emitted by the
+     *      inherited accounting. Read `sharesOf` alongside it. This is the
+     *      usual trade-off for a rebasing token.
+     */
+    uint256 private constant INDEX_SCALE = 1e18;
+
+    /// @notice A holder's ownership of the loan, unaffected by amortization.
+    function sharesOf(address account) public view returns (uint256) {
+        return super.balanceOf(account);
+    }
+
+    /// @notice Total ownership units outstanding.
+    function totalShares() public view returns (uint256) {
+        return super.totalSupply();
+    }
+
+    /// @notice What a holder's shares are worth today.
+    function balanceOf(address account) public view override returns (uint256) {
+        return (super.balanceOf(account) * principalIndex()) / INDEX_SCALE;
+    }
+
+    /// @notice Outstanding principal, in token units.
+    function totalSupply() public view override returns (uint256) {
+        return (super.totalSupply() * principalIndex()) / INDEX_SCALE;
+    }
+
+    /// @dev Balance amount to the share amount that currently represents it.
+    function sharesForAmount(uint256 amount) public view returns (uint256) {
+        uint256 index = principalIndex();
+        // Fully repaid: the tokens are spent and only a zero transfer is
+        // meaningful. Returning zero keeps that case from dividing by zero.
+        if (index == 0) return 0;
+        return (amount * INDEX_SCALE) / index;
+    }
+
     /// @notice Only the vault may change status; it alone tracks the schedule.
     function setStatus(Status next) external {
         if (msg.sender != vault) revert NotVault();
@@ -195,7 +292,16 @@ contract RWANote is ERC20 {
             if (!isBurn) IHolderSync(vault_).syncHolder(to);
         }
 
-        super._update(from, to, value);
+        /*
+         * Callers speak in balances; the ledger speaks in shares. Converting
+         * here rather than in `_transfer` because OpenZeppelin marks that
+         * function non-virtual — `_update` is the single point every balance
+         * change passes through.
+         *
+         * The initial mint is unaffected: nothing has amortized yet, so the
+         * index is 1 and shares equal tokens.
+         */
+        super._update(from, to, isMint ? value : sharesForAmount(value));
     }
 
     /// @notice The immutable terms, as one struct, for off-chain consumers.

@@ -618,6 +618,149 @@ contract TransferRestrictionTest is TokenForgeFixture {
 
 // ---------------------------------------------------------------------------
 
+/// @notice Amortization: balances fall as principal comes back.
+contract AmortizationTest is TokenForgeFixture {
+    RWANote internal note;
+    RepaymentVault internal vault;
+
+    function setUp() public override {
+        super.setUp();
+        (note, vault) = _mint();
+    }
+
+    function _settleAll() internal {
+        for (uint256 i = 0; i < PERIODS; i++) {
+            _settle(vault);
+        }
+    }
+
+    /// @notice Interest is a payment on the loan, not a repayment of it.
+    function test_InterestOnlyPeriodsDoNotAmortize() public {
+        _settle(vault); // coupon only; principal comes at maturity
+
+        assertEq(note.principalRepaid(), 0);
+        assertEq(note.totalSupply(), SUPPLY, "supply is untouched by a coupon");
+        assertEq(note.balanceOf(issuer), SUPPLY);
+    }
+
+    /// @notice The final period returns the principal, and the note is spent.
+    function test_PrincipalRepaymentRetiresTheSupply() public {
+        _settleAll();
+
+        assertEq(note.principalRepaid(), PRINCIPAL);
+        assertEq(note.principalIndex(), 0, "nothing outstanding");
+        assertEq(note.totalSupply(), 0, "no tokens left to represent a claim");
+        assertEq(note.balanceOf(issuer), 0);
+        // Ownership survives as the record of who is owed the cash.
+        assertEq(note.totalShares(), SUPPLY);
+    }
+
+    /**
+     * @notice The property the whole design exists for.
+     *
+     * Two identical positions must earn identically, regardless of who
+     * collects their cash first. Alice claims after every period; Bob never
+     * claims until the end.
+     */
+    function test_CollectingEarlyEarnsNoLessThanWaiting() public {
+        vm.startPrank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+        note.transfer(bob, SUPPLY / 4);
+        vm.stopPrank();
+
+        for (uint256 i = 0; i < PERIODS; i++) {
+            _settle(vault);
+            if (vault.claimable(alice) > 0) {
+                vm.prank(alice);
+                vault.claim();
+            }
+        }
+
+        vm.prank(bob);
+        vault.claim();
+
+        assertEq(
+            usdg.balanceOf(alice),
+            usdg.balanceOf(bob),
+            "claiming promptly must not cost anything"
+        );
+    }
+
+    /// @notice Amortization moves every balance by the same fraction.
+    function test_BalancesFallInStep() public {
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        uint256 aliceBefore = note.balanceOf(alice);
+        uint256 issuerBefore = note.balanceOf(issuer);
+
+        _settleAll();
+
+        assertEq(note.balanceOf(alice), 0);
+        assertEq(note.balanceOf(issuer), 0);
+        assertGt(aliceBefore, 0);
+        assertGt(issuerBefore, 0);
+    }
+
+    /// @notice Shares are the ownership record and amortization cannot touch them.
+    function test_SharesSurviveAmortization() public {
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        uint256 shares = note.sharesOf(alice);
+        _settleAll();
+
+        assertEq(note.sharesOf(alice), shares, "ownership is unchanged");
+        assertEq(note.balanceOf(alice), 0, "but it is worth nothing now");
+    }
+
+    /// @notice Entitlement follows shares, so a transfer still moves the claim.
+    function test_TransferMovesTheClaimAfterAmortization() public {
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        _settle(vault);
+
+        uint256 owed = vault.claimable(alice);
+        assertGt(owed, 0);
+
+        // Read before the prank: vm.prank applies to the next call, and an
+        // argument that is itself a call would consume it.
+        uint256 position = note.balanceOf(alice);
+
+        // Alice sells her whole position; the coupon she already earned stays.
+        vm.prank(alice);
+        note.transfer(bob, position);
+
+        assertEq(vault.claimable(alice), owed, "earned coupons do not transfer");
+        assertEq(note.sharesOf(bob), SUPPLY / 4, "the position does");
+    }
+
+    function test_OnlyVaultCanAmortize() public {
+        vm.prank(issuer);
+        vm.expectRevert(RWANote.NotVault.selector);
+        note.amortize(1);
+    }
+
+    /// @notice Everything deposited remains claimable after full amortization.
+    function test_ClaimsStillWorkOnASpentNote() public {
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        _settleAll();
+        assertEq(note.balanceOf(alice), 0);
+
+        vm.prank(alice);
+        assertGt(vault.claim(), 0, "a spent token still owes its holder cash");
+
+        vm.prank(issuer);
+        vault.claim();
+        assertApproxEqAbs(vault.totalClaimed(), vault.totalDeposited(), PERIODS);
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 /// @notice Guard clauses and malformed input — the paths that should never run.
 contract ValidationTest is TokenForgeFixture {
     function test_RegistryRejectsZeroAdmin() public {
@@ -770,6 +913,126 @@ contract DistributionFuzzTest is TokenForgeFixture {
             vault.claimable(issuer) + vault.claimable(alice),
             before,
             "a transfer moves tokens, not accrued coupons"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * @notice An amortizing loan, where principal returns a slice at a time.
+ *
+ * The fixture above is interest-only, so its supply survives untouched until
+ * the final period. This one repays 10% of principal every period, which is
+ * where the design earns its keep: a holder watches their balance fall in step
+ * with what they have been repaid.
+ */
+contract AmortizingScheduleTest is TokenForgeFixture {
+    uint256 internal constant LOAN = 1_000e6; // 1,000 USDG
+    uint256 internal constant TOKENS = 100e18; // 100 tokens
+    uint256 internal constant INSTALMENTS = 10; // 10% of principal each
+    uint256 internal constant PRINCIPAL_PER_PERIOD = LOAN / INSTALMENTS;
+    uint256 internal constant INTEREST_PER_PERIOD = 5e6;
+
+    RWANote internal note;
+    RepaymentVault internal vault;
+
+    function _amortizingSchedule() internal pure returns (Period[] memory schedule) {
+        schedule = new Period[](INSTALMENTS);
+        for (uint256 i = 0; i < INSTALMENTS; i++) {
+            schedule[i] = Period({
+                dueDate: START + uint64(i + 1) * QUARTER,
+                principal: PRINCIPAL_PER_PERIOD,
+                interest: INTEREST_PER_PERIOD
+            });
+        }
+    }
+
+    function setUp() public override {
+        super.setUp();
+
+        Period[] memory schedule = _amortizingSchedule();
+        NoteFactory.MintParams memory params = NoteFactory.MintParams({
+            name: "Amortizing Note",
+            symbol: "AMRT",
+            issuer: issuer,
+            supply: TOKENS,
+            currency: usdg,
+            gracePeriod: GRACE,
+            terms: RWANote.Terms({
+                principal: LOAN,
+                rateBps: 500,
+                maturity: schedule[INSTALMENTS - 1].dueDate,
+                documentHash: keccak256("Amortizing.pdf"),
+                scheduleHash: ScheduleLib.hash(schedule)
+            }),
+            schedule: schedule
+        });
+
+        vm.prank(issuer);
+        (note, vault) = factory.mintNote(params);
+    }
+
+    /// @notice 1,000 USDG, 100 tokens, 10% repaid: 100 tokens become 90.
+    function test_TenPercentRepaidRetiresTenPercentOfTheBalance() public {
+        vm.prank(issuer);
+        note.transfer(alice, TOKENS);
+        assertEq(note.balanceOf(alice), 100e18);
+
+        _settle(vault);
+
+        assertEq(note.balanceOf(alice), 90e18, "10% of the position is repaid");
+        assertEq(note.totalSupply(), 90e18);
+        assertEq(vault.claimable(alice), PRINCIPAL_PER_PERIOD + INTEREST_PER_PERIOD);
+    }
+
+    /// @notice The balance tracks outstanding principal at every step.
+    function test_BalanceTracksOutstandingPrincipal() public {
+        vm.prank(issuer);
+        note.transfer(alice, TOKENS);
+
+        for (uint256 i = 1; i <= INSTALMENTS; i++) {
+            _settle(vault);
+
+            uint256 outstanding = LOAN - (PRINCIPAL_PER_PERIOD * i);
+            assertEq(
+                note.balanceOf(alice),
+                (TOKENS * outstanding) / LOAN,
+                "balance is the share of principal still owed"
+            );
+        }
+
+        assertEq(note.balanceOf(alice), 0, "fully repaid leaves nothing");
+        assertEq(note.totalSupply(), 0);
+    }
+
+    /// @notice Two equal holders are repaid equally, whenever they collect.
+    function test_AmortizationIsEvenAcrossHolders() public {
+        vm.startPrank(issuer);
+        note.transfer(alice, TOKENS / 2);
+        note.transfer(bob, TOKENS / 2);
+        vm.stopPrank();
+
+        // Alice collects after every instalment; Bob waits until the end.
+        for (uint256 i = 0; i < INSTALMENTS; i++) {
+            _settle(vault);
+            vm.prank(alice);
+            vault.claim();
+        }
+
+        vm.prank(bob);
+        vault.claim();
+
+        assertEq(note.balanceOf(alice), note.balanceOf(bob));
+        assertEq(
+            usdg.balanceOf(alice),
+            usdg.balanceOf(bob),
+            "collecting early must not cost anything"
+        );
+        assertEq(
+            usdg.balanceOf(alice),
+            (LOAN + INTEREST_PER_PERIOD * INSTALMENTS) / 2,
+            "each holder receives half of principal plus interest"
         );
     }
 }
