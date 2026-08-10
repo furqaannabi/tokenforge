@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { FieldLabel, HexValue, Stamp } from "@/components/primitives";
 import { OnChainNote } from "@/components/onchain-note";
+import { TransferNote } from "@/components/transfer-note";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDocumentUrl, useExtraction } from "@/lib/queries";
@@ -92,6 +93,12 @@ export function NoteScreen({ noteId }: { noteId: string }) {
         note={minted.noteAddress}
         vault={minted.vaultAddress}
         currency={note.currency}
+      />
+
+      <TransferNote
+        note={minted.noteAddress}
+        vault={minted.vaultAddress}
+        symbol={minted.symbol}
       />
 
       <Card className="mt-6">

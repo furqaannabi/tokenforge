@@ -1,11 +1,13 @@
 "use client";
 
-import { BadgeCheck, ExternalLink } from "lucide-react";
-import { AdminQueue, ApplyPanel } from "@/components/issuer-onboarding";
+import Link from "next/link";
+import { ArrowRight, BadgeCheck, ExternalLink } from "lucide-react";
+import { ApplyPanel } from "@/components/issuer-onboarding";
 import { FieldLabel } from "@/components/primitives";
 import { Card, CardContent } from "@/components/ui/card";
 import { useApplications } from "@/lib/queries";
-import { useRegistryAdmin } from "@/lib/registry";
+import { useIsRegistryAdmin, useRegistryAdmin } from "@/lib/registry";
+import { useWallet } from "@/lib/wallet";
 import { addresses, contractsConfigured } from "@/lib/contracts";
 import { truncateHex } from "@/lib/format";
 
@@ -13,9 +15,9 @@ import { truncateHex } from "@/lib/format";
  * The issuer registry.
  *
  * Membership is a contract, not a list this app maintains. Admitted issuers are
- * shown from applications the chain has confirmed, and the admin's own queue
- * writes directly to `IssuerRegistry` — nothing here asks a server for
- * permission to change who may mint.
+ * shown from applications the chain has confirmed. This page is for the company
+ * applying and for anyone checking who was admitted; the admin's queue is a
+ * different job and lives at /admin.
  */
 export default function RegistryPage() {
   const admin = useRegistryAdmin();
@@ -79,7 +81,7 @@ export default function RegistryPage() {
       )}
 
       <ApplyPanel />
-      <AdminQueue />
+      <AdminLink />
 
       <section className="mt-8">
         <FieldLabel>Admitted issuers</FieldLabel>
@@ -137,6 +139,29 @@ export default function RegistryPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** Shown only to the wallet the registry contract names as admin. */
+function AdminLink() {
+  const { address } = useWallet();
+  const { isAdmin } = useIsRegistryAdmin(address);
+  if (!isAdmin) return null;
+
+  return (
+    <Card className="mt-6">
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <span className="text-muted-foreground">
+          This wallet is the registry admin.
+        </span>
+        <Link
+          href="/admin"
+          className="inline-flex items-center gap-1.5 font-medium hover:text-verified"
+        >
+          Open the queue <ArrowRight className="size-3.5" />
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

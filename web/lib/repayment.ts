@@ -246,6 +246,40 @@ export function useClaim(vault?: `0x${string}`) {
 }
 
 /**
+ * Moves a holding to another wallet.
+ *
+ * This is how a note reaches an investor: the issuer mints the whole supply to
+ * itself and transfers stakes out. The amount is a balance, not shares — the
+ * note converts on the way in, so sending "100 tokens" means 100 of today's
+ * worth however far principal has already amortized.
+ *
+ * There is no marketplace behind this and deliberately so. Who may hold a
+ * private credit note is a legal question about the investor, not a technical
+ * one, and inventing a permissionless order book here would quietly answer it
+ * the wrong way.
+ */
+export function useTransferNote(note?: `0x${string}`) {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+
+  return {
+    hash,
+    error,
+    isSigning: isPending,
+    isConfirming: receipt.isLoading,
+    isConfirmed: receipt.isSuccess,
+    transfer: (to: `0x${string}`, amount: bigint) =>
+      writeContractAsync({
+        abi: rwaNoteAbi,
+        address: note!,
+        functionName: "transfer",
+        args: [to, amount],
+        chainId: CHAIN_ID,
+      }),
+  };
+}
+
+/**
  * Mints test currency to the caller.
  *
  * Only meaningful against the testnet mock, whose `mint` is unrestricted. It

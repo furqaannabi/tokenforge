@@ -7,6 +7,7 @@ import { useAppKit } from "@reown/appkit/react";
 import { useConnect, useConnectors } from "wagmi";
 import { BadgeCheck, ShieldOff, TriangleAlert, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
+import { useIsRegistryAdmin } from "@/lib/registry";
 import { hasProjectId } from "@/lib/wagmi";
 import { truncateHex } from "@/lib/format";
 import { Stamp } from "@/components/primitives";
@@ -14,14 +15,26 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
+  { href: "/notes", label: "Notes" },
+  { href: "/portfolio", label: "Portfolio" },
   { href: "/", label: "Issue" },
   { href: "/registry", label: "Registry" },
 ] as const;
 
+/**
+ * Only the registry's own admin sees this.
+ *
+ * The gate is cosmetic — `admitIssuer` reverts for anyone else regardless — but
+ * showing a door that will not open to every visitor is its own kind of lie.
+ */
+const ADMIN_LINK = { href: "/admin", label: "Admin" } as const;
+
 export function TopNav() {
   const pathname = usePathname();
-  const { issuer, connected, connecting, wrongNetwork, disconnect } =
+  const { issuer, address, connected, connecting, wrongNetwork, disconnect } =
     useWallet();
+  const { isAdmin } = useIsRegistryAdmin(address);
+  const links = isAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
 
   return (
     <header className="border-b border-border bg-card">
@@ -50,8 +63,8 @@ export function TopNav() {
           </span>
         </Link>
 
-        <nav className="flex shrink-0 items-center gap-1">
-          {LINKS.map((link) => {
+        <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto sm:gap-1">
+          {links.map((link) => {
             const active =
               link.href === "/"
                 ? pathname === "/"
