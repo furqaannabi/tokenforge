@@ -81,7 +81,11 @@ contract ExampleTest is Test {
         console.log("1,000 USDG loan, 100 tokens. Alice 60, Bob 40.");
         console.log("Five instalments: 200 USDG principal + 10 USDG interest each.");
         console.log("");
-        console.log("period | outstanding | alice bal | bob bal | supply | alice owed | bob owed");
+        console.log("Alice claims every period. Bob never claims until the end.");
+        console.log("");
+        console.log(
+            "period | outstanding | alice bal | bob bal | alice unclaimed | alice paid | bob unclaimed"
+        );
 
         _row(0);
         for (uint256 i = 1; i <= PERIODS; i++) {
@@ -90,13 +94,15 @@ contract ExampleTest is Test {
             vault.settleNextPeriod();
             vm.stopPrank();
 
-            _row(i);
-
-            // Alice collects every period; Bob leaves his to accumulate.
+            // Alice collects every period; Bob leaves his to accumulate. The
+            // row is printed after she claims, so "unclaimed" and "paid" are
+            // describing the same moment.
             if (vault.claimable(alice) > 0) {
                 vm.prank(alice);
                 vault.claim();
             }
+
+            _row(i);
         }
 
         vm.prank(bob);
@@ -111,7 +117,10 @@ contract ExampleTest is Test {
         console.log("  alice", usdg.balanceOf(alice) / 1e6, "= 60% of 1,050");
         console.log("  bob  ", usdg.balanceOf(bob) / 1e6, "= 40% of 1,050");
         console.log("");
-        console.log("alice claimed after every instalment, bob waited. Same outcome.");
+        console.log("Alice's unclaimed balance is 0 every period because she just");
+        console.log("collected it. Her 126 per instalment -- 60% of 210 -- accumulates");
+        console.log("in the 'paid' column instead. Bob's stacks up unclaimed until the");
+        console.log("end. Five instalments either way: 5 x 126 = 630, 5 x 84 = 420.");
     }
 
     function _row(uint256 period) internal view {
@@ -121,9 +130,9 @@ contract ExampleTest is Test {
                 _pad((LOAN - note.principalRepaid()) / 1e6, 11), " | ",
                 _pad(note.balanceOf(alice) / 1e18, 9), " | ",
                 _pad(note.balanceOf(bob) / 1e18, 7), " | ",
-                _pad(note.totalSupply() / 1e18, 6), " | ",
-                _pad(vault.claimable(alice) / 1e6, 10), " | ",
-                _pad(vault.claimable(bob) / 1e6, 8)
+                _pad(vault.claimable(alice) / 1e6, 15), " | ",
+                _pad(usdg.balanceOf(alice) / 1e6, 10), " | ",
+                _pad(vault.claimable(bob) / 1e6, 13)
             )
         );
     }
