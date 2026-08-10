@@ -23,23 +23,23 @@ forge test --match-contract Example -vv
 ```
 
 Runs an amortizing loan end to end and prints what the contracts do. 1,000 USDG
-split into 100 tokens, Alice holding 60 and Bob 40, repaid in five instalments
-of 200 principal plus 10 interest:
+at 10% over the term, so 1,100 is repaid in total. Split into 100 tokens, Alice
+holding 60 and Bob 40, in five instalments of 200 principal plus 20 interest:
 
 ```text
 period | outstanding | alice bal | bob bal | alice unclaimed | alice paid | bob unclaimed
      0 |        1000 |        60 |      40 |               0 |          0 |             0
-     1 |         800 |        48 |      32 |               0 |        126 |            84
-     2 |         600 |        36 |      24 |               0 |        252 |           168
-     3 |         400 |        24 |      16 |               0 |        378 |           252
-     4 |         200 |        12 |       8 |               0 |        504 |           336
-     5 |           0 |         0 |       0 |               0 |        630 |           420
+     1 |         800 |        48 |      32 |               0 |        132 |            88
+     2 |         600 |        36 |      24 |               0 |        264 |           176
+     3 |         400 |        24 |      16 |               0 |        396 |           264
+     4 |         200 |        12 |       8 |               0 |        528 |           352
+     5 |           0 |         0 |       0 |               0 |        660 |           440
 ```
 
 Alice claims after every instalment, which is why her unclaimed column stays at
-zero — each 126, being 60% of a 210 instalment, moves straight into *paid*. Bob
+zero — each 132, being 60% of a 220 instalment, moves straight into *paid*. Bob
 never claims, so his accumulates instead. Both finish with exactly their share
-of 1,050: 630 and 420.
+of 1,100: 660 and 440.
 
 Balances fall in step with outstanding principal, while shares — and therefore
 ownership — never move.

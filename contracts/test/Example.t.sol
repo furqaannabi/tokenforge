@@ -14,8 +14,9 @@ import {MockUSDG} from "../src/mocks/MockUSDG.sol";
  *
  *   forge test --match-contract Example -vv
  *
- * A 1,000 USDG loan split into 100 tokens. Alice takes 60, Bob 40. Five
- * instalments each return 20% of principal plus 10 USDG of interest.
+ * A 1,000 USDG loan at 10% over its term, so 1,100 is repaid in total. Split
+ * into 100 tokens; Alice takes 60, Bob 40. Five instalments each return 20% of
+ * principal (200) plus a fifth of the interest (20).
  *
  * Alice claims her cash after every instalment. Bob never claims until the
  * end. They finish with exactly their share, which is the point.
@@ -25,7 +26,7 @@ contract ExampleTest is Test {
     uint256 constant TOKENS = 100e18;
     uint256 constant PERIODS = 5;
     uint256 constant PRINCIPAL_EACH = 200e6;
-    uint256 constant INTEREST_EACH = 10e6;
+    uint256 constant INTEREST_EACH = 20e6;
 
     RWANote note;
     RepaymentVault vault;
@@ -62,7 +63,7 @@ contract ExampleTest is Test {
                 gracePeriod: 10 days,
                 terms: RWANote.Terms({
                     principal: LOAN,
-                    rateBps: 500,
+                    rateBps: 1000,
                     maturity: schedule[PERIODS - 1].dueDate,
                     documentHash: keccak256("Example.pdf"),
                     scheduleHash: ScheduleLib.hash(schedule)
@@ -79,7 +80,8 @@ contract ExampleTest is Test {
 
     function test_Walkthrough() public {
         console.log("1,000 USDG loan, 100 tokens. Alice 60, Bob 40.");
-        console.log("Five instalments: 200 USDG principal + 10 USDG interest each.");
+        console.log("10% interest over the term, so 1,100 repaid in total.");
+        console.log("Five instalments: 200 principal + 20 interest each = 220.");
         console.log("");
         console.log("Alice claims every period. Bob never claims until the end.");
         console.log("");
@@ -114,13 +116,13 @@ contract ExampleTest is Test {
         console.log("  bob   shares", note.sharesOf(bob) / 1e18);
         console.log("");
         console.log("cash received (USDG):");
-        console.log("  alice", usdg.balanceOf(alice) / 1e6, "= 60% of 1,050");
-        console.log("  bob  ", usdg.balanceOf(bob) / 1e6, "= 40% of 1,050");
+        console.log("  alice", usdg.balanceOf(alice) / 1e6, "= 60% of 1,100");
+        console.log("  bob  ", usdg.balanceOf(bob) / 1e6, "= 40% of 1,100");
         console.log("");
         console.log("Alice's unclaimed balance is 0 every period because she just");
-        console.log("collected it. Her 126 per instalment -- 60% of 210 -- accumulates");
+        console.log("collected it. Her 132 per instalment -- 60% of 220 -- accumulates");
         console.log("in the 'paid' column instead. Bob's stacks up unclaimed until the");
-        console.log("end. Five instalments either way: 5 x 126 = 630, 5 x 84 = 420.");
+        console.log("end. Five instalments either way: 5 x 132 = 660, 5 x 88 = 440.");
     }
 
     function _row(uint256 period) internal view {
