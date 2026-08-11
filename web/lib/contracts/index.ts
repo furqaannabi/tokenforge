@@ -32,6 +32,11 @@ export const addresses = {
     | `0x${string}`
     | undefined,
   usdg: process.env.NEXT_PUBLIC_USDG_ADDRESS as `0x${string}` | undefined,
+  // One desk serves every note, so this is a single address rather than one
+  // per issuance.
+  saleDesk: process.env.NEXT_PUBLIC_SALE_DESK_ADDRESS as
+    | `0x${string}`
+    | undefined,
 };
 
 export function issuerRegistryAddress(): `0x${string}` {
@@ -46,3 +51,4 @@ export { noteFactoryAbi } from "./noteFactory";
 export { rwaNoteAbi } from "./rwaNote";
 export { repaymentVaultAbi } from "./repaymentVault";
 export { erc20Abi } from "./erc20";
+export { saleDeskAbi } from "./saleDesk";

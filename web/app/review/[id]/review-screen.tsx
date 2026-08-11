@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { parseUnits } from "viem";
 import { Check, CircleAlert, Loader2, ShieldOff, TriangleAlert } from "lucide-react";
 import { DocumentPane } from "@/components/document-pane";
 import { TermCard, type EditorKind } from "@/components/term-card";
 import { FieldLabel } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,6 +31,8 @@ import {
   useReviewExtraction,
 } from "@/lib/queries";
 import { useMintNote } from "@/lib/mint";
+import { useOpenOfferFor } from "@/lib/sale";
+import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
 import { SUPPLY_TOKENS } from "@/lib/issuance";
 import { CHAIN_ID } from "@/lib/contracts";
 import { extractionToNote } from "@/lib/adapt";
@@ -70,11 +74,16 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const [activeField, setActiveField] = useState<TermField | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
   const minting = useMintNote();
+  const openOffer = useOpenOfferFor();
   const recordMint = useRecordMintedNote(noteId);
   // Below lg the two panes cannot sit side by side, so one shows at a time.
   const [pane, setPane] = useState<"document" | "terms">("terms");
-  // An issuance decision, not an extraction: no document states it.
+  // Issuance decisions, not extractions: no document states either of them.
   const [currency, setCurrency] = useState<Currency>("USDG");
+  // Share of the supply to place for sale at issuance, and what the issuer
+  // wants for it. Blank proceeds means par.
+  const [salePct, setSalePct] = useState("");
+  const [saleProceeds, setSaleProceeds] = useState("");
 
   const remote = useExtraction(noteId);
   const review = useReviewExtraction(noteId);
@@ -159,6 +168,42 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         name: note.name,
         symbol: note.symbol,
       });
+
+      /*
+       * The offering is a second decision and a second pair of transactions.
+       * It runs after the mint has confirmed because there is nothing to sell
+       * until the note exists, and it is allowed to fail on its own: a note
+       * that minted but whose sale did not open is recoverable from its own
+       * page, whereas throwing here would strand a minted note behind an
+       * error about a pool.
+       */
+      const pct = Number(salePct);
+      if (pct > 0) {
+        try {
+          const poolTokens = parseUnits(
+            ((SUPPLY_TOKENS * pct) / 100).toFixed(18),
+            18,
+          );
+          const proceeds = Number(saleProceeds);
+          const priceOverride =
+            proceeds > 0 && poolTokens > 0n
+              ? (parseUnits(
+                  proceeds.toFixed(CURRENCY_DECIMALS[currency]),
+                  CURRENCY_DECIMALS[currency],
+                ) *
+                  10n ** 18n) /
+                poolTokens
+              : 0n;
+
+          await openOffer.run(result.note, poolTokens, priceOverride);
+        } catch (cause) {
+          setMintError(
+            `The note was minted, but the sale did not open: ${
+              (cause as Error).message
+            } You can open it from the note's own page.`,
+          );
+        }
+      }
 
       router.push(`/note/${noteId}`);
     } catch (cause) {
@@ -315,10 +360,22 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
           </div>
 
           <SettlementCurrency value={currency} onChange={setCurrency} />
+          <OfferingAtIssue
+            currency={currency}
+            pct={salePct}
+            proceeds={saleProceeds}
+            onPct={setSalePct}
+            onProceeds={setSaleProceeds}
+          />
 
           <MintFooter
             gate={gate}
-            minting={minting.isSigning || minting.isConfirming}
+            minting={
+              minting.isSigning ||
+              minting.isConfirming ||
+              openOffer.isApproving ||
+              openOffer.isFunding
+            }
             signing={minting.isSigning}
             error={mintError}
             onMint={handleMint}
@@ -331,6 +388,103 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * How much of the loan to place for sale, decided at issuance.
+ *
+ * The factory mints the whole supply to the issuer, so without this a note is
+ * born entirely in one pair of hands and no investor can ever reach it. The
+ * issuer says what share to offer and what they want for it; the price per
+ * token is the quotient, which is the way round an issuer actually thinks —
+ * "sell a quarter of this and raise 245,000", not "quote 0.98 per token".
+ *
+ * Leaving the proceeds blank sells at par, where one token is a claim on one
+ * unit of principal and the raise equals the share being sold.
+ */
+function OfferingAtIssue({
+  currency,
+  pct,
+  proceeds,
+  onPct,
+  onProceeds,
+}: {
+  currency: Currency;
+  pct: string;
+  proceeds: string;
+  onPct: (next: string) => void;
+  onProceeds: (next: string) => void;
+}) {
+  const share = Number(pct);
+  const valid = Number.isFinite(share) && share > 0 && share <= 100;
+  const poolTokens = valid ? (SUPPLY_TOKENS * share) / 100 : 0;
+
+  const wanted = Number(proceeds);
+  const perToken =
+    poolTokens > 0 && Number.isFinite(wanted) && wanted > 0
+      ? wanted / poolTokens
+      : null;
+
+  return (
+    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <FieldLabel>Offer for sale</FieldLabel>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Placed on the sale desk once the note is minted. Leave empty to keep
+            the whole issue.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Input
+              value={pct}
+              onChange={(event) => onPct(event.target.value)}
+              placeholder="0"
+              inputMode="decimal"
+              aria-label="Percent of supply to offer"
+              className="tnum w-24 pr-7 text-sm"
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">
+              %
+            </span>
+          </div>
+          <Input
+            value={proceeds}
+            onChange={(event) => onProceeds(event.target.value)}
+            placeholder="At par"
+            inputMode="decimal"
+            aria-label={`Amount to receive in ${currency}`}
+            disabled={!valid}
+            className="tnum w-32 text-sm"
+          />
+        </div>
+      </div>
+
+      {valid ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {poolTokens.toLocaleString("en-US", { maximumFractionDigits: 2 })} of{" "}
+          {SUPPLY_TOKENS.toLocaleString("en-US")} tokens
+          {perToken !== null ? (
+            <>
+              {" "}
+              at{" "}
+              <span className="tnum text-foreground">
+                {perToken.toLocaleString("en-US", {
+                  maximumFractionDigits: 6,
+                })}{" "}
+                {currency}
+              </span>{" "}
+              each.
+            </>
+          ) : (
+            <> at par — one token per unit of principal.</>
+          )}{" "}
+          Unsold tokens can be taken back at any time.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Settlement currency, chosen rather than extracted.

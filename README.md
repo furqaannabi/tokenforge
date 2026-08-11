@@ -96,6 +96,7 @@ contracts       Foundry · deployed and verified on X Layer testnet
 |---|---|---|
 | `IssuerRegistry` | [`0x57873ccC430f7709ed77dA7da1EC521CED877F59`](https://www.oklink.com/xlayer-test/address/0x57873ccc430f7709ed77da7da1ec521ced877f59) | Verified |
 | `NoteFactory` | [`0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357`](https://www.oklink.com/xlayer-test/address/0xc430c8ee28aaacbabfe06cdb6a6900ce616dd357) | Verified |
+| `SaleDesk` | [`0x9df0003bd18733a730db709b55e0ff08824b8052`](https://www.oklink.com/xlayer-test/address/0x9df0003bd18733a730db709b55e0ff08824b8052) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
 `RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json).

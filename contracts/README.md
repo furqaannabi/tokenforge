@@ -14,6 +14,7 @@ forge coverage      # 96% of lines, 76% of branches
 | `NoteFactory` | The only supported way on-chain. Enforces registry membership, claims the document hash, deploys note and vault atomically |
 | `RWANote` | ERC-20 with immutable terms, impairment state, and a transfer restriction hook |
 | `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure |
+| `SaleDesk` | The primary offering. The issuer places a share of a note at a price, an investor buys straight from the pool |
 | `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
 
 ## A worked example

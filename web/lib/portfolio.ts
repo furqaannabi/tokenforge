@@ -4,8 +4,10 @@ import { useMemo } from "react";
 import { useReadContracts } from "wagmi";
 import {
   CHAIN_ID,
+  addresses,
   rwaNoteAbi,
   repaymentVaultAbi,
+  saleDeskAbi,
 } from "./contracts";
 import { useExtractions } from "./queries";
 import type { ApiExtractionSummary } from "./api";
@@ -104,6 +106,21 @@ export function useNotesMarket() {
             chainId: CHAIN_ID,
             functionName: "periodCount",
           },
+          // What a browsing investor is actually looking for.
+          {
+            abi: saleDeskAbi,
+            address: addresses.saleDesk,
+            chainId: CHAIN_ID,
+            functionName: "available",
+            args: [note.noteAddress],
+          },
+          {
+            abi: saleDeskAbi,
+            address: addresses.saleDesk,
+            chainId: CHAIN_ID,
+            functionName: "price",
+            args: [note.noteAddress],
+          },
         ];
       }),
     [minted],
@@ -118,7 +135,7 @@ export function useNotesMarket() {
     () =>
       minted.map((extraction, index) => {
         const at = (offset: number) =>
-          reads.data?.[index * 4 + offset]?.result;
+          reads.data?.[index * 6 + offset]?.result;
         return {
           extraction,
           note: extraction.note!,
@@ -126,6 +143,9 @@ export function useNotesMarket() {
           status: Number((at(1) as number | undefined) ?? 0),
           periodsPaid: Number((at(2) as bigint | undefined) ?? 0n),
           periodCount: Number((at(3) as bigint | undefined) ?? 0n),
+          /** Tokens on offer right now, or 0n when nothing is for sale. */
+          forSale: (at(4) as bigint | undefined) ?? 0n,
+          pricePerToken: (at(5) as bigint | undefined) ?? 0n,
         };
       }),
     [minted, reads.data],

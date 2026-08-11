@@ -41,6 +41,7 @@ export default function BrowseNotes() {
         <p className="mt-1 text-muted-foreground">
           Every note minted through TokenForge, with the terms extracted from
           its signed agreement and its repayment record read from the chain.
+          Anything showing a quantity under <em>For sale</em> can be bought now.
         </p>
       </header>
 
@@ -53,6 +54,7 @@ export default function BrowseNotes() {
               <TableHead className="text-right">Rate</TableHead>
               <TableHead>Maturity</TableHead>
               <TableHead className="text-right">Paid</TableHead>
+              <TableHead className="text-right">For sale</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -85,6 +87,19 @@ export default function BrowseNotes() {
                   <TableCell className="tnum text-right text-muted-foreground">
                     {row.periodsPaid}/{row.periodCount || "—"}
                   </TableCell>
+                  <TableCell className="text-right">
+                    {row.forSale > 0n ? (
+                      <Link
+                        href={`/note/${row.extraction.id}`}
+                        className="tnum text-verified hover:underline"
+                      >
+                        {tokens(row.forSale)} @{" "}
+                        {money(Number(formatUnits(row.pricePerToken, 6)))}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Stamp
                       tone={
@@ -103,7 +118,7 @@ export default function BrowseNotes() {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="py-10 text-center text-sm text-muted-foreground"
                 >
                   {isError
@@ -133,6 +148,13 @@ export default function BrowseNotes() {
             vault to be claimed.
           </p>
           <p>
+            Notes are sold by the issuer that originated them, at par by
+            default — one token is a claim on one unit of outstanding
+            principal. There is no order book behind this and no market maker:
+            a primary sale is the issuer placing part of a loan, and nobody is
+            obliged to buy it back.
+          </p>
+          <p>
             A note in the registry means its issuer was admitted, and that its
             terms match the document it was minted from. It is not a judgement
             on whether the borrower will pay. Credit risk stays with the holder.
@@ -141,4 +163,10 @@ export default function BrowseNotes() {
       </Card>
     </div>
   );
+}
+
+function tokens(value: bigint): string {
+  return Number(formatUnits(value, 18)).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  });
 }

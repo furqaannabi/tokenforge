@@ -29,6 +29,14 @@
       "deployedAtBlock": 37816575,
       "decimals": 6,
       "warning": "TESTNET ONLY. Minting is unrestricted, so this token is worthless as money. On mainnet, point RepaymentVault at the real USDG instead."
+    },
+    "SaleDesk": {
+      "address": "0x3efB366ee4EdC391AcbA9E5635d8c19dE9D9b4a8",
+      "txHash": "0x01b38cb6162b35fc4a3f5eeb65dbc68ebfbad7ca9c55f8fdedc2eb62bd9ea38e",
+      "deployedAtBlock": 37979826,
+      "constructorArgs": {},
+      "supersedes": "0x9df0003bd18733a730db709b55e0ff08824b8052",
+      "note": "Primary offering desk. One instance serves every note; authority is read from each note's issuer(). Supersedes 0x9df0003b, which quoted a cost of zero for amounts small enough to round down and so gave those tokens away free."
     }
   },
   "notes": [
