@@ -364,7 +364,7 @@ function InvestorOffering({
 }) {
   const buy = useBuyFromOffer(note);
   const decimals = CURRENCY_DECIMALS[currency];
-  const [amountInput, setAmountInput] = useState("");
+  const [spendInput, setSpendInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   if (!offer?.open || offer.available === 0n) {
@@ -381,14 +381,31 @@ function InvestorOffering({
     );
   }
 
-  let amount = 0n;
+  /*
+   * The investor says what they want to spend, not how many tokens to buy.
+   *
+   * A token here is a claim on one unit of principal, so on a 2,500,000 loan
+   * split a thousand ways one token costs 2,500 — and asking for "tokens to
+   * buy" told anyone with 500 to work out that they wanted 0.2 of one. The
+   * ledger is 18-decimal, so fractions were always purchasable; only the
+   * question was wrong.
+   */
+  let spend = 0n;
   try {
-    amount = amountInput.trim() ? parseUnits(amountInput.trim(), 18) : 0n;
+    spend = spendInput.trim() ? parseUnits(spendInput.trim(), decimals) : 0n;
   } catch {
-    amount = 0n;
+    spend = 0n;
   }
-  const cost = (amount * offer.price) / 10n ** 18n;
+
+  // Rounded down, so the tokens derived from a budget never cost more than it.
+  const amount =
+    offer.price > 0n ? (spend * 10n ** 18n) / offer.price : 0n;
+
+  // Rounded up, matching `SaleDesk.quote`. Rounding down here would display a
+  // figure one unit under what the contract actually charges.
+  const cost = ceilDiv(amount * offer.price, 10n ** 18n);
   const tooMuch = amount > offer.available;
+  const maxSpend = ceilDiv(offer.available * offer.price, 10n ** 18n);
   const busy = buy.isApproving || buy.isBuying;
 
   const onBuy = async () => {
@@ -398,7 +415,7 @@ function InvestorOffering({
       // and a note that amortizes between quote and confirmation would
       // otherwise revert a buy the investor had already approved.
       await buy.run(amount, cost + cost / 100n);
-      setAmountInput("");
+      setSpendInput("");
       onChange();
     } catch (cause) {
       setError((cause as Error).message);
@@ -439,29 +456,64 @@ function InvestorOffering({
         <div className="space-y-3 border-t border-border pt-4">
           <div>
             <div className="mb-1.5 flex items-baseline justify-between gap-2">
-              <FieldLabel>Tokens to buy</FieldLabel>
+              <FieldLabel>Amount to invest</FieldLabel>
               <button
                 type="button"
-                onClick={() => setAmountInput(formatUnits(offer.available, 18))}
+                onClick={() => setSpendInput(formatUnits(maxSpend, decimals))}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Max {tokens(offer.available)}
+                Max {money(maxSpend, decimals)}
               </button>
             </div>
-            <Input
-              value={amountInput}
-              onChange={(event) => setAmountInput(event.target.value)}
-              placeholder="0.0"
-              inputMode="decimal"
-              className="tnum text-sm"
-              disabled={busy}
-            />
+            <div className="relative">
+              <Input
+                value={spendInput}
+                onChange={(event) => setSpendInput(event.target.value)}
+                placeholder="0.00"
+                inputMode="decimal"
+                aria-label={`Amount to invest in ${currency}`}
+                className="tnum pr-16 text-sm"
+                disabled={busy}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-muted-foreground">
+                {currency}
+              </span>
+            </div>
+
+            {/* A stake this size is a fraction of one token, which is the
+                point — nothing here requires buying a whole one. */}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[100n, 500n, 1_000n, 5_000n].map((preset) => {
+                const units = preset * 10n ** BigInt(decimals);
+                if (units > maxSpend) return null;
+                return (
+                  <button
+                    key={String(preset)}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setSpendInput(String(preset))}
+                    className="rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-verified hover:text-foreground"
+                  >
+                    {preset.toLocaleString("en-US")}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="rounded-lg border border-border bg-background px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">
-              <FieldLabel>You pay</FieldLabel>
+              <FieldLabel>You receive</FieldLabel>
               <span className="tnum text-lg font-semibold">
+                {tokens(amount)}{" "}
+                <span className="text-sm font-normal text-muted-foreground">
+                  tokens
+                </span>
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between gap-3">
+              <span className="text-xs text-muted-foreground">You pay</span>
+              <span className="tnum text-xs text-muted-foreground">
                 {money(cost, decimals)} {currency}
               </span>
             </div>
@@ -469,7 +521,8 @@ function InvestorOffering({
 
           {tooMuch ? (
             <p className="text-xs text-review">
-              Only {tokens(offer.available)} tokens are on offer.
+              Only {money(maxSpend, decimals)} {currency} of this note is on
+              offer — {tokens(offer.available)} tokens.
             </p>
           ) : null}
 
@@ -529,6 +582,12 @@ function Figure({
       ) : null}
     </div>
   );
+}
+
+/** Matches `SaleDesk.quote`, which rounds a cost up so no buy is ever free. */
+function ceilDiv(numerator: bigint, denominator: bigint): bigint {
+  if (numerator === 0n) return 0n;
+  return (numerator + denominator - 1n) / denominator;
 }
 
 function tokens(value: bigint): string {
