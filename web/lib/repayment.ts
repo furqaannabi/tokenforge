@@ -121,6 +121,39 @@ export function useHolderPosition(
   };
 }
 
+/**
+ * Every period, read from the vault.
+ *
+ * The extraction has a schedule too, but that one is what a model read off a
+ * PDF. This is what the note will actually pay, and the two are only equal
+ * because the mint hashed the schedule and the contract enforces it — so when
+ * the question is "what would I receive", the chain is the place to ask.
+ */
+export function useSchedule(vault?: `0x${string}`, periodCount = 0) {
+  const contracts = Array.from({ length: periodCount }, (_, index) => ({
+    abi: repaymentVaultAbi,
+    address: vault,
+    chainId: CHAIN_ID,
+    functionName: "periodAt" as const,
+    args: [BigInt(index)],
+  }));
+
+  const result = useReadContracts({
+    contracts,
+    query: { enabled: Boolean(vault) && periodCount > 0 },
+  });
+
+  return {
+    ...result,
+    periods: (result.data ?? []).map(
+      (entry) =>
+        entry.result as
+          | { dueDate: bigint; principal: bigint; interest: bigint }
+          | undefined,
+    ),
+  };
+}
+
 /** Where the schedule has got to. */
 export function useVaultProgress(vault?: `0x${string}`) {
   const contract = {

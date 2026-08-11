@@ -24,6 +24,7 @@ import {
 import { useHolderPosition, useNoteState } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
 import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+import { ReceiptsDialog } from "@/components/receipts-dialog";
 import { addresses } from "@/lib/contracts";
 import type { Currency } from "@tokenforge/core";
 
@@ -66,6 +67,7 @@ export function Offering({
   ) : (
     <InvestorOffering
       note={note}
+      vault={vault}
       currency={currency}
       offer={offer}
       onChange={refetch}
@@ -304,11 +306,13 @@ function IssuerOffering({
 /** The investor's side: what is for sale, and what it costs. */
 function InvestorOffering({
   note,
+  vault,
   currency,
   offer,
   onChange,
 }: {
   note: `0x${string}`;
+  vault: `0x${string}`;
   currency: Currency;
   offer?: Offer;
   onChange: () => void;
@@ -505,6 +509,16 @@ function InvestorOffering({
               {error}
             </p>
           ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <ReceiptsDialog
+              note={note}
+              vault={vault}
+              amount={amount}
+              currency={currency}
+              disabled={amount === 0n}
+            />
+          </div>
 
           <Button
             className="w-full"
