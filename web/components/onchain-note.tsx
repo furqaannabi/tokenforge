@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatUnits } from "viem";
 import { CircleAlert, Coins, ExternalLink, Loader2, Wallet } from "lucide-react";
-import { FieldLabel, Stamp, StatTile } from "@/components/primitives";
+import { FieldLabel, StatTile } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -225,6 +225,9 @@ export function OnChainNote({
                         </>
                       )}
                     </Button>
+                    {settle.settleHash ? (
+                      <TxLink hash={settle.settleHash} />
+                    ) : null}
                   </>
                 ) : (
                   <p className="border-t border-border pt-3 text-xs text-muted-foreground">
@@ -268,39 +271,6 @@ export function OnChainNote({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>On-chain</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <Row
-            label="Note"
-            value={<Explorer address={note} />}
-          />
-          <Row label="Vault" value={<Explorer address={vault} />} />
-          <Row
-            label="Status"
-            value={
-              <Stamp
-                tone={
-                  state?.status === 1
-                    ? "impaired"
-                    : state?.status === 2
-                      ? "neutral"
-                      : "verified"
-                }
-              >
-                {state?.status === 1
-                  ? "Impaired"
-                  : state?.status === 2
-                    ? "Matured"
-                    : "Active"}
-              </Stamp>
-            }
-          />
-          {settle.settleHash ? <TxLink hash={settle.settleHash} /> : null}
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -314,18 +284,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Explorer({ address }: { address: `0x${string}` }) {
-  return (
-    <a
-      href={`https://www.oklink.com/xlayer-test/address/${address}`}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-1.5 font-mono text-xs hover:text-verified"
-    >
-      {truncateHex(address, 8, 6)} <ExternalLink className="size-3" />
-    </a>
-  );
-}
 
 function TxLink({ hash }: { hash: `0x${string}` }) {
   return (

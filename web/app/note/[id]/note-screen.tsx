@@ -6,11 +6,18 @@ import { FieldLabel, HexValue, Stamp } from "@/components/primitives";
 import { OnChainNote } from "@/components/onchain-note";
 import { Offering } from "@/components/offering";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useDocumentUrl, useExtraction } from "@/lib/queries";
+import { useNoteState } from "@/lib/repayment";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
-import { percent, monthYear, money } from "@/lib/format";
+import { percent, monthYear, money, truncateHex } from "@/lib/format";
 
 /**
  * A minted note.
@@ -24,6 +31,7 @@ export function NoteScreen({ noteId }: { noteId: string }) {
   const { address } = useWallet();
   const extraction = useExtraction(noteId);
   const pdf = useDocumentUrl(extraction.data?.document?.id);
+  const chain = useNoteState(extraction.data?.note?.noteAddress);
 
   if (extraction.isPending) {
     return (
@@ -101,11 +109,44 @@ export function NoteScreen({ noteId }: { noteId: string }) {
         currency={note.currency}
       />
 
+      {/*
+        One card, because it answers one question: what is this token, really?
+        The contracts and the document are two halves of the same answer — the
+        addresses say where it lives, the hash says what it represents — and
+        splitting them put the paper trail at the bottom of the page and the
+        chain at the top with the trading controls in between.
+      */}
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Provenance</CardTitle>
+          <CardDescription>
+            What this token is, on the chain and on paper.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <ContractRow label="Note" address={minted.noteAddress} />
+            <ContractRow label="Vault" address={minted.vaultAddress} />
+            <div className="flex items-baseline justify-between gap-4">
+              <FieldLabel>Status</FieldLabel>
+              <Stamp
+                tone={
+                  chain.state?.status === 1
+                    ? "impaired"
+                    : chain.state?.status === 2
+                      ? "neutral"
+                      : "verified"
+                }
+              >
+                {chain.state?.status === 1
+                  ? "Impaired"
+                  : chain.state?.status === 2
+                    ? "Matured"
+                    : "Active"}
+              </Stamp>
+            </div>
+          </div>
+
           <HexValue
             label="Source document hash"
             value={record.document?.contentHash ?? "—"}
@@ -137,6 +178,28 @@ export function NoteScreen({ noteId }: { noteId: string }) {
           </p>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ContractRow({
+  label,
+  address,
+}: {
+  label: string;
+  address: `0x${string}`;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <FieldLabel>{label}</FieldLabel>
+      <a
+        href={`https://www.oklink.com/xlayer-test/address/${address}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 font-mono text-xs hover:text-verified"
+      >
+        {truncateHex(address, 8, 6)} <ExternalLink className="size-3" />
+      </a>
     </div>
   );
 }
