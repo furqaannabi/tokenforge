@@ -51,6 +51,18 @@ export function OnChainNote({
   const faucet = useMintTestCurrency();
   const [error, setError] = useState<string | null>(null);
 
+  /*
+   * Repaying is the borrower's obligation, not an action anyone can take.
+   * `settleNextPeriod` pulls the payment from whoever signs it, so showing the
+   * button to a holder offered them the chance to pay someone else's loan out
+   * of their own pocket. They still see what is due and when — that is when
+   * they get paid — but the controls belong to the issuer.
+   */
+  const isIssuer =
+    Boolean(address) &&
+    Boolean(state?.issuer) &&
+    state!.issuer.toLowerCase() === address!.toLowerCase();
+
   const period = due.data as
     | { dueDate: bigint; principal: bigint; interest: bigint }
     | undefined;
@@ -135,7 +147,7 @@ export function OnChainNote({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Repay</CardTitle>
+            <CardTitle>{isIssuer ? "Repay" : "Next payment"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {finished ? (
@@ -146,6 +158,18 @@ export function OnChainNote({
             ) : (
               <>
                 <Row label={`Period ${progress.nextPeriod + 1} due`} value={money(amountDue)} />
+                {period?.dueDate ? (
+                  <Row
+                    label="Due date"
+                    value={new Date(
+                      Number(period.dueDate) * 1000,
+                    ).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  />
+                ) : null}
                 {period && period.principal > 0n ? (
                   <p className="text-xs text-muted-foreground">
                     {money(period.principal)} of this is principal, so every
@@ -159,43 +183,56 @@ export function OnChainNote({
                   </p>
                 )}
 
-                <Button
-                  className="w-full"
-                  onClick={onSettle}
-                  disabled={settle.isApproving || settle.isSettling}
-                >
-                  {settle.isApproving ? (
-                    <>
-                      <Loader2 className="animate-spin" /> Approving {currency}…
-                    </>
-                  ) : settle.isSettling ? (
-                    <>
-                      <Loader2 className="animate-spin" /> Settling…
-                    </>
-                  ) : (
-                    <>
-                      <Coins /> Repay {money(amountDue)}
-                    </>
-                  )}
-                </Button>
+                {isIssuer ? (
+                  <>
+                    <Button
+                      className="w-full"
+                      onClick={onSettle}
+                      disabled={settle.isApproving || settle.isSettling}
+                    >
+                      {settle.isApproving ? (
+                        <>
+                          <Loader2 className="animate-spin" /> Approving{" "}
+                          {currency}…
+                        </>
+                      ) : settle.isSettling ? (
+                        <>
+                          <Loader2 className="animate-spin" /> Settling…
+                        </>
+                      ) : (
+                        <>
+                          <Coins /> Repay {money(amountDue)}
+                        </>
+                      )}
+                    </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  disabled={!address || faucet.isPending}
-                  onClick={() => address && faucet.mint(address, amountDue * 2n)}
-                >
-                  {faucet.isPending ? (
-                    <>
-                      <Loader2 className="animate-spin" /> Minting…
-                    </>
-                  ) : (
-                    <>
-                      <Wallet /> Get test {currency}
-                    </>
-                  )}
-                </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={!address || faucet.isPending}
+                      onClick={() =>
+                        address && faucet.mint(address, amountDue * 2n)
+                      }
+                    >
+                      {faucet.isPending ? (
+                        <>
+                          <Loader2 className="animate-spin" /> Minting…
+                        </>
+                      ) : (
+                        <>
+                          <Wallet /> Get test {currency}
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+                    The borrower settles this payment. When they do, your
+                    balance amortizes by the principal portion and your share of
+                    the whole instalment becomes claimable.
+                  </p>
+                )}
               </>
             )}
           </CardContent>

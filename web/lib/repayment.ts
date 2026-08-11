@@ -34,6 +34,8 @@ export interface NoteState {
   totalShares: bigint;
   /** 0 Active · 1 Impaired · 2 Matured */
   status: number;
+  /** Who owes the money. Only this address can settle a period. */
+  issuer: `0x${string}`;
 }
 
 /** Live note state. Balances here already reflect amortization. */
@@ -48,11 +50,13 @@ export function useNoteState(note?: `0x${string}`) {
       { ...contract, functionName: "totalSupply" },
       { ...contract, functionName: "totalShares" },
       { ...contract, functionName: "status" },
+      { ...contract, functionName: "issuer" },
     ],
     query: { enabled: Boolean(note) },
   });
 
-  const [index, repaid, principal, supply, shares, status] = result.data ?? [];
+  const [index, repaid, principal, supply, shares, status, issuer] =
+    result.data ?? [];
 
   return {
     ...result,
@@ -64,6 +68,7 @@ export function useNoteState(note?: `0x${string}`) {
           totalSupply: (supply?.result as bigint) ?? 0n,
           totalShares: (shares?.result as bigint) ?? 0n,
           status: Number(status?.result ?? 0),
+          issuer: (issuer?.result as `0x${string}`) ?? "0x",
         } satisfies NoteState)
       : undefined,
   };

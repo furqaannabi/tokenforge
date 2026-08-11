@@ -108,3 +108,26 @@
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * AppKit's connect button, brought into the palette.
+ *
+ * `createAppKit`'s `themeVariables: { "--w3m-accent" }` is a Web3Modal-era key
+ * that appears nowhere in AppKit 1.8.23 — the library writes it to :root and
+ * nothing reads it. What it does do is derive its text, icon and border accent
+ * tokens from it, while the button's own background and the accent ramp stay
+ * on Reown's blue. Pinning those two leaves a button that matches the rest of
+ * the app instead of one that looks pasted in from another product.
+ *
+ * `!important` is required, not decorative: AppKit writes its tokens as inline
+ * styles on the root element, which a plain stylesheet rule cannot outrank.
+ *
+ * These are internal token names and could be renamed by an AppKit upgrade. The
+ * failure mode is cosmetic — the button reverts to blue — so it is not worth
+ * guarding, but it is worth knowing where to look.
+ */
+:root {
+  --apkt-tokens-core-backgroundAccentPrimary: var(--verified) !important;
+  --apkt-tokens-core-backgroundAccentPrimary-base: var(--verified) !important;
+  --apkt-colors-accent100: var(--verified) !important;
+}
