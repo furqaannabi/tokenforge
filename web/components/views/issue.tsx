@@ -28,10 +28,7 @@ import {
 
 export function IssueView() {
   const { issuer, connected } = useWallet();
-  // One request, split two ways: what still needs a person, and what is done.
   const extractions = useExtractions();
-  const pending =
-    extractions.data?.filter((e) => e.status !== "MINTED") ?? [];
   const notes = extractions.data?.filter((e) => e.status === "MINTED") ?? [];
 
   return (
@@ -55,34 +52,6 @@ export function IssueView() {
         <IssuerPanel />
       </div>
 
-      {pending.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="mb-1 text-lg font-semibold">Awaiting mint</h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Extracted but not yet on-chain. Nothing is minted until the terms
-            pass validation and an authorized representative signs.
-          </p>
-          <Card className="py-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Document</TableHead>
-                  <TableHead className="text-right">Principal</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead>Maturity</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pending.map((extraction) => (
-                  <PendingRow key={extraction.id} extraction={extraction} />
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </section>
-      ) : null}
 
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Your notes</h2>
@@ -122,59 +91,6 @@ export function IssueView() {
         </Card>
       </section>
     </div>
-  );
-}
-
-/**
- * One extraction still waiting on someone.
- *
- * The action is always review, including for `INVALID`: the reviewer needs to
- * see *why* the validator refused it, and that screen is where the reasons and
- * the source clauses are. Minting happens there too, once the gate opens.
- */
-function PendingRow({ extraction }: { extraction: ApiExtractionSummary }) {
-  const { terms, status } = extraction;
-
-  return (
-    <TableRow>
-      <TableCell className="font-medium">
-        {extraction.document?.filename ?? "Document"}
-      </TableCell>
-      <TableCell className="tnum text-right">
-        {money(terms.principal.value)}
-      </TableCell>
-      <TableCell className="tnum text-right">
-        {percent(terms.interestRatePct.value)}
-      </TableCell>
-      <TableCell className="tnum">
-        {monthYear(terms.maturityDate.value)}
-      </TableCell>
-      <TableCell>
-        <Stamp
-          tone={
-            status === "INVALID"
-              ? "impaired"
-              : status === "VALIDATED"
-                ? "verified"
-                : "review"
-          }
-        >
-          {status === "NEEDS_REVIEW"
-            ? "Needs review"
-            : status === "VALIDATED"
-              ? "Ready to mint"
-              : status.charAt(0) + status.slice(1).toLowerCase()}
-        </Stamp>
-      </TableCell>
-      <TableCell className="text-right">
-        <Link
-          href={`/review/${extraction.id}`}
-          className="text-sm hover:text-verified"
-        >
-          {status === "VALIDATED" ? "Mint" : "Review"}
-        </Link>
-      </TableCell>
-    </TableRow>
   );
 }
 
