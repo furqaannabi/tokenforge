@@ -31,12 +31,15 @@
       "warning": "TESTNET ONLY. Minting is unrestricted, so this token is worthless as money. On mainnet, point RepaymentVault at the real USDG instead."
     },
     "SaleDesk": {
-      "address": "0x3efB366ee4EdC391AcbA9E5635d8c19dE9D9b4a8",
-      "txHash": "0x01b38cb6162b35fc4a3f5eeb65dbc68ebfbad7ca9c55f8fdedc2eb62bd9ea38e",
-      "deployedAtBlock": 37979826,
+      "address": "0xDA9DD5Ab32372507fFcD662f6FE1608901c1bbF5",
+      "txHash": "0x009e03906772d79db6fc7b7fb22f8ed62b22b2e1e7e689cdbea20faaa0e973a0",
+      "deployedAtBlock": 37980687,
       "constructorArgs": {},
-      "supersedes": "0x9df0003bd18733a730db709b55e0ff08824b8052",
-      "note": "Primary offering desk. One instance serves every note; authority is read from each note's issuer(). Supersedes 0x9df0003b, which quoted a cost of zero for amounts small enough to round down and so gave those tokens away free."
+      "supersedes": [
+        "0x9df0003bd18733a730db709b55e0ff08824b8052",
+        "0x3efB366ee4EdC391AcbA9E5635d8c19dE9D9b4a8"
+      ],
+      "note": "Primary offering desk. One instance serves every note; authority is read from each note's issuer(). No price can be set \u2014 a token is a claim on one unit of principal, so the desk computes par from the note's own terms. 0x9df0003b quoted zero for amounts that rounded down, giving those tokens away free; 0x3efB366e let the issuer override the price."
     }
   },
   "notes": [

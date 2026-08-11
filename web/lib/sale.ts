@@ -27,8 +27,6 @@ import {
 
 export interface OfferState {
   seller: `0x${string}`;
-  /** Currency units per whole token, or 0n when quoting at par. */
-  priceOverride: bigint;
   open: boolean;
   /** Tokens currently for sale. Amortizes with the note. */
   available: bigint;
@@ -59,17 +57,14 @@ export function useOffer(note?: `0x${string}`) {
   });
 
   const [offer, available, price, parPrice, poolBps, raised] = result.data ?? [];
-  const tuple = offer?.result as
-    | readonly [`0x${string}`, bigint, boolean]
-    | undefined;
+  const tuple = offer?.result as readonly [`0x${string}`, boolean] | undefined;
 
   return {
     ...result,
     offer: tuple
       ? ({
           seller: tuple[0],
-          priceOverride: tuple[1],
-          open: tuple[2],
+          open: tuple[1],
           available: (available?.result as bigint) ?? 0n,
           price: (price?.result as bigint) ?? 0n,
           parPrice: (parPrice?.result as bigint) ?? 0n,
@@ -124,11 +119,10 @@ export function useFundOffer(note?: `0x${string}`) {
 
     /**
      * @param amount Tokens to place in the pool.
-     * @param priceOverride Currency units per token, or 0n to quote at par.
      * @param alreadyOpen Whether an offer exists — the desk rejects a second
      *        `openOffer`, and `fundPool` rejects a note with no offer.
      */
-    run: async (amount: bigint, priceOverride: bigint, alreadyOpen: boolean) => {
+    run: async (amount: bigint, alreadyOpen: boolean) => {
       if (!note || !addresses.saleDesk) {
         throw new Error("The sale desk address is not configured.");
       }
@@ -147,7 +141,7 @@ export function useFundOffer(note?: `0x${string}`) {
         abi: saleDeskAbi,
         address: addresses.saleDesk,
         functionName: alreadyOpen ? "fundPool" : "openOffer",
-        args: alreadyOpen ? [note, amount] : [note, amount, priceOverride],
+        args: [note, amount],
         chainId: CHAIN_ID,
       });
     },
@@ -179,11 +173,7 @@ export function useOpenOfferFor() {
     isFunding: open.isPending || openReceipt.isLoading,
     error: approve.error ?? open.error,
 
-    run: async (
-      note: `0x${string}`,
-      amount: bigint,
-      priceOverride: bigint,
-    ) => {
+    run: async (note: `0x${string}`, amount: bigint) => {
       if (!addresses.saleDesk) {
         throw new Error("The sale desk address is not configured.");
       }
@@ -201,7 +191,7 @@ export function useOpenOfferFor() {
         abi: saleDeskAbi,
         address: addresses.saleDesk,
         functionName: "openOffer",
-        args: [note, amount, priceOverride],
+        args: [note, amount],
         chainId: CHAIN_ID,
       });
     },
@@ -224,27 +214,6 @@ export function useWithdrawPool(note?: `0x${string}`) {
         address: addresses.saleDesk!,
         functionName: "withdrawPool",
         args: [note!, amount],
-        chainId: CHAIN_ID,
-      }),
-  };
-}
-
-/** Repoints the quote. Zero restores par. */
-export function useSetPrice(note?: `0x${string}`) {
-  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
-  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
-
-  return {
-    hash,
-    error,
-    isPending: isPending || receipt.isLoading,
-    isDone: receipt.isSuccess,
-    setPrice: (priceOverride: bigint) =>
-      writeContractAsync({
-        abi: saleDeskAbi,
-        address: addresses.saleDesk!,
-        functionName: "setPrice",
-        args: [note!, priceOverride],
         chainId: CHAIN_ID,
       }),
   };

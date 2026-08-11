@@ -48,16 +48,15 @@ contract SaleDesk is ReentrancyGuard {
 
     /**
      * @notice An open offering.
-     * @dev `priceOverride` of zero means "quote at par", which is what the
-     *      issuer wants almost always: a token is a claim on one unit of
-     *      outstanding principal, so par is the price at which the proceeds
-     *      equal what is being sold. Storing zero rather than the computed par
-     *      keeps the quote correct as the note amortizes instead of freezing it
-     *      at the value it had when the offer opened.
+     * @dev No price is stored, because the issuer does not set one. A token is
+     *      a claim on one unit of principal, so the price follows from the
+     *      note's own terms and this contract computes it. Letting a seller
+     *      name their own number would have made the quote a matter of opinion
+     *      and handed them a way to reprice between a buyer's quote and their
+     *      confirmation.
      */
     struct Offer {
         address seller;
-        uint256 priceOverride;
         bool open;
     }
 
@@ -67,9 +66,8 @@ contract SaleDesk is ReentrancyGuard {
     /// @notice Total settlement currency this desk has taken for a note.
     mapping(address note => uint256) public raised;
 
-    event OfferOpened(address indexed note, address indexed seller, uint256 price);
+    event OfferOpened(address indexed note, address indexed seller);
     event OfferClosed(address indexed note);
-    event PriceSet(address indexed note, uint256 price);
     event PoolFunded(address indexed note, uint256 amount);
     event PoolWithdrawn(address indexed note, uint256 amount);
     event Bought(
@@ -101,9 +99,11 @@ contract SaleDesk is ReentrancyGuard {
      * @param note The note being offered.
      * @param amount Tokens to place in the pool. The caller must have approved
      *        this desk for at least this much first.
-     * @param priceOverride Currency units per whole token, or zero for par.
+     * @dev There is no price argument. The only decision an issuer makes here
+     *      is how much of the loan to place; what it costs is arithmetic on the
+     *      note's own terms.
      */
-    function openOffer(address note, uint256 amount, uint256 priceOverride)
+    function openOffer(address note, uint256 amount)
         external
         onlyIssuer(note)
         nonReentrant
@@ -111,13 +111,9 @@ contract SaleDesk is ReentrancyGuard {
         if (offers[note].open) revert OfferAlreadyOpen(note);
         if (IRWANote(note).status() != 0) revert NoteNotActive(note);
 
-        offers[note] = Offer({
-            seller: msg.sender,
-            priceOverride: priceOverride,
-            open: true
-        });
+        offers[note] = Offer({seller: msg.sender, open: true});
 
-        emit OfferOpened(note, msg.sender, priceOverride);
+        emit OfferOpened(note, msg.sender);
         if (amount > 0) _fund(note, amount);
     }
 
@@ -149,16 +145,6 @@ contract SaleDesk is ReentrancyGuard {
 
         IERC20(note).safeTransfer(offers[note].seller, amount);
         emit PoolWithdrawn(note, amount);
-    }
-
-    /// @notice Repoints the quote. Zero restores par.
-    function setPrice(address note, uint256 priceOverride)
-        external
-        onlyIssuer(note)
-    {
-        if (!offers[note].open) revert OfferNotOpen(note);
-        offers[note].priceOverride = priceOverride;
-        emit PriceSet(note, priceOverride);
     }
 
     /// @notice Closes the offering and returns whatever is left to the seller.
@@ -203,11 +189,11 @@ contract SaleDesk is ReentrancyGuard {
     // --- The investor's side ------------------------------------------------
 
     /**
-     * @notice Buys `amount` tokens from the pool at the quoted price.
-     * @dev The cost is read at execution rather than passed in, so a buyer
-     *      cannot be charged a price they never saw — but it also means an
-     *      issuer could reprice between quote and confirmation. `maxCost` is
-     *      the buyer's protection against that.
+     * @notice Buys `amount` tokens from the pool at the computed price.
+     * @dev `maxCost` remains the buyer's protection even though nobody can
+     *      reprice an offer. Par is derived from the note, and a note whose
+     *      status changed between quote and confirmation can still move the
+     *      cost under a buyer who has already signed.
      */
     function buy(address note, uint256 amount, uint256 maxCost)
         external
@@ -263,10 +249,9 @@ contract SaleDesk is ReentrancyGuard {
         return (IRWANote(note).principal() * 1e18) / shares;
     }
 
-    /// @notice The price a buy would use: the issuer's override, else par.
+    /// @notice The price a buy would use. Always par; nobody can set it.
     function price(address note) public view returns (uint256) {
-        uint256 over = offers[note].priceOverride;
-        return over > 0 ? over : parPrice(note);
+        return parPrice(note);
     }
 
     /**

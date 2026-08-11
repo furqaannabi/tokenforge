@@ -32,7 +32,6 @@ import {
 } from "@/lib/queries";
 import { useMintNote } from "@/lib/mint";
 import { useOpenOfferFor } from "@/lib/sale";
-import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
 import { SUPPLY_TOKENS } from "@/lib/issuance";
 import { CHAIN_ID } from "@/lib/contracts";
 import { extractionToNote } from "@/lib/adapt";
@@ -80,10 +79,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const [pane, setPane] = useState<"document" | "terms">("terms");
   // Issuance decisions, not extractions: no document states either of them.
   const [currency, setCurrency] = useState<Currency>("USDG");
-  // Share of the supply to place for sale at issuance, and what the issuer
-  // wants for it. Blank proceeds means par.
+  // Share of the supply to place for sale at issuance. There is no price to
+  // choose: the desk quotes par from the note's own principal.
   const [salePct, setSalePct] = useState("");
-  const [saleProceeds, setSaleProceeds] = useState("");
 
   const remote = useExtraction(noteId);
   const review = useReviewExtraction(noteId);
@@ -184,18 +182,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
             ((SUPPLY_TOKENS * pct) / 100).toFixed(18),
             18,
           );
-          const proceeds = Number(saleProceeds);
-          const priceOverride =
-            proceeds > 0 && poolTokens > 0n
-              ? (parseUnits(
-                  proceeds.toFixed(CURRENCY_DECIMALS[currency]),
-                  CURRENCY_DECIMALS[currency],
-                ) *
-                  10n ** 18n) /
-                poolTokens
-              : 0n;
-
-          await openOffer.run(result.note, poolTokens, priceOverride);
+          await openOffer.run(result.note, poolTokens);
         } catch (cause) {
           setMintError(
             `The note was minted, but the sale did not open: ${
@@ -362,10 +349,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
           <SettlementCurrency value={currency} onChange={setCurrency} />
           <OfferingAtIssue
             currency={currency}
+            principal={terms.principal.value}
             pct={salePct}
-            proceeds={saleProceeds}
             onPct={setSalePct}
-            onProceeds={setSaleProceeds}
           />
 
           <MintFooter
@@ -403,26 +389,23 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
  */
 function OfferingAtIssue({
   currency,
+  principal,
   pct,
-  proceeds,
   onPct,
-  onProceeds,
 }: {
   currency: Currency;
+  principal: number;
   pct: string;
-  proceeds: string;
   onPct: (next: string) => void;
-  onProceeds: (next: string) => void;
 }) {
   const share = Number(pct);
   const valid = Number.isFinite(share) && share > 0 && share <= 100;
   const poolTokens = valid ? (SUPPLY_TOKENS * share) / 100 : 0;
 
-  const wanted = Number(proceeds);
-  const perToken =
-    poolTokens > 0 && Number.isFinite(wanted) && wanted > 0
-      ? wanted / poolTokens
-      : null;
+  // Par, the same arithmetic the desk does on-chain: a token is a claim on one
+  // unit of principal, so the price and the proceeds both follow from the size.
+  const perToken = principal / SUPPLY_TOKENS;
+  const proceeds = poolTokens * perToken;
 
   return (
     <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
@@ -434,52 +417,36 @@ function OfferingAtIssue({
             the whole issue.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Input
-              value={pct}
-              onChange={(event) => onPct(event.target.value)}
-              placeholder="0"
-              inputMode="decimal"
-              aria-label="Percent of supply to offer"
-              className="tnum w-24 pr-7 text-sm"
-            />
-            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">
-              %
-            </span>
-          </div>
+        <div className="relative">
           <Input
-            value={proceeds}
-            onChange={(event) => onProceeds(event.target.value)}
-            placeholder="At par"
+            value={pct}
+            onChange={(event) => onPct(event.target.value)}
+            placeholder="0"
             inputMode="decimal"
-            aria-label={`Amount to receive in ${currency}`}
-            disabled={!valid}
-            className="tnum w-32 text-sm"
+            aria-label="Percent of supply to offer"
+            className="tnum w-24 pr-7 text-sm"
           />
+          <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">
+            %
+          </span>
         </div>
       </div>
 
       {valid ? (
         <p className="mt-2 text-xs text-muted-foreground">
           {poolTokens.toLocaleString("en-US", { maximumFractionDigits: 2 })} of{" "}
-          {SUPPLY_TOKENS.toLocaleString("en-US")} tokens
-          {perToken !== null ? (
-            <>
-              {" "}
-              at{" "}
-              <span className="tnum text-foreground">
-                {perToken.toLocaleString("en-US", {
-                  maximumFractionDigits: 6,
-                })}{" "}
-                {currency}
-              </span>{" "}
-              each.
-            </>
-          ) : (
-            <> at par — one token per unit of principal.</>
-          )}{" "}
-          Unsold tokens can be taken back at any time.
+          {SUPPLY_TOKENS.toLocaleString("en-US")} tokens at{" "}
+          <span className="tnum text-foreground">
+            {perToken.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+            {currency}
+          </span>{" "}
+          each, raising{" "}
+          <span className="tnum text-foreground">
+            {proceeds.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+            {currency}
+          </span>{" "}
+          if fully taken. The price is par, computed by the desk — there is
+          nothing to set. Unsold tokens can be taken back at any time.
         </p>
       ) : null}
     </div>

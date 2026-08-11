@@ -3,8 +3,8 @@
  *
  * The pool for a note is the desk's own balance of it rather than a stored
  * figure, because balances amortize and anything written down would go stale
- * the moment a period settled. `price` returns the issuer's override when one
- * is set and par otherwise, so a quote stays correct without anyone repricing.
+ * the moment a period settled. There is no price to set: a token is a claim on
+ * one unit of principal, so `price` is par computed from the note's terms.
  */
 export const saleDeskAbi = [
     {
@@ -97,11 +97,6 @@ export const saleDeskAbi = [
           "internalType": "address"
         },
         {
-          "name": "priceOverride",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
           "name": "open",
           "type": "bool",
           "internalType": "bool"
@@ -120,11 +115,6 @@ export const saleDeskAbi = [
         },
         {
           "name": "amount",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "priceOverride",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -234,24 +224,6 @@ export const saleDeskAbi = [
     },
     {
       "type": "function",
-      "name": "setPrice",
-      "inputs": [
-        {
-          "name": "note",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "priceOverride",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
       "name": "sweep",
       "inputs": [
         {
@@ -340,12 +312,6 @@ export const saleDeskAbi = [
           "type": "address",
           "indexed": true,
           "internalType": "address"
-        },
-        {
-          "name": "price",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -381,25 +347,6 @@ export const saleDeskAbi = [
         },
         {
           "name": "amount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "PriceSet",
-      "inputs": [
-        {
-          "name": "note",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "price",
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"

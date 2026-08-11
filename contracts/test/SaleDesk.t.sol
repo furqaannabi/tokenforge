@@ -103,7 +103,7 @@ abstract contract SaleFixture is Test {
         tokens = (SUPPLY * bps) / 10_000;
         vm.startPrank(issuer);
         note.approve(address(desk), tokens);
-        desk.openOffer(address(note), tokens, 0);
+        desk.openOffer(address(note), tokens);
         vm.stopPrank();
     }
 
@@ -143,21 +143,23 @@ contract SaleDeskOfferTest is SaleFixture {
     }
 
     /**
-     * The issuer names what they want to receive, not a price.
+     * The issuer chooses a size, and the proceeds follow from it.
      *
-     * The interface asks "how much of this do you want to sell, and how much do
-     * you want for it"; the price per token is the quotient. This proves the
-     * contract reproduces the raise the issuer asked for.
+     * Selling a quarter of a 1,000 loan raises 250 because a token is a claim
+     * on one unit of principal — not because anyone typed 250. There is no
+     * price to set, so there is nothing to disagree about.
      */
-    function test_PriceDerivedFromTheAmountToReceive() public {
-        uint256 tokens = _openAtPar(2_500); // 250 tokens
-        uint256 wanted = 245e6; // willing to sell at a small discount
+    function test_ProceedsFollowFromTheShareOffered() public {
+        uint256 tokens = _openAtPar(2_500); // 250 of 1,000 tokens
 
-        uint256 perToken = (wanted * 1e18) / tokens;
-        vm.prank(issuer);
-        desk.setPrice(address(note), perToken);
+        assertEq(desk.quote(address(note), tokens), 250e6);
+        assertEq(desk.poolBps(address(note)), 2_500);
+    }
 
-        assertEq(desk.quote(address(note), tokens), wanted);
+    /// There is no way for a seller to name their own price.
+    function test_PriceIsAlwaysPar() public {
+        _openAtPar(5_000);
+        assertEq(desk.price(address(note)), desk.parPrice(address(note)));
     }
 
     function test_OnlyIssuerCanOpen() public {
@@ -165,7 +167,7 @@ contract SaleDeskOfferTest is SaleFixture {
         vm.expectRevert(
             abi.encodeWithSelector(SaleDesk.NotIssuer.selector, address(note), outsider)
         );
-        desk.openOffer(address(note), 1e18, 0);
+        desk.openOffer(address(note), 1e18);
     }
 
     function test_CannotOpenTwice() public {
@@ -174,7 +176,7 @@ contract SaleDeskOfferTest is SaleFixture {
         vm.expectRevert(
             abi.encodeWithSelector(SaleDesk.OfferAlreadyOpen.selector, address(note))
         );
-        desk.openOffer(address(note), 0, 0);
+        desk.openOffer(address(note), 0);
     }
 }
 
@@ -211,17 +213,14 @@ contract SaleDeskBuyTest is SaleFixture {
         vm.stopPrank();
     }
 
-    function test_BuyerIsProtectedFromARepriceInFlight() public {
+    /// The cap still binds, even though nobody can move the price under a buyer.
+    function test_BuyerCapIsEnforced() public {
         _openAtPar(10_000);
-
-        // Alice approves for the price she was quoted.
-        vm.prank(issuer);
-        desk.setPrice(address(note), 2e6);
 
         vm.startPrank(alice);
         usdg.approve(address(desk), 1_000e6);
         vm.expectRevert(SaleDesk.CostAboveMax.selector);
-        desk.buy(address(note), 100e18, 100e6);
+        desk.buy(address(note), 100e18, 99e6); // 100 tokens cost 100
         vm.stopPrank();
     }
 

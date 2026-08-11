@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { CircleAlert, Coins, Loader2, Store, Tag } from "lucide-react";
+import { CircleAlert, Coins, Loader2, Store } from "lucide-react";
 import { FieldLabel, Stamp } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,6 @@ import {
   useCloseOffer,
   useFundOffer,
   useOffer,
-  useSetPrice,
   useWithdrawPool,
 } from "@/lib/sale";
 import { useHolderPosition, useNoteState } from "@/lib/repayment";
@@ -104,12 +103,10 @@ function IssuerOffering({
   const position = useHolderPosition(note, vault, address);
   const fund = useFundOffer(note);
   const withdraw = useWithdrawPool(note);
-  const reprice = useSetPrice(note);
   const close = useCloseOffer(note);
 
   const decimals = CURRENCY_DECIMALS[currency];
   const [pct, setPct] = useState("40");
-  const [priceInput, setPriceInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const par = offer?.parPrice ?? 0n;
@@ -135,10 +132,7 @@ function IssuerOffering({
   const onFund = async () => {
     setError(null);
     try {
-      const override = priceInput.trim()
-        ? parseUnits(priceInput.trim(), decimals)
-        : 0n;
-      await fund.run(amount, override, open);
+      await fund.run(amount, open);
       onChange();
       void position.refetch();
     } catch (cause) {
@@ -186,7 +180,7 @@ function IssuerOffering({
             <Figure
               label="Price / token"
               value={`${money(offer!.price, decimals)} ${currency}`}
-              sub={offer!.priceOverride > 0n ? "your price" : "at par"}
+              sub="at par — set by the note"
             />
             <Figure
               label="Raised"
@@ -229,22 +223,6 @@ function IssuerOffering({
             </div>
           </div>
 
-          {!open ? (
-            <div>
-              <FieldLabel className="mb-1.5 block">
-                Price per token — leave blank for par
-              </FieldLabel>
-              <Input
-                value={priceInput}
-                onChange={(event) => setPriceInput(event.target.value)}
-                placeholder={`${money(par, decimals)} (par)`}
-                inputMode="decimal"
-                className="tnum text-sm"
-                disabled={busy}
-              />
-            </div>
-          ) : null}
-
           {/*
             The number the issuer actually cares about. Everything above is how
             much of the loan leaves; this is what arrives if it all sells.
@@ -257,8 +235,9 @@ function IssuerOffering({
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {tokens(amount)} tokens at{" "}
-              {money(offer?.price ?? par, decimals)} {currency} each.
+              {tokens(amount)} tokens at {money(offer?.price ?? par, decimals)}{" "}
+              {currency} each — par, computed by the desk from this note&rsquo;s
+              principal. There is no price to set.
               {wanted > position.balance
                 ? " Capped at what you still hold."
                 : ""}
@@ -306,21 +285,6 @@ function IssuerOffering({
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={reprice.isPending}
-                  onClick={() =>
-                    act(() =>
-                      reprice.setPrice(
-                        priceInput.trim()
-                          ? parseUnits(priceInput.trim(), decimals)
-                          : 0n,
-                      ),
-                    )
-                  }
-                >
-                  <Tag /> Reprice
-                </Button>
-                <Button
-                  variant="outline"
                   disabled={close.isPending}
                   onClick={() => act(() => close.close())}
                 >
@@ -330,20 +294,6 @@ function IssuerOffering({
             ) : null}
           </div>
 
-          {open ? (
-            <div>
-              <FieldLabel className="mb-1.5 block">
-                New price per token — blank for par
-              </FieldLabel>
-              <Input
-                value={priceInput}
-                onChange={(event) => setPriceInput(event.target.value)}
-                placeholder={`${money(par, decimals)} (par)`}
-                inputMode="decimal"
-                className="tnum text-sm"
-              />
-            </div>
-          ) : null}
         </div>
       </CardContent>
     </Card>
@@ -445,7 +395,7 @@ function InvestorOffering({
           <Figure
             label="Price / token"
             value={`${money(offer.price, decimals)} ${currency}`}
-            sub={offer.priceOverride > 0n ? "issuer's price" : "at par"}
+            sub="at par"
           />
           <Figure
             label="Share of note"
