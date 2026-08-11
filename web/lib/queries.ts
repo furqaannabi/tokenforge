@@ -243,6 +243,9 @@ export function useReviewExtraction(extractionId: string | undefined) {
       // The server re-validates, so its answer replaces ours rather than
       // merging with it.
       queryClient.setQueryData(queryKeys.extraction(extraction.id), extraction);
+      // A review can move the status to VALIDATED, which the dashboard's
+      // queue is sorted by.
+      queryClient.invalidateQueries({ queryKey: ["extractions"] });
     },
   });
 }

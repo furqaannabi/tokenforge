@@ -433,7 +433,24 @@ app.post("/extractions/:id/review", async (c) => {
   }
 
   const validation = validateTerms(parsed.data);
-  const unreviewed = fieldsNeedingReview(parsed.data, new Set(body.confirmed));
+
+  /*
+   * Confirmations accumulate. `confirmed` says "this field is fine as
+   * extracted", which is not recorded on the field itself — unlike a
+   * correction, nothing about the value changed, and stamping it as
+   * human-edited would claim more than happened. So the record of what has
+   * been vouched for lives in `unreviewedFields`, and each request has to
+   * carry the earlier ones forward. Passing only this request's set made
+   * reviewers confirm fields one at a time and never converge: the second
+   * confirmation silently undid the first.
+   */
+  const alreadyConfirmed = (Object.keys(parsed.data) as TermField[]).filter(
+    (field) => !existing.unreviewedFields.includes(field),
+  );
+  const unreviewed = fieldsNeedingReview(
+    parsed.data,
+    new Set([...alreadyConfirmed, ...(body.confirmed ?? [])]),
+  );
 
   const extraction = await prisma.extraction.update({
     where: { id },

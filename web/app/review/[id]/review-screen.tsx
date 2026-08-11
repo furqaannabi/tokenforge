@@ -85,10 +85,29 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   );
   const terms = note?.terms;
 
-  const gate = useMemo(
-    () => (terms ? mintGate(terms, issuer?.verified ?? false, { now: DEMO_NOW }) : null),
-    [terms, issuer?.verified],
-  );
+  /*
+   * The service owns the record of what a human has vouched for.
+   *
+   * Confirming a field as extracted changes nothing about the value, so
+   * nothing is written onto the field — the fact lives in the extraction's
+   * `unreviewedFields`. Recomputing the gate from the terms alone therefore
+   * ignored every confirmation ever made, and the mint button stayed disabled
+   * forever on any document that had a single low-confidence field. Anything
+   * absent from that list has been confirmed.
+   */
+  const gate = useMemo(() => {
+    if (!terms) return null;
+    const unreviewed = new Set(remote.data?.unreviewedFields ?? []);
+    const confirmed = new Set(
+      (Object.keys(terms) as TermField[]).filter(
+        (field) => !unreviewed.has(field),
+      ),
+    );
+    return mintGate(terms, issuer?.verified ?? false, {
+      confirmed,
+      now: DEMO_NOW,
+    });
+  }, [terms, issuer?.verified, remote.data?.unreviewedFields]);
 
   if (remote.isPending) return <ReviewLoading />;
   if (remote.isError) {
