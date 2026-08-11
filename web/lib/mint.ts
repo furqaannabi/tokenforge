@@ -48,6 +48,7 @@ export function useMintNote() {
       name: string;
       symbol: string;
       issuer: `0x${string}`;
+      borrower: `0x${string}`;
       currency: Currency;
       documentHash: `0x${string}`;
       supplyTokens: number;

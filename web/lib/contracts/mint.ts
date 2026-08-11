@@ -91,6 +91,8 @@ export interface MintArgs {
   name: string;
   symbol: string;
   issuer: `0x${string}`;
+  /** Who repays. Distinct from the issuer, who originated and is selling. */
+  borrower: `0x${string}`;
   supply: bigint;
   currency: `0x${string}`;
   gracePeriod: bigint;
@@ -109,6 +111,8 @@ export function buildMintArgs(input: {
   name: string;
   symbol: string;
   issuer: `0x${string}`;
+  /** Who repays. Distinct from the issuer, who originated and is selling. */
+  borrower: `0x${string}`;
   currency: Currency;
   currencyAddress: `0x${string}`;
   documentHash: `0x${string}`;
@@ -122,6 +126,7 @@ export function buildMintArgs(input: {
     name: input.name,
     symbol: input.symbol,
     issuer: input.issuer,
+    borrower: input.borrower,
     // The note itself is a plain 18-decimal ERC-20; only the money it settles
     // in uses the currency's decimals.
     supply: parseUnits(String(input.supplyTokens), 18),

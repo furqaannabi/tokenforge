@@ -48,6 +48,7 @@ contract NoteFactory {
 
     /// @dev Carries the address so the rejection names who was refused.
     error IssuerNotRegistered(address caller);
+    error BorrowerNotRegistered(address borrower);
     error NotAuthorizedRepresentative(address issuer, address caller);
     error DocumentAlreadyTokenized(bytes32 documentHash, address existingNote);
     error ZeroDocumentHash();
@@ -61,6 +62,8 @@ contract NoteFactory {
         string name;
         string symbol;
         address issuer;
+        /// @dev Who repays. See `RWANote.borrower` for why this is not `issuer`.
+        address borrower;
         uint256 supply;
         IERC20 currency;
         uint64 gracePeriod;
@@ -80,6 +83,12 @@ contract NoteFactory {
         if (!registry.isRegisteredIssuer(params.issuer)) {
             revert IssuerNotRegistered(params.issuer);
         }
+        // The borrower is admitted through the same registry. It is really a
+        // list of counterparties this deployment will deal with, and a loan
+        // needs both ends of it vouched for.
+        if (!registry.isRegisteredIssuer(params.borrower)) {
+            revert BorrowerNotRegistered(params.borrower);
+        }
         if (!registry.isAuthorizedRepresentative(params.issuer, msg.sender)) {
             revert NotAuthorizedRepresentative(params.issuer, msg.sender);
         }
@@ -95,6 +104,9 @@ contract NoteFactory {
             params.name,
             params.symbol,
             params.issuer,
+            params.borrower,
+            // The whole supply is minted to the issuer, who sells it down. The
+            // borrower owes the loan; they do not own a share of it.
             params.issuer,
             params.supply,
             params.terms

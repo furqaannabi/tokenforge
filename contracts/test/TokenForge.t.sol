@@ -26,6 +26,8 @@ abstract contract TokenForgeFixture is Test {
     address internal issuer = makeAddr("issuer");
     address internal representative = makeAddr("representative");
     address internal outsider = makeAddr("outsider");
+    /// @dev Owes the money. The issuer originated the loan and sells it on.
+    address internal borrower = makeAddr("borrower");
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
 
@@ -52,6 +54,9 @@ abstract contract TokenForgeFixture is Test {
 
         vm.prank(admin);
         registry.admitIssuer(issuer, "Meridian Freight Holdings LLC", "Delaware, USA");
+        // Both ends of a loan are admitted through the same registry.
+        vm.prank(admin);
+        registry.admitIssuer(borrower, "Meridian Freight Operating Co", "Delaware, USA");
 
         // Enough to service the loan several times over.
         usdg.mint(issuer, 10_000_000e6);
@@ -80,12 +85,13 @@ abstract contract TokenForgeFixture is Test {
         });
     }
 
-    function _mintParams() internal pure returns (NoteFactory.MintParams memory) {
+    function _mintParams() internal view returns (NoteFactory.MintParams memory) {
         Period[] memory schedule = _schedule();
         return NoteFactory.MintParams({
             name: "Meridian Freight Senior Note",
             symbol: "MFH-26",
             issuer: address(0), // filled by the caller
+            borrower: borrower,
             supply: SUPPLY,
             currency: MockUSDG(address(0)),
             gracePeriod: GRACE,
@@ -94,8 +100,15 @@ abstract contract TokenForgeFixture is Test {
         });
     }
 
-    /// @dev Mints the fixture note as `issuer`.
+    /// @dev Mints the fixture note as `issuer`, accepted by the borrower.
     function _mint() internal returns (RWANote note, RepaymentVault vault) {
+        (note, vault) = _mintPending();
+        vm.prank(borrower);
+        note.accept();
+    }
+
+    /// @dev Mints but leaves the note awaiting the borrower's signature.
+    function _mintPending() internal returns (RWANote note, RepaymentVault vault) {
         NoteFactory.MintParams memory params = _mintParams();
         params.issuer = issuer;
         params.currency = usdg;
@@ -113,6 +126,164 @@ abstract contract TokenForgeFixture is Test {
         usdg.approve(address(vault), due);
         vault.settleNextPeriod();
         vm.stopPrank();
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Three parties, and the note keeps them apart.
+ *
+ * The issuer originated the loan and is selling it to get their capital back
+ * early. The borrower owes the money. The holders own the repayments. Before
+ * `borrower` existed the first two were the same address, which made the
+ * originator appear to owe a debt to the people they had just sold it to.
+ */
+contract PartiesTest is TokenForgeFixture {
+    function test_IssuerAndBorrowerAreDifferentParties() public {
+        (RWANote note,) = _mint();
+
+        assertEq(note.issuer(), issuer);
+        assertEq(note.borrower(), borrower);
+        assertTrue(note.issuer() != note.borrower());
+    }
+
+    /// The supply is minted to the issuer to sell. The borrower owns none of it.
+    function test_BorrowerHoldsNoneOfTheLoan() public {
+        (RWANote note,) = _mint();
+
+        assertEq(note.balanceOf(issuer), SUPPLY);
+        assertEq(note.balanceOf(borrower), 0);
+    }
+
+    /**
+     * The borrower pays, and the money reaches the holders.
+     *
+     * This is the whole three-party loop in one test: the issuer sells a stake
+     * to Alice, the borrower settles a period out of their own balance, and
+     * Alice can claim a share of it.
+     */
+    function test_BorrowerRepaysAndHoldersAreDistributed() public {
+        (RWANote note, RepaymentVault vault) = _mint();
+
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
+        usdg.mint(borrower, due);
+
+        uint256 issuerBefore = usdg.balanceOf(issuer);
+
+        vm.startPrank(borrower);
+        usdg.approve(address(vault), due);
+        vault.settleNextPeriod();
+        vm.stopPrank();
+
+        assertEq(
+            usdg.balanceOf(issuer),
+            issuerBefore,
+            "the originator pays nothing to service a loan they sold"
+        );
+        assertEq(vault.claimable(alice), due / 4, "the holder is owed her share");
+
+        uint256 aliceBefore = usdg.balanceOf(alice);
+        vm.prank(alice);
+        vault.claim();
+        assertEq(usdg.balanceOf(alice) - aliceBefore, due / 4);
+    }
+
+    /**
+     * Paying is open to anyone, and deliberately so.
+     *
+     * A guarantor, a servicer, or the originator covering a shortfall may all
+     * legitimately settle. Restricting it to the borrower would let one lost
+     * key strand a performing loan.
+     */
+    function test_AnyoneMaySettleOnTheBorrowersBehalf() public {
+        (, RepaymentVault vault) = _mint();
+
+        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
+        usdg.mint(outsider, due);
+
+        vm.startPrank(outsider);
+        usdg.approve(address(vault), due);
+        vault.settleNextPeriod();
+        vm.stopPrank();
+
+        assertEq(vault.nextPeriod(), 1);
+    }
+}
+
+/**
+ * Nothing happens until the borrower signs.
+ *
+ * A minted note is the issuer's assertion about someone else. These tests are
+ * the difference between that and a debt the borrower acknowledged.
+ */
+contract AcceptanceTest is TokenForgeFixture {
+    function test_NoteStartsPending() public {
+        (RWANote note,) = _mintPending();
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Pending));
+    }
+
+    function test_BorrowerAcceptsAndTheNoteGoesActive() public {
+        (RWANote note,) = _mintPending();
+
+        vm.prank(borrower);
+        note.accept();
+
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Active));
+    }
+
+    function test_NobodyElseCanAcceptOnTheBorrowersBehalf() public {
+        (RWANote note,) = _mintPending();
+
+        vm.prank(issuer);
+        vm.expectRevert(abi.encodeWithSelector(RWANote.NotBorrower.selector, issuer));
+        note.accept();
+    }
+
+    function test_AcceptingTwiceReverts() public {
+        (RWANote note,) = _mint(); // already accepted
+
+        vm.prank(borrower);
+        vm.expectRevert(RWANote.NotPending.selector);
+        note.accept();
+    }
+
+    /// A stake cannot change hands in an instrument nobody has affirmed.
+    function test_TransfersAreBlockedWhilePending() public {
+        (RWANote note,) = _mintPending();
+
+        vm.prank(issuer);
+        vm.expectRevert(RWANote.NotAcceptedYet.selector);
+        note.transfer(alice, 1e18);
+    }
+
+    /// Nor can money be taken against one.
+    function test_SettlementIsBlockedWhilePending() public {
+        (, RepaymentVault vault) = _mintPending();
+
+        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
+        vm.startPrank(issuer);
+        usdg.approve(address(vault), due);
+        vm.expectRevert(RepaymentVault.NotAcceptedYet.selector);
+        vault.settleNextPeriod();
+        vm.stopPrank();
+    }
+
+    /// Both ends of the loan must be admitted before either can be named.
+    function test_UnregisteredBorrowerCannotBeNamed() public {
+        NoteFactory.MintParams memory params = _mintParams();
+        params.issuer = issuer;
+        params.borrower = outsider;
+        params.currency = usdg;
+
+        vm.prank(issuer);
+        vm.expectRevert(
+            abi.encodeWithSelector(NoteFactory.BorrowerNotRegistered.selector, outsider)
+        );
+        factory.mintNote(params);
     }
 }
 
@@ -956,6 +1127,7 @@ contract AmortizingScheduleTest is TokenForgeFixture {
             name: "Amortizing Note",
             symbol: "AMRT",
             issuer: issuer,
+            borrower: borrower,
             supply: TOKENS,
             currency: usdg,
             gracePeriod: GRACE,
@@ -971,6 +1143,9 @@ contract AmortizingScheduleTest is TokenForgeFixture {
 
         vm.prank(issuer);
         (note, vault) = factory.mintNote(params);
+
+        vm.prank(borrower);
+        note.accept();
     }
 
     /// @notice 1,000 USDG, 100 tokens, 10% repaid: 100 tokens become 90.

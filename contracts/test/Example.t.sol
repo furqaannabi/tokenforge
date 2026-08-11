@@ -32,6 +32,7 @@ contract ExampleTest is Test {
     RepaymentVault vault;
     MockUSDG usdg;
     address issuer = makeAddr("issuer");
+    address borrower = makeAddr("borrower");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
 
@@ -40,6 +41,7 @@ contract ExampleTest is Test {
         IssuerRegistry registry = new IssuerRegistry(address(this));
         NoteFactory factory = new NoteFactory(registry);
         usdg = new MockUSDG();
+        registry.admitIssuer(borrower, "Borrower Co", "Delaware, USA");
         registry.admitIssuer(issuer, "Example Co", "Delaware, USA");
         usdg.mint(issuer, 10_000e6);
 
@@ -58,6 +60,7 @@ contract ExampleTest is Test {
                 name: "Example Note",
                 symbol: "EX",
                 issuer: issuer,
+                borrower: borrower,
                 supply: TOKENS,
                 currency: usdg,
                 gracePeriod: 10 days,
@@ -71,6 +74,9 @@ contract ExampleTest is Test {
                 schedule: schedule
             })
         );
+
+        vm.prank(borrower);
+        note.accept();
 
         vm.startPrank(issuer);
         note.transfer(alice, 60e18);

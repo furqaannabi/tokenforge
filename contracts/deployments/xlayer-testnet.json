@@ -14,14 +14,14 @@
       }
     },
     "NoteFactory": {
-      "address": "0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357",
-      "txHash": "0xf432e61284d6b83a94a88754b6463fb21aaa1f7cfe4de30aa8be55443d22aca4",
-      "deployedAtBlock": 37893602,
+      "address": "0x4941ed1f4785bf68083620566CC2c64D78c15aE4",
+      "txHash": "0x4077d5d6c71d5468f5c2bc610fceb30e5c49eaf1891da73f204b49d5394b199d",
+      "deployedAtBlock": null,
       "constructorArgs": {
         "registry": "0x57873ccC430f7709ed77dA7da1EC521CED877F59"
       },
-      "supersedes": "0x4E19A6C2B37c799E6BC8eb682889f33C6d97760A",
-      "note": "Redeployed when RWANote became share-based. NoteFactory embeds the note and vault bytecode, so a change to either needs a new factory. IssuerRegistry and MockUSDG were byte-identical to what we compile and kept their state, including the admitted issuer."
+      "supersedes": "0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357",
+      "note": "Names a borrower distinct from the issuer, requires both to be in the registry, and mints notes Pending until the borrower calls accept(). Notes from earlier factories have no borrower and are Active from mint."
     },
     "MockUSDG": {
       "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",

@@ -154,8 +154,42 @@ export function useNotesMarket() {
   return { rows, isPending, isError };
 }
 
-/** `NoteStatus` as the contract enumerates it. */
-export const NOTE_STATUS = ["Active", "Matured", "Impaired"] as const;
+/**
+ * `RWANote.Status`, in the contract's own order.
+ *
+ * This list previously read Active/Matured/Impaired, which had the last two
+ * transposed — a defaulted loan rendered as "Matured", the one mislabelling
+ * that turns the worst outcome into the best. `Pending` is appended because
+ * the enum appends it, so that Active stays zero for notes already minted.
+ */
+export const NOTE_STATUS = [
+  "Active",
+  "Impaired",
+  "Matured",
+  "Pending",
+] as const;
+
+/**
+ * The colour a status should carry, in one place.
+ *
+ * Two screens each mapped these by hand and one had impaired and matured the
+ * wrong way round, painting a defaulted loan in the tone reserved for one that
+ * had paid in full.
+ */
+export function statusTone(
+  status: number,
+): "verified" | "impaired" | "review" | "neutral" {
+  switch (status) {
+    case 1:
+      return "impaired";
+    case 2:
+      return "neutral";
+    case 3:
+      return "review";
+    default:
+      return "verified";
+  }
+}
 
 /**
  * The connected wallet's positions.

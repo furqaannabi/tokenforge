@@ -34,6 +34,7 @@ abstract contract SaleFixture is Test {
     address internal admin = makeAddr("admin");
     address internal issuer = makeAddr("issuer");
     address internal outsider = makeAddr("outsider");
+    address internal borrower = makeAddr("borrower");
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
 
@@ -55,6 +56,8 @@ abstract contract SaleFixture is Test {
 
         vm.prank(admin);
         registry.admitIssuer(issuer, "Northbridge Credit Partners", "Delaware, USA");
+        vm.prank(admin);
+        registry.admitIssuer(borrower, "Northbridge Trading Ltd", "Delaware, USA");
 
         usdg.mint(issuer, 10_000e6);
         usdg.mint(alice, 10_000e6);
@@ -81,6 +84,7 @@ abstract contract SaleFixture is Test {
             name: "Northbridge Working Capital Note",
             symbol: "NBC-26",
             issuer: issuer,
+            borrower: borrower,
             supply: SUPPLY,
             currency: usdg,
             gracePeriod: 10 days,
@@ -96,6 +100,9 @@ abstract contract SaleFixture is Test {
 
         vm.prank(issuer);
         (note_, vault_) = factory.mintNote(params);
+
+        vm.prank(borrower);
+        note_.accept();
     }
 
     /// @dev Opens an offer holding `bps` of the supply, quoted at par.

@@ -70,6 +70,7 @@ contract RepaymentVault is ReentrancyGuard {
     error NotNote();
     error ScheduleHashMismatch(bytes32 expected, bytes32 actual);
     error AllPeriodsSettled();
+    error NotAcceptedYet();
     error NothingToClaim();
     error NoSupply();
     error NotOverdue();
@@ -117,6 +118,11 @@ contract RepaymentVault is ReentrancyGuard {
      *      issuer's behalf — what matters to holders is that it arrives.
      */
     function settleNextPeriod() external nonReentrant returns (uint256 amount) {
+        // A note the borrower has not accepted is not yet a debt, and taking
+        // a payment against one would distribute money to holders of an
+        // instrument that could still be repudiated.
+        if (note.status() == RWANote.Status.Pending) revert NotAcceptedYet();
+
         uint256 index = nextPeriod;
         if (index >= _schedule.length) revert AllPeriodsSettled();
 
@@ -157,6 +163,11 @@ contract RepaymentVault is ReentrancyGuard {
      *         issuer's cooperation to have arrears recognised.
      */
     function flagImpaired() external {
+        // A note the borrower has not accepted is not yet a debt, and taking
+        // a payment against one would distribute money to holders of an
+        // instrument that could still be repudiated.
+        if (note.status() == RWANote.Status.Pending) revert NotAcceptedYet();
+
         uint256 index = nextPeriod;
         if (index >= _schedule.length) revert AllPeriodsSettled();
         if (!_isOverdue(index)) revert NotOverdue();

@@ -18,6 +18,8 @@ import {
 } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
 import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 import { truncateHex } from "@/lib/format";
 import type { Currency } from "@tokenforge/core";
 
@@ -52,16 +54,26 @@ export function OnChainNote({
   const [error, setError] = useState<string | null>(null);
 
   /*
-   * Repaying is the borrower's obligation, not an action anyone can take.
+   * Repaying belongs to the borrower, not the issuer and not a holder.
+   *
    * `settleNextPeriod` pulls the payment from whoever signs it, so showing the
-   * button to a holder offered them the chance to pay someone else's loan out
-   * of their own pocket. They still see what is due and when — that is when
-   * they get paid — but the controls belong to the issuer.
+   * button to the wrong party offers them the chance to pay someone else's
+   * loan out of their own pocket. The issuer originated this loan and sold it;
+   * they are owed nothing and owe nothing. Everyone else still sees what is
+   * due and when, because that is when they get paid.
+   *
+   * Notes from factories that predate the borrower role have a zero address
+   * there. Falling back to the issuer keeps those payable rather than
+   * stranding them.
    */
-  const isIssuer =
+  const payer =
+    state?.borrower && state.borrower !== ZERO_ADDRESS
+      ? state.borrower
+      : state?.issuer;
+  const isBorrower =
     Boolean(address) &&
-    Boolean(state?.issuer) &&
-    state!.issuer.toLowerCase() === address!.toLowerCase();
+    Boolean(payer) &&
+    payer!.toLowerCase() === address!.toLowerCase();
 
   const period = due.data as
     | { dueDate: bigint; principal: bigint; interest: bigint }
@@ -147,7 +159,7 @@ export function OnChainNote({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{isIssuer ? "Repay" : "Next payment"}</CardTitle>
+            <CardTitle>{isBorrower ? "Repay" : "Next payment"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {finished ? (
@@ -183,7 +195,7 @@ export function OnChainNote({
                   </p>
                 )}
 
-                {isIssuer ? (
+                {isBorrower ? (
                   <>
                     <Button
                       className="w-full"

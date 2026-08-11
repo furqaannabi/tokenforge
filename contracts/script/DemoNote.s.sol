@@ -19,6 +19,8 @@ contract DemoNote is Script {
     function run() external returns (RWANote note, RepaymentVault vault) {
         NoteFactory factory = NoteFactory(vm.envAddress("FACTORY"));
         address issuer = vm.envAddress("ISSUER");
+        // Falls back to the issuer so the demo runs with one funded key.
+        address borrower = vm.envOr("BORROWER", issuer);
         IERC20 usdg = IERC20(vm.envAddress("USDG"));
 
         Period[] memory schedule = new Period[](5);
@@ -36,6 +38,7 @@ contract DemoNote is Script {
                 name: "Demo Amortizing Note",
                 symbol: "DEMO",
                 issuer: issuer,
+                borrower: borrower,
                 supply: 1_000e18,
                 currency: usdg,
                 gracePeriod: 10 days,

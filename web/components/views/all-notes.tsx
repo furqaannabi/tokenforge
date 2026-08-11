@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { formatUnits } from "viem";
 import { Stamp } from "@/components/primitives";
-import { NOTE_STATUS, useNotesMarket } from "@/lib/portfolio";
+import { NOTE_STATUS, statusTone, useNotesMarket } from "@/lib/portfolio";
 import { money, percent, monthYear } from "@/lib/format";
 import {
   Card,
@@ -101,15 +101,7 @@ export function AllNotesView() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Stamp
-                      tone={
-                        row.status === 2
-                          ? "impaired"
-                          : row.status === 1
-                            ? "neutral"
-                            : "verified"
-                      }
-                    >
+                    <Stamp tone={statusTone(row.status)}>
                       {NOTE_STATUS[row.status] ?? "Unknown"}
                     </Stamp>
                   </TableCell>

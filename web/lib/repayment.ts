@@ -34,8 +34,13 @@ export interface NoteState {
   totalShares: bigint;
   /** 0 Active · 1 Impaired · 2 Matured */
   status: number;
-  /** Who owes the money. Only this address can settle a period. */
+  /** Who originated the loan and sells it on. */
   issuer: `0x${string}`;
+  /**
+   * Who owes the money. Zero for notes from factories that predate the role,
+   * which had no borrower and were Active from mint.
+   */
+  borrower: `0x${string}`;
 }
 
 /** Live note state. Balances here already reflect amortization. */
@@ -51,11 +56,12 @@ export function useNoteState(note?: `0x${string}`) {
       { ...contract, functionName: "totalShares" },
       { ...contract, functionName: "status" },
       { ...contract, functionName: "issuer" },
+      { ...contract, functionName: "borrower" },
     ],
     query: { enabled: Boolean(note) },
   });
 
-  const [index, repaid, principal, supply, shares, status, issuer] =
+  const [index, repaid, principal, supply, shares, status, issuer, borrower] =
     result.data ?? [];
 
   return {
@@ -69,6 +75,9 @@ export function useNoteState(note?: `0x${string}`) {
           totalShares: (shares?.result as bigint) ?? 0n,
           status: Number(status?.result ?? 0),
           issuer: (issuer?.result as `0x${string}`) ?? "0x",
+          borrower:
+            (borrower?.result as `0x${string}`) ??
+            "0x0000000000000000000000000000000000000000",
         } satisfies NoteState)
       : undefined,
   };
@@ -278,6 +287,34 @@ export function useClaim(vault?: `0x${string}`) {
         abi: repaymentVaultAbi,
         address: vault!,
         functionName: "claim",
+        chainId: CHAIN_ID,
+      }),
+  };
+}
+
+/**
+ * The borrower affirms the terms.
+ *
+ * Until this lands the note is Pending: it cannot be transferred, offered, or
+ * repaid. Only the named borrower's own key can call it — the issuer minting a
+ * note is an assertion about someone else, and this is what turns it into a
+ * debt that party acknowledged.
+ */
+export function useAcceptNote(note?: `0x${string}`) {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+
+  return {
+    hash,
+    error,
+    isSigning: isPending,
+    isConfirming: receipt.isLoading,
+    isConfirmed: receipt.isSuccess,
+    accept: () =>
+      writeContractAsync({
+        abi: rwaNoteAbi,
+        address: note!,
+        functionName: "accept",
         chainId: CHAIN_ID,
       }),
   };

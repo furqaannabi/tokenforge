@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, BadgeCheck, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { FieldLabel, HexValue, Stamp } from "@/components/primitives";
 import { OnChainNote } from "@/components/onchain-note";
+import { AcceptNote } from "@/components/accept-note";
 import { Offering } from "@/components/offering";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { useDocumentUrl, useExtraction } from "@/lib/queries";
 import { useNoteState } from "@/lib/repayment";
+import { NOTE_STATUS, statusTone } from "@/lib/portfolio";
 import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { percent, monthYear, money, truncateHex } from "@/lib/format";
@@ -97,6 +99,8 @@ export function NoteScreen({ noteId }: { noteId: string }) {
         </p>
       </header>
 
+      <AcceptNote note={minted.noteAddress} />
+
       <OnChainNote
         note={minted.noteAddress}
         vault={minted.vaultAddress}
@@ -129,20 +133,8 @@ export function NoteScreen({ noteId }: { noteId: string }) {
             <ContractRow label="Vault" address={minted.vaultAddress} />
             <div className="flex items-baseline justify-between gap-4">
               <FieldLabel>Status</FieldLabel>
-              <Stamp
-                tone={
-                  chain.state?.status === 1
-                    ? "impaired"
-                    : chain.state?.status === 2
-                      ? "neutral"
-                      : "verified"
-                }
-              >
-                {chain.state?.status === 1
-                  ? "Impaired"
-                  : chain.state?.status === 2
-                    ? "Matured"
-                    : "Active"}
+              <Stamp tone={statusTone(chain.state?.status ?? 0)}>
+                {NOTE_STATUS[chain.state?.status ?? 0] ?? "Unknown"}
               </Stamp>
             </div>
           </div>

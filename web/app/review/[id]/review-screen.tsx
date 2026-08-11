@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { parseUnits } from "viem";
+import { isAddress, parseUnits } from "viem";
 import { Check, CircleAlert, Loader2, ShieldOff, TriangleAlert } from "lucide-react";
 import { DocumentPane } from "@/components/document-pane";
 import { TermCard, type EditorKind } from "@/components/term-card";
@@ -82,6 +82,9 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   // Share of the supply to place for sale at issuance. There is no price to
   // choose: the desk quotes par from the note's own principal.
   const [salePct, setSalePct] = useState("");
+  // The wallet that will repay. The document names the borrower; only the
+  // issuer can say which address that company controls.
+  const [borrower, setBorrower] = useState("");
 
   const remote = useExtraction(noteId);
   const review = useReviewExtraction(noteId);
@@ -152,6 +155,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         name: note.name,
         symbol: note.symbol,
         issuer: address!,
+        borrower: borrower.trim() as `0x${string}`,
         currency,
         documentHash: note.document.hash,
         supplyTokens: SUPPLY_TOKENS,
@@ -346,6 +350,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
             </section>
           </div>
 
+          <BorrowerWallet value={borrower} onChange={setBorrower} />
           <SettlementCurrency value={currency} onChange={setCurrency} />
           <OfferingAtIssue
             currency={currency}
@@ -356,6 +361,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 
           <MintFooter
             gate={gate}
+            borrowerReady={isAddress(borrower.trim(), { strict: false })}
             minting={
               minting.isSigning ||
               minting.isConfirming ||
@@ -374,6 +380,56 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * The wallet that will repay.
+ *
+ * Three parties, and until now two of them were the same address. The issuer
+ * originated this loan and is selling it to get their capital back early; the
+ * borrower owes the money; the holders own the repayments. Naming the borrower
+ * is what separates the first two — without it the originator appeared to owe a
+ * debt to the people they had just sold it to.
+ *
+ * The document names a borrowing company. Which address that company controls
+ * is not in the document, and the factory rejects one the registry has not
+ * admitted.
+ */
+function BorrowerWallet({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const trimmed = value.trim();
+  const malformed = trimmed.length > 0 && !isAddress(trimmed, { strict: false });
+
+  return (
+    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <FieldLabel>Borrower wallet</FieldLabel>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Who repays. The note stays pending until this wallet accepts the
+            terms.
+          </p>
+        </div>
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="0x…"
+          aria-label="Borrower wallet address"
+          className="w-full font-mono text-sm sm:w-[24rem]"
+        />
+      </div>
+      {malformed ? (
+        <p className="mt-2 text-xs text-impaired">
+          That is not a valid address.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * How much of the loan to place for sale, decided at issuance.
@@ -616,6 +672,7 @@ function ReviewSummary({
 
 function MintFooter({
   gate,
+  borrowerReady,
   minting,
   signing,
   error,
@@ -623,6 +680,7 @@ function MintFooter({
   issuerVerified,
 }: {
   gate: NonNullable<ReturnType<typeof mintGate>>;
+  borrowerReady: boolean;
   minting: boolean;
   signing: boolean;
   error: string | null;
@@ -631,6 +689,16 @@ function MintFooter({
 }) {
   return (
     <div className="border-t border-border bg-card px-4 py-3 sm:px-5 sm:py-4">
+      {gate.canMint && !borrowerReady ? (
+        <p className="mb-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+          <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-review" />
+          <span>
+            Name the borrower&rsquo;s wallet. The factory rejects a mint without
+            one, and the note has nobody to accept it.
+          </span>
+        </p>
+      ) : null}
+
       {gate.canMint ? null : (
         <ul className="mb-3 space-y-1.5">
           {gate.blockers.map((blocker, index) => (
@@ -659,7 +727,7 @@ function MintFooter({
       <Button
         size="lg"
         onClick={onMint}
-        disabled={!gate.canMint || minting}
+        disabled={!gate.canMint || !borrowerReady || minting}
         className="w-full"
       >
         {signing ? (
