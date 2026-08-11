@@ -28,9 +28,13 @@ frequency, and whether the schedule reproduces the stated rate against a
 declining balance. It ignores confidence entirely.
 
 `fieldsNeedingReview` is the separate question, and honours sign-off from either
-direction: the web app flips `editedByHuman` on the field as a reviewer works;
-the service is handed a set of confirmed keys. Treating either as sufficient is
-what lets one implementation serve both.
+direction: a correction sets `editedByHuman` on the field, while confirming a
+value as extracted changes nothing about it and is recorded as a key in a
+confirmed set. Treating either as sufficient is what lets one implementation
+serve both — and both callers must pass that set. The review screen once
+recomputed from the terms alone, which ignored every confirmation ever made and
+left the mint button permanently disabled on any document with one
+low-confidence field.
 
 `mintGate` combines them into the single question the review screen asks — may
 these terms be minted? Three independent gates: registry membership, arithmetic

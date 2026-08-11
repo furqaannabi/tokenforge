@@ -4,17 +4,17 @@ Foundry. Deployed and verified on X Layer testnet — addresses in
 [deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
 
 ```bash
-forge test          # 67 tests
+forge test          # 99 tests
 forge coverage      # 96% of lines, 76% of branches
 ```
 
 | Contract | |
 |---|---|
 | `IssuerRegistry` | Who may issue. Admission, revocation, per-issuer representatives, two-step admin handover |
-| `NoteFactory` | The only supported way on-chain. Enforces registry membership, claims the document hash, deploys note and vault atomically |
-| `RWANote` | ERC-20 with immutable terms, impairment state, and a transfer restriction hook |
+| `NoteFactory` | The only supported way on-chain. Requires *both* issuer and borrower to be registered, claims the document hash, deploys note and vault atomically |
+| `RWANote` | ERC-20 with immutable terms, a named borrower, a `Pending` state until they accept, impairment, and a transfer restriction hook |
 | `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure |
-| `SaleDesk` | The primary offering. The issuer places a share of a note at a price, an investor buys straight from the pool |
+| `SaleDesk` | The primary offering. The issuer places a share of a note; the price is par, computed by the desk, and nobody can set it |
 | `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
 
 ## A worked example
@@ -45,7 +45,26 @@ of 1,100: 660 and 440.
 Balances fall in step with outstanding principal, while shares — and therefore
 ownership — never move.
 
-## Four decisions worth knowing
+## Three parties
+
+`issuer` and `borrower` are different addresses and the distinction carries
+weight. The issuer originated the loan and is selling it to recover capital
+early; the borrower owes the money; holders own the repayments. With one address
+doing two jobs, the originator appeared to owe a debt to the people they had
+just sold it to.
+
+A note mints `Pending`. Until the named borrower calls `accept()` from their own
+key, nothing transfers, nothing can be offered, and the vault refuses payment —
+because until then the terms are the issuer's assertion about somebody else.
+
+`accept()` is the only thing restricted to the borrower. `settleNextPeriod`
+stays open to anyone: a guarantor or a servicer may legitimately pay, and
+requiring one specific key would let losing it strand a performing loan.
+
+`Pending` is appended to the `Status` enum rather than placed first, so `Active`
+stays zero and notes from earlier factories keep their meaning.
+
+## Five decisions worth knowing
 
 **Distribution uses an accumulator, not per-period snapshots.** The note calls
 `syncHolder` for both parties before any balance change, so a coupon lands with
@@ -75,11 +94,25 @@ One trade-off worth knowing: the `Transfer` event carries the share amount, not
 the balance amount, because it is emitted by the inherited ERC-20 accounting.
 Read `sharesOf` alongside it. This is the usual cost of a rebasing token.
 
+**The sale desk holds no price and no money.** A token is a claim on one unit of
+principal, so par is arithmetic on the note's own terms — `openOffer` takes no
+price argument and there is nothing to set. The pool is the desk's own balance
+of the note rather than a stored figure, so it amortizes along with everything
+else: after a 20% paydown a half-sold note is still half sold. Payment goes
+straight from buyer to seller in the same call that delivers the tokens, so the
+desk never holds anyone's money between calls. `quote` rounds *up*, because
+rounding down let amounts small enough to zero the cost be taken for free.
+
 **Revoking an issuer does not touch notes already issued.** Their terms are
 immutable and their holders' claims should survive the issuer losing the right
 to create more.
 
 ## Testing
+
+`PartiesTest` and `AcceptanceTest` cover the three-party model: that the issuer
+and borrower are distinct, that the borrower holds none of the loan, that a
+borrower's payment reaches a holder who bought part of it, and that transfers
+and settlement both refuse a note nobody has accepted.
 
 The fixture is the Meridian note from the demo documents — $2.5M at 8.50%,
 twelve $53,125 quarterly coupons — the same figures the TypeScript validator

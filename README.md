@@ -17,7 +17,7 @@ TokenForge puts an LLM on that critical path. Remove the model and there is no p
 ## How it works
 
 ```text
-Company is verified and admitted to the issuer registry
+Issuer and borrower are both admitted to the registry
         ↓
 Verified issuer uploads the signed PDF     → stored in R2, hashed, text read out
         ↓
@@ -27,16 +27,38 @@ Deterministic validator checks internal consistency
         ↓
 Human reviews low-confidence fields
         ↓
-Authorized issuer representative approves
+Authorized issuer representative approves and mints
         ↓
-RWANote minted on X Layer, document hash stored on-chain
+RWANote minted on X Layer — Pending, document hash stored on-chain
         ↓
-Investors hold proportional shares
+Borrower accepts the terms from their own wallet     → the note goes Active
+        ↓
+Issuer places a share of the note on the sale desk
+        ↓
+Investors buy in and hold proportional shares
         ↓
 Borrower deposits USDG repayments
         ↓
 Holders claim principal + interest pro-rata
 ```
+
+### Three parties, kept apart
+
+A loan has three sides, and collapsing any two of them tells a lie:
+
+| | |
+|---|---|
+| **Issuer** | Originated the loan and is selling it to get their capital back early. Mints the note, holds the whole supply, places part of it for sale |
+| **Borrower** | Owes the money. Named at issuance, must be in the registry, and must sign `accept()` before the note does anything. Repays into the vault |
+| **Holders** | Own the repayments. Buy from the offering, claim their share, and can sell on |
+
+Until the borrower accepts, a minted note is only the issuer's assertion *about*
+someone else — so it stays `Pending` and cannot be transferred, offered, or
+repaid. Only that wallet's own key can clear it.
+
+Paying, though, is open to anyone. A guarantor or a servicer may legitimately
+settle a period, and restricting it to one address would let a lost key strand
+a performing loan.
 
 ## The trust stack
 
@@ -48,6 +70,7 @@ No single check is trusted on its own. Five layers each do a different job:
 | AI verification | Extracts terms, cross-checks the document, flags inconsistencies, scores confidence |
 | Human verification | A person reads the source document and confirms or corrects the AI's output |
 | Issuer approval | The authorized representative signs off on the final terms on-chain |
+| Borrower acceptance | The named borrower signs `accept()` from their own wallet. Nothing trades or settles until they do |
 | Onchain enforcement | Terms are immutable, the document hash is recorded, the repayment schedule is enforced by contract |
 
 **Issuer verification is an eligibility layer, not a safety guarantee.** A reputable company can still originate a bad loan. Verification controls *who may issue*; it says nothing about whether a particular loan will be repaid. Credit risk remains entirely with the investor.
@@ -95,11 +118,16 @@ contracts       Foundry · deployed and verified on X Layer testnet
 | Contract | Address | |
 |---|---|---|
 | `IssuerRegistry` | [`0x57873ccC430f7709ed77dA7da1EC521CED877F59`](https://www.oklink.com/xlayer-test/address/0x57873ccc430f7709ed77da7da1ec521ced877f59) | Verified |
-| `NoteFactory` | [`0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357`](https://www.oklink.com/xlayer-test/address/0xc430c8ee28aaacbabfe06cdb6a6900ce616dd357) | Verified |
-| `SaleDesk` | [`0x3efB366ee4EdC391AcbA9E5635d8c19dE9D9b4a8`](https://www.oklink.com/xlayer-test/address/0x3efb366ee4edc391acba9e5635d8c19de9d9b4a8) | Verified |
+| `NoteFactory` | [`0x4941ed1f4785bf68083620566CC2c64D78c15aE4`](https://www.oklink.com/xlayer-test/address/0x4941ed1f4785bf68083620566cc2c64d78c15ae4) | Verified |
+| `SaleDesk` | [`0xDA9DD5Ab32372507fFcD662f6FE1608901c1bbF5`](https://www.oklink.com/xlayer-test/address/0xda9dd5ab32372507ffcd662f6fe1608901c1bbf5) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
-`RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json).
+`RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json), including superseded addresses and why each was replaced.
+
+`NoteFactory` and `SaleDesk` have both been redeployed. Earlier factories minted
+notes with no borrower, which the app still reads and treats as payable by the
+issuer; earlier desks let the issuer name their own price, and the first of them
+quoted zero for amounts small enough to round down.
 
 One note is live for demonstration — 1,000 USDG at 10%, five instalments — with a period already settled:
 
@@ -109,6 +137,20 @@ One note is live for demonstration — 1,000 USDG at 10%, five instalments — w
 | [`RepaymentVault`](https://www.oklink.com/xlayer-test/address/0x6a22eeaa78088085099c17afdddc9714f3324cd5) | `0x6A22eeAa78088085099C17AfdDdc9714F3324cD5` |
 
 After that first repayment, on-chain: `totalSupply` 1,000 → 800 tokens, `sharesOf` unchanged at 1,000, `principalIndex` 0.8, and 220 USDG claimable.
+
+A second note carries a live offering — the Meridian agreement from
+[samples/](samples/), $2.5M at 8.50% over twelve quarterly coupons, with 401 of
+its 1,000 tokens on the desk at par:
+
+| | |
+|---|---|
+| [`RWANote`](https://www.oklink.com/xlayer-test/address/0xe594a95b0034c0a5e23a3a783bfda36d77009c22) | `0xe594a95b0034c0a5E23A3a783BFDa36D77009C22` |
+| [`RepaymentVault`](https://www.oklink.com/xlayer-test/address/0x5bf30e0fc51693062e3ea5c2c36e1b165cc7c61a) | `0x5BF30E0fc51693062e3EA5c2C36E1B165cC7c61A` |
+
+Par is 2,500 USDG a token — 2,500,000 of principal over 1,000 tokens — so a 625
+stake buys 0.25 of a token and is owed twelve coupons of 13.28 plus 625 of
+principal at maturity. Both notes predate the borrower role and are Active from
+mint; notes issued now start `Pending`.
 
 **X Layer testnet is chain 1952**, confirmed against the RPC — `eth_chainId` returns `0x7a0` on both `xlayertestrpc.okx.com` and `testrpc.xlayer.tech`. The 195 figure that circulates is wrong. Mainnet is 196.
 
@@ -130,7 +172,7 @@ cp .env.example .env.local        # addresses are in the deployments JSON
 pnpm dev                          # :3000
 
 cd ../contracts
-forge test                        # 66 tests
+forge test                        # 99 tests
 ```
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
@@ -145,16 +187,25 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 **Partially stubbed:** issuer verification. The `IssuerRegistry` and its on-chain enforcement are real — an unregistered address genuinely cannot mint — but admission to the registry is a manual off-chain decision here, not a KYB integration.
 
-**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, and the repayment logic with 66 passing tests.
+**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 99 passing tests.
 
 ## What is not built yet
 
 Stated plainly, because a demo can hide these:
 
-- **Nothing has been signed from a browser.** Mint, repay, and claim are all wired to the contracts and signed by the connected wallet, and the whole lifecycle has been exercised on testnet through the deployed factory — but by a scripted signer, not a browser wallet.
-- **No note exists on-chain.** The mint → deposit → claim lifecycle has only ever run in Foundry, not on testnet.
+- **Most of it has never been signed from a browser.** Placing an offering has:
+  `fundPool` for 400 tokens landed at block 37982017 from the issuer wallet, a
+  transaction no script in this repository sent. Mint, accept, repay, claim, and
+  buy are all wired to the contracts and signed by the connected wallet, and
+  every one has been exercised on testnet — but by a scripted signer. That gap
+  remains the largest untested surface.
+- **The borrower's acceptance has never run against a real second wallet.** The
+  `Pending` gate is covered by contract tests and by confirming that notes
+  predating the role do not trip it.
+- **Nothing has been bought.** `raised` is zero on every offering, so the buy
+  path — approve, quote, transfer — has only ever run in Foundry.
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
 
 ## Status
 
-Day 4 of 12.
+Day 5 of 12.

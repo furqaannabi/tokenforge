@@ -69,23 +69,44 @@ The hash is always computed here, over the bytes that arrived, and never
 accepted from the caller — it is the claim that a token corresponds to a
 specific document.
 
-Buckets stay private. Reading goes through a short-lived signed URL.
+Reading has two modes. Set `R2_PUBLIC_URL` to a custom domain in front of the
+bucket and links are permanent and unsigned, which is convenient for a demo but
+means anyone holding one can read the agreement — and the keys are content
+hashes, not secrets. Leave it unset and the bucket stays private behind
+five-minute signed URLs, which is the right default for documents nobody
+intended to publish.
 
 ## Endpoints
 
 | | |
 |---|---|
 | `POST /documents` | Register a document. Send it as multipart with a `file` part and the service stores it in R2; deduplicated by keccak256 of its bytes, the same hash `NoteFactory` claims on-chain |
-| `GET /documents/:id/url` | Short-lived signed URL for the stored file |
+| `GET /documents` | Recent documents |
+| `GET /documents/:id/url` | A URL for the stored file — permanent or signed, see Storage |
 | `POST /documents/:id/extract` | Run the pipeline |
 | `POST /documents/:id/extract/stream` | The same, reported as server-sent events: each stage, and each term as it finishes parsing |
+| `GET /extractions` | Recent extractions with their status, filterable by `?status=`. The document arrives without its text, which a page of rows does not need |
 | `GET /extractions/:id` | Extraction with its document and note |
 | `POST /extractions/:id/review` | Record corrections and confirmations, then re-validate |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |
 | `POST /extractions/:id/mint` | Record a mint that already happened on-chain |
+| `POST /issuers/applications` | Apply to the registry — corporate detail that has no business on-chain |
+| `GET /issuers/applications` | The queue, filterable by `?status=` |
+| `GET /issuers/applications/by-wallet/:address` | Whether a wallet has applied |
+| `POST /issuers/applications/:id/admitted` | Record an admission the admin already signed |
+| `POST /issuers/applications/:id/reject` | Decline an application |
 
 This service never holds a key or sends a transaction. The issuer's own wallet
-signs; `/mint` indexes what the chain already accepted.
+signs; `/mint` indexes what the chain already accepted. The same applies to
+admission — the admin signs `admitIssuer` from their own wallet and the service
+is told afterwards, because a service that could admit issuers would become a
+second registry and the on-chain one would stop being the answer.
+
+A confirmation carries forward. `POST /review` accepts a `confirmed` list, and
+the fields already cleared are merged with it rather than replaced — passing
+only the current request's set meant confirming a second field silently
+un-confirmed the first, and a reviewer working one field at a time never
+converged.
 
 ## Known gaps
 
