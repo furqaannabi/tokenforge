@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useReadContract,
   useReadContracts,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -73,6 +74,24 @@ export function useOffer(note?: `0x${string}`) {
         } satisfies OfferState)
       : undefined,
   };
+}
+
+/**
+ * The connected wallet's settlement-currency balance.
+ *
+ * The buy panel needs it for two reasons: to say what someone has to spend,
+ * and because a percentage button is meaningless without a number to take a
+ * percentage of.
+ */
+export function useCurrencyBalance(owner?: `0x${string}`) {
+  return useReadContract({
+    abi: erc20Abi,
+    address: addresses.usdg,
+    functionName: "balanceOf",
+    args: owner ? [owner] : undefined,
+    chainId: CHAIN_ID,
+    query: { enabled: Boolean(owner && addresses.usdg), refetchInterval: 15_000 },
+  });
 }
 
 /** The issuer's allowance to the desk, which gates funding the pool. */

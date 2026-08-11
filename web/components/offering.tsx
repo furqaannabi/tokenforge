@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   useBuyFromOffer,
+  useCurrencyBalance,
   useCloseOffer,
   useFundOffer,
   useOffer,
@@ -313,6 +314,9 @@ function InvestorOffering({
   onChange: () => void;
 }) {
   const buy = useBuyFromOffer(note);
+  const { address } = useWallet();
+  const balanceRead = useCurrencyBalance(address);
+  const balance = (balanceRead.data as bigint | undefined) ?? 0n;
   const decimals = CURRENCY_DECIMALS[currency];
   const [spendInput, setSpendInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +360,15 @@ function InvestorOffering({
   const cost = ceilDiv(amount * offer.price, 10n ** 18n);
   const tooMuch = amount > offer.available;
   const maxSpend = ceilDiv(offer.available * offer.price, 10n ** 18n);
+
+  /*
+   * A percentage of what the buyer could actually spend here, which is their
+   * balance or the whole pool, whichever runs out first. Taking a percentage
+   * of the balance alone would let 100% exceed what is on offer, and a button
+   * that always fails is worse than no button.
+   */
+  const affordable = balance < maxSpend ? balance : maxSpend;
+  const shortOfFunds = cost > balance;
   const busy = buy.isApproving || buy.isBuying;
 
   const onBuy = async () => {
@@ -407,13 +420,12 @@ function InvestorOffering({
           <div>
             <div className="mb-1.5 flex items-baseline justify-between gap-2">
               <FieldLabel>Amount to invest</FieldLabel>
-              <button
-                type="button"
-                onClick={() => setSpendInput(formatUnits(maxSpend, decimals))}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Max {money(maxSpend, decimals)}
-              </button>
+              <span className="text-xs text-muted-foreground">
+                Balance{" "}
+                <span className="tnum text-foreground">
+                  {money(balance, decimals)} {currency}
+                </span>
+              </span>
             </div>
             <div className="relative">
               <Input
@@ -430,24 +442,28 @@ function InvestorOffering({
               </span>
             </div>
 
-            {/* A stake this size is a fraction of one token, which is the
-                point — nothing here requires buying a whole one. */}
+            {/* Whatever this comes to is almost always a fraction of one
+                token, which is the point — nothing requires buying a whole
+                one. */}
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {[100n, 500n, 1_000n, 5_000n].map((preset) => {
-                const units = preset * 10n ** BigInt(decimals);
-                if (units > maxSpend) return null;
-                return (
-                  <button
-                    key={String(preset)}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setSpendInput(String(preset))}
-                    className="rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-verified hover:text-foreground"
-                  >
-                    {preset.toLocaleString("en-US")}
-                  </button>
-                );
-              })}
+              {([25, 50, 75, 100] as const).map((share) => (
+                <button
+                  key={share}
+                  type="button"
+                  disabled={busy || affordable === 0n}
+                  onClick={() =>
+                    setSpendInput(
+                      formatUnits(
+                        (affordable * BigInt(share)) / 100n,
+                        decimals,
+                      ),
+                    )
+                  }
+                  className="rounded border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-verified hover:text-foreground disabled:opacity-40"
+                >
+                  {share === 100 ? "Max" : `${share}%`}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -469,6 +485,13 @@ function InvestorOffering({
             </div>
           </div>
 
+          {shortOfFunds && !tooMuch ? (
+            <p className="text-xs text-review">
+              That is more than this wallet holds — you have{" "}
+              {money(balance, decimals)} {currency}.
+            </p>
+          ) : null}
+
           {tooMuch ? (
             <p className="text-xs text-review">
               Only {money(maxSpend, decimals)} {currency} of this note is on
@@ -486,7 +509,7 @@ function InvestorOffering({
           <Button
             className="w-full"
             onClick={onBuy}
-            disabled={busy || amount === 0n || tooMuch}
+            disabled={busy || amount === 0n || tooMuch || shortOfFunds}
           >
             {buy.isApproving ? (
               <>
