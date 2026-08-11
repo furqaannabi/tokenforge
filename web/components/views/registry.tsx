@@ -19,12 +19,12 @@ import { truncateHex } from "@/lib/format";
  * applying and for anyone checking who was admitted; the admin's queue is a
  * different job and lives at /admin.
  */
-export default function RegistryPage() {
+export function RegistryView() {
   const admin = useRegistryAdmin();
   const approved = useApplications("APPROVED");
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-6 sm:px-6 sm:py-8">
+    <div>
       <header className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Issuer registry
@@ -155,7 +155,7 @@ function AdminLink() {
           This wallet is the registry admin.
         </span>
         <Link
-          href="/admin"
+          href="/?view=admin"
           className="inline-flex items-center gap-1.5 font-medium hover:text-verified"
         >
           Open the queue <ArrowRight className="size-3.5" />

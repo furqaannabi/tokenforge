@@ -26,7 +26,7 @@ import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
  * take it. None of that goes through the service — the balances are read from
  * the notes and the claim is signed by the holder.
  */
-export default function PortfolioPage() {
+export function MyNotesView() {
   const { address, connected } = useWallet();
   const { holdings, isPending, isError, refetch } = useHoldings(address);
 
@@ -48,7 +48,7 @@ export default function PortfolioPage() {
   const totalClaimable = holdings.reduce((sum, h) => sum + h.claimable, 0n);
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
+    <div>
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Portfolio
@@ -97,7 +97,7 @@ export default function PortfolioPage() {
                 ? "Reading positions…"
                 : "This wallet holds no notes."}
             <p className="mt-3">
-              <Link href="/notes" className="text-verified hover:underline">
+              <Link href="/" className="text-verified hover:underline">
                 Browse issued notes
               </Link>
             </p>

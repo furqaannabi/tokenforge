@@ -29,11 +29,11 @@ import {
  * the lender, so a page that demanded a connection before showing anything
  * would give that back.
  */
-export default function BrowseNotes() {
+export function AllNotesView() {
   const { rows, isPending, isError } = useNotesMarket();
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
+    <div>
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Issued notes

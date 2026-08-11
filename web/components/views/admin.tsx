@@ -30,7 +30,7 @@ import type { ApiIssuerApplication } from "@/lib/api";
  * Every decision here is a transaction from the admin's own wallet. The service
  * is told afterwards, and only for the record — it cannot admit anyone.
  */
-export default function AdminPage() {
+export function AdminView() {
   const { address, connected } = useWallet();
   const { isAdmin, admin, isPending } = useIsRegistryAdmin(address);
 
@@ -63,7 +63,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-8">
+    <div>
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Registry admin

@@ -24,6 +24,19 @@ const X402_STUBS = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  /**
+   * The five top-level screens became tabs on one. These keep links that were
+   * already shared — and anyone's muscle memory — pointing somewhere real.
+   */
+  async redirects() {
+    return [
+      { source: "/notes", destination: "/", permanent: false },
+      { source: "/portfolio", destination: "/?view=mine", permanent: false },
+      { source: "/registry", destination: "/?view=registry", permanent: false },
+      { source: "/admin", destination: "/?view=admin", permanent: false },
+    ];
+  },
+
   // @tokenforge/core ships TypeScript source rather than a build artifact, so
   // that the schema and validator have exactly one definition shared with the
   // extraction service. Next has to compile it like first-party code.
