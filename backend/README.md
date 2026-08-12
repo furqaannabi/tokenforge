@@ -45,6 +45,13 @@ The three stages answer different questions and fail independently:
   reconciles, and the cadence matches the declared frequency. It ignores
   confidence: a term set the model was 99% sure of still fails if the arithmetic
   does not hold.
+- **Provenance** asks two questions the document hash cannot. `NoteFactory`
+  refuses a hash it has tokenized and the documents table is unique on the same
+  value, but both are exact-byte checks: the same agreement re-exported or
+  rescanned is a different file describing the same loan. Nothing checked whose
+  agreement it was either. Both verdicts are scored and explained, and block the
+  mint rather than refusing silently — a reviewer who knows the group structure
+  can overrule them.
 - **Confidence routing** sends uncertain fields to a person. Distinct from
   validation — terms can be arithmetically perfect and still too uncertain to
   mint unsupervised.
@@ -88,6 +95,10 @@ intended to publish.
 | `GET /extractions` | Recent extractions with their status, filterable by `?status=`. The document arrives without its text, which a page of rows does not need |
 | `GET /extractions/:id` | Extraction with its document and note |
 | `POST /extractions/:id/review` | Record corrections and confirmations, then re-validate |
+| `POST /extractions/:id/provenance` | Two checks a hash cannot make: is the document's lender this issuer, and has the same agreement been extracted under another file |
+| `POST /extractions/:id/mint-request` | The issuer submits what they intend to mint. The service derives the parameters from the reviewed terms and hashes them |
+| `GET /extractions/:id/mint-args` | The approved parameters, for the issuer's wallet to sign |
+| `GET /mint-requests` | The admin's queue of mints awaiting a decision |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |
 | `POST /extractions/:id/mint` | Record a mint that already happened on-chain |
 | `POST /issuers/applications` | Apply to the registry — corporate detail that has no business on-chain |
@@ -97,7 +108,15 @@ intended to publish.
 | `POST /issuers/applications/:id/reject` | Decline an application |
 
 This service never holds a key or sends a transaction. The issuer's own wallet
-signs; `/mint` indexes what the chain already accepted. The same applies to
+signs; `/mint` indexes what the chain already accepted.
+
+It does, however, build the mint parameters. The browser sends only what an
+issuer actually chooses — who repays, in what currency, how many tokens — and
+the rest is derived here from the reviewed terms, hashed for the admin to
+approve, and handed back unchanged at mint time. Rebuilding them in the browser
+is what would let a stale form diverge from what the admin cleared, and the
+factory would refuse the result: correct, but arriving as an unexplained
+revert. The same applies to
 admission — the admin signs `admitIssuer` from their own wallet and the service
 is told afterwards, because a service that could admit issuers would become a
 second registry and the on-chain one would stop being the answer.

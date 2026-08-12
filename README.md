@@ -17,7 +17,7 @@ TokenForge puts an LLM on that critical path. Remove the model and there is no p
 ## How it works
 
 ```text
-Issuer and borrower are both admitted to the registry
+Issuer and borrower are admitted to the registry, under separate roles
         ↓
 Verified issuer uploads the signed PDF     → stored in R2, hashed, text read out
         ↓
@@ -25,11 +25,15 @@ AI extracts terms with per-field confidence
         ↓
 Deterministic validator checks internal consistency
         ↓
+AI checks whose document it is, and whether we have seen it before
+        ↓
 Human reviews low-confidence fields
         ↓
-Authorized issuer representative approves and mints
+Issuer submits the exact parameters for approval
         ↓
-RWANote minted on X Layer — Pending, document hash stored on-chain
+Registry admin clears those exact parameters on-chain
+        ↓
+Issuer signs the mint — Pending, document hash stored on-chain
         ↓
 Borrower accepts the terms from their own wallet     → the note goes Active
         ↓
@@ -70,6 +74,8 @@ No single check is trusted on its own. Five layers each do a different job:
 | AI verification | Extracts terms, cross-checks the document, flags inconsistencies, scores confidence |
 | Human verification | A person reads the source document and confirms or corrects the AI's output |
 | Issuer approval | The authorized representative signs off on the final terms on-chain |
+| Document provenance | A model checks the agreement names this issuer as lender, and that the same loan has not already been tokenized under a different file |
+| Admin approval | The registry admin clears one exact set of mint parameters. Editing anything afterwards produces a different hash and the factory refuses it |
 | Borrower acceptance | The named borrower signs `accept()` from their own wallet. Nothing trades or settles until they do |
 | Onchain enforcement | Terms are immutable, the document hash is recorded, the repayment schedule is enforced by contract |
 
@@ -117,8 +123,8 @@ contracts       Foundry · deployed and verified on X Layer testnet
 
 | Contract | Address | |
 |---|---|---|
-| `IssuerRegistry` | [`0x57873ccC430f7709ed77dA7da1EC521CED877F59`](https://www.oklink.com/xlayer-test/address/0x57873ccc430f7709ed77da7da1ec521ced877f59) | Verified |
-| `NoteFactory` | [`0x4941ed1f4785bf68083620566CC2c64D78c15aE4`](https://www.oklink.com/xlayer-test/address/0x4941ed1f4785bf68083620566cc2c64d78c15ae4) | Verified |
+| `IssuerRegistry` | [`0x0422508c0aFB8fEa40365E7781e0248699824375`](https://www.oklink.com/xlayer-test/address/0x0422508c0afb8fea40365e7781e0248699824375) | Verified |
+| `NoteFactory` | [`0xDAce270A9991E838bC858884156022fd5ae43aDa`](https://www.oklink.com/xlayer-test/address/0xdace270a9991e838bc858884156022fd5ae43ada) | Verified |
 | `SaleDesk` | [`0xDA9DD5Ab32372507fFcD662f6FE1608901c1bbF5`](https://www.oklink.com/xlayer-test/address/0xda9dd5ab32372507ffcd662f6fe1608901c1bbf5) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
@@ -129,28 +135,9 @@ notes with no borrower, which the app still reads and treats as payable by the
 issuer; earlier desks let the issuer name their own price, and the first of them
 quoted zero for amounts small enough to round down.
 
-One note is live for demonstration — 1,000 USDG at 10%, five instalments — with a period already settled:
-
-| | |
-|---|---|
-| [`RWANote`](https://www.oklink.com/xlayer-test/address/0x58312cd745b214dcab5728c31204b1dedf5b0b35) | `0x58312Cd745B214Dcab5728c31204B1DEDF5B0B35` |
-| [`RepaymentVault`](https://www.oklink.com/xlayer-test/address/0x6a22eeaa78088085099c17afdddc9714f3324cd5) | `0x6A22eeAa78088085099C17AfdDdc9714F3324cD5` |
-
-After that first repayment, on-chain: `totalSupply` 1,000 → 800 tokens, `sharesOf` unchanged at 1,000, `principalIndex` 0.8, and 220 USDG claimable.
-
-A second note carries a live offering — the Meridian agreement from
-[samples/](samples/), $2.5M at 8.50% over twelve quarterly coupons, with 401 of
-its 1,000 tokens on the desk at par:
-
-| | |
-|---|---|
-| [`RWANote`](https://www.oklink.com/xlayer-test/address/0xe594a95b0034c0a5e23a3a783bfda36d77009c22) | `0xe594a95b0034c0a5E23A3a783BFDa36D77009C22` |
-| [`RepaymentVault`](https://www.oklink.com/xlayer-test/address/0x5bf30e0fc51693062e3ea5c2c36e1b165cc7c61a) | `0x5BF30E0fc51693062e3EA5c2C36E1B165cC7c61A` |
-
-Par is 2,500 USDG a token — 2,500,000 of principal over 1,000 tokens — so a 625
-stake buys 0.25 of a token and is owed twelve coupons of 13.28 plus 625 of
-principal at maturity. Both notes predate the borrower role and are Active from
-mint; notes issued now start `Pending`.
+No notes are live: the database was reset when the registry and factory were
+last replaced. Earlier notes remain on-chain under the superseded factories
+but are no longer indexed.
 
 **X Layer testnet is chain 1952**, confirmed against the RPC — `eth_chainId` returns `0x7a0` on both `xlayertestrpc.okx.com` and `testrpc.xlayer.tech`. The 195 figure that circulates is wrong. Mainnet is 196.
 
@@ -172,7 +159,7 @@ cp .env.example .env.local        # addresses are in the deployments JSON
 pnpm dev                          # :3000
 
 cd ../contracts
-forge test                        # 99 tests
+forge test                        # 118 tests
 ```
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
@@ -187,7 +174,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 **Partially stubbed:** issuer verification. The `IssuerRegistry` and its on-chain enforcement are real — an unregistered address genuinely cannot mint — but admission to the registry is a manual off-chain decision here, not a KYB integration.
 
-**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 99 passing tests.
+**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 118 passing tests.
 
 ## What is not built yet
 
@@ -199,6 +186,9 @@ Stated plainly, because a demo can hide these:
   buy are all wired to the contracts and signed by the connected wallet, and
   every one has been exercised on testnet — but by a scripted signer. That gap
   remains the largest untested surface.
+- **Automated repayment has no interface yet.** `collectFromBorrower` and the
+  standing authorization it needs are on-chain and covered by tests; nothing in
+  the app shows the authorization or triggers a collection, and no keeper runs.
 - **The borrower's acceptance has never run against a real second wallet.** The
   `Pending` gate is covered by contract tests and by confirming that notes
   predating the role do not trip it.
@@ -208,4 +198,4 @@ Stated plainly, because a demo can hide these:
 
 ## Status
 
-Day 5 of 12.
+Day 6 of 12.

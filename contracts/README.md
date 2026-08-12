@@ -4,16 +4,16 @@ Foundry. Deployed and verified on X Layer testnet — addresses in
 [deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
 
 ```bash
-forge test          # 99 tests
+forge test          # 118 tests
 forge coverage      # 96% of lines, 76% of branches
 ```
 
 | Contract | |
 |---|---|
-| `IssuerRegistry` | Who may issue. Admission, revocation, per-issuer representatives, two-step admin handover |
-| `NoteFactory` | The only supported way on-chain. Requires *both* issuer and borrower to be registered, claims the document hash, deploys note and vault atomically |
+| `IssuerRegistry` | Who may issue, who may borrow, and which exact mints are cleared. Separate rolls, per-issuer representatives, two-step admin handover |
+| `NoteFactory` | The only supported way on-chain. Requires a registered issuer, a registered borrower, and an admin approval of the exact parameters; claims the document hash and deploys note and vault atomically |
 | `RWANote` | ERC-20 with immutable terms, a named borrower, a `Pending` state until they accept, impairment, and a transfer restriction hook |
-| `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure |
+| `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure. Collects from the borrower against a standing approval once a period is due |
 | `SaleDesk` | The primary offering. The issuer places a share of a note; the price is par, computed by the desk, and nobody can set it |
 | `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
 
@@ -64,6 +64,37 @@ requiring one specific key would let losing it strand a performing loan.
 `Pending` is appended to the `Status` enum rather than placed first, so `Active`
 stays zero and notes from earlier factories keep their meaning.
 
+## Automated repayment
+
+`collectFromBorrower` pulls the instalment from the borrower against an
+allowance they granted once, so a schedule needs one authorization rather than
+a signature per month. It is callable by anyone, deliberately: a contract
+cannot wake itself up, and making the keeper privileged would put one key
+between a borrower and their own repayment record.
+
+What makes that safe is that it moves nobody's money but the borrower's, only
+as far as they authorised — revoke the allowance and it reverts — and only once
+the period is due. `settleNextPeriod` still pays from the caller's own balance
+and still allows early payment: settling your own debt early is your business,
+pulling someone else's money early is not.
+
+The payment lands in the vault and distributes pro-rata as any other does. A
+direct transfer to a single investor would not work here, because a note is
+held fractionally by many wallets.
+
+## Approval binds to the whole mint
+
+`approveMint` is keyed by `NoteFactory.mintHash` — a commitment to every value
+the note will carry — rather than by the document. Approving the document alone
+would have left the principal, supply, borrower and schedule free to change
+between the admin's decision and the transaction while the approval still held.
+The schedule is covered through `terms.scheduleHash`, which the vault's
+constructor independently refuses to contradict.
+
+`hashMintArgs` in `packages/core` reproduces the hash off-chain, and
+`MintHashParityTest` pins a shared constant so a divergence fails there rather
+than as a mint the chain refuses for no visible reason.
+
 ## Five decisions worth knowing
 
 **Distribution uses an accumulator, not per-period snapshots.** The note calls
@@ -108,6 +139,15 @@ immutable and their holders' claims should survive the issuer losing the right
 to create more.
 
 ## Testing
+
+`AutomatedRepaymentTest` covers the authorization: that nothing is collectible
+without one, that one approval covers every instalment, that collection is
+refused before the due date, that any keeper can trigger it and pays nothing
+itself, and that revoking the allowance stops it.
+
+`MintApprovalTest` covers the binding: that a registered issuer still needs an
+approval, and that changing the supply, principal, borrower or schedule
+afterwards is refused.
 
 `PartiesTest` and `AcceptanceTest` cover the three-party model: that the issuer
 and borrower are distinct, that the borrower holds none of the loan, that a

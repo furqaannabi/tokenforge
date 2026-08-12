@@ -27,7 +27,7 @@ would not open.
 | My notes | A connected wallet — its positions and claims |
 | New note | A wallet the registry has admitted |
 | Registry | Everyone — apply, and see who was admitted |
-| Admin | Only the address `IssuerRegistry` names as admin |
+| Admin | Only the address `IssuerRegistry` names as admin — issuer applications and the queue of mints awaiting approval |
 
 The selection lives in the query string, so a tab is still a link someone can
 send, and an unknown or newly-hidden one falls back to the first rather than
@@ -48,6 +48,12 @@ into review when they do not.
 
 Below `lg` the two panes cannot sit side by side, so one shows at a time behind
 a toggle, defaulting to the terms.
+
+**Minting is an application, not a button.** The issuer submits the exact
+parameters, the registry admin clears those parameters on-chain, and only then
+does the issuer's wallet sign — using the values the service stored rather than
+whatever the form currently holds. The hash that binds them appears nowhere
+here; it is computed by the service and checked by the factory.
 
 **Three things sit beside the mint action rather than among the term cards**,
 because no loan agreement contains any of them. The settlement currency — the

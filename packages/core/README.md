@@ -12,6 +12,13 @@ terms minting that should not have.
 
 ## What is in it
 
+**`mint.ts`** — building the parameters a mint carries, and hashing them.
+`mintHash` is what the registry admin approves and what `NoteFactory` checks, so
+an off-chain implementation that disagreed by a byte would turn every approved
+mint into an unexplained revert. It lives here for the same reason the validator
+does: the extraction service builds these now, the web app signs them, and two
+copies would drift.
+
 **`schema.ts`** — zod schemas for the extracted terms. Written for structured
 outputs, which require every property to be present, hence `.nullable()` rather
 than `.optional()` throughout and no numeric range keywords. Ranges are the
