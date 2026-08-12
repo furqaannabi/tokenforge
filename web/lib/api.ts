@@ -87,6 +87,7 @@ export interface ApiExtraction {
   reviewedBy: string | null;
   document?: ApiDocument;
   note?: ApiNote | null;
+  provenance?: ApiProvenance | null;
 }
 
 /**
@@ -96,6 +97,22 @@ export interface ApiExtraction {
  */
 export interface ApiExtractionSummary extends Omit<ApiExtraction, "document"> {
   document?: Pick<ApiDocument, "id" | "filename" | "contentHash">;
+}
+
+/** The two checks a hash cannot make. Null until they have been run. */
+export interface ApiProvenance {
+  ownership: {
+    belongsToIssuer: boolean;
+    confidence: number;
+    documentLender: string;
+    reason: string;
+  };
+  duplicate: {
+    isDuplicate: boolean;
+    ofExtractionId: string | null;
+    confidence: number;
+    reason: string;
+  };
 }
 
 export interface ApiNote {
@@ -190,6 +207,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }).then((r) => r.application),
+
+  checkProvenance: (
+    extractionId: string,
+    body: { issuerName: string; issuerJurisdiction?: string },
+  ) =>
+    request<{ provenance: ApiProvenance }>(
+      `/extractions/${extractionId}/provenance`,
+      { method: "POST", body: JSON.stringify(body) },
+    ).then((r) => r.provenance),
 
   listApplications: (status?: ApplicationStatus) =>
     request<{ applications: ApiIssuerApplication[] }>(

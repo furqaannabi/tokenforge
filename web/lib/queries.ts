@@ -69,6 +69,26 @@ export function useMyApplication(address?: string) {
   });
 }
 
+/**
+ * Runs the ownership and duplicate checks.
+ *
+ * A mutation rather than a query: it costs a model call, so it happens when a
+ * reviewer asks for it, and the answer is stored against the extraction rather
+ * than recomputed on every render.
+ */
+export function useCheckProvenance(extractionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { issuerName: string; issuerJurisdiction?: string }) =>
+      api.checkProvenance(extractionId!, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.extraction(extractionId!),
+      });
+    },
+  });
+}
+
 export function useApply() {
   const queryClient = useQueryClient();
   return useMutation({

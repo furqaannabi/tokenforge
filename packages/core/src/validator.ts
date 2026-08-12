@@ -353,6 +353,26 @@ export function fieldsNeedingReview(
   });
 }
 
+/**
+ * The result of the two checks that compare a document against the world
+ * outside it, rather than against itself. Shaped to match what the extraction
+ * service stores, so neither side reshapes the other's answer.
+ */
+export interface ProvenanceVerdict {
+  ownership?: {
+    belongsToIssuer: boolean;
+    confidence: number;
+    documentLender: string;
+    reason: string;
+  };
+  duplicate?: {
+    isDuplicate: boolean;
+    ofExtractionId: string | null;
+    confidence: number;
+    reason: string;
+  };
+}
+
 export interface MintGate {
   canMint: boolean;
   validation: ValidationResult;
@@ -375,9 +395,16 @@ export function mintGate(
     confirmed?: ReadonlySet<string>;
     /** Injected so the demo and tests get a stable answer. */
     now?: Date;
+    /**
+     * The two checks a hash cannot make, when they have been run. Absent means
+     * not yet checked, which does not block — the gate says what is known, and
+     * refusing everything unchecked would stop the demo dead the moment the
+     * model key was missing.
+     */
+    provenance?: ProvenanceVerdict;
   } = {},
 ): MintGate {
-  const { confirmed = new Set<string>(), now = new Date() } = options;
+  const { confirmed = new Set<string>(), now = new Date(), provenance } = options;
 
   const validation = validateTerms(terms, now);
   const unreviewedFields = fieldsNeedingReview(terms, confirmed);
@@ -396,6 +423,22 @@ export function mintGate(
       `${unreviewedFields.length} low-confidence ${
         unreviewedFields.length === 1 ? "field requires" : "fields require"
       } human verification.`,
+    );
+  }
+
+  /*
+   * Both of these are a model's judgement, so they block rather than refuse
+   * outright: a reviewer who knows the entity structure can look at the reason
+   * and decide. What they must not do is pass silently.
+   */
+  if (provenance?.ownership && !provenance.ownership.belongsToIssuer) {
+    blockers.push(
+      `This document names ${provenance.ownership.documentLender} as the lender, not the issuing wallet. ${provenance.ownership.reason}`,
+    );
+  }
+  if (provenance?.duplicate?.isDuplicate) {
+    blockers.push(
+      `This agreement has already been extracted under a different file. ${provenance.duplicate.reason}`,
     );
   }
 

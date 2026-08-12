@@ -135,6 +135,12 @@ model Extraction {
   /// Field keys still awaiting human confirmation.
   unreviewedFields String[] @default([])
 
+  /// Two checks a hash cannot make: whether the document's lender is the
+  /// issuer applying to mint it, and whether the same agreement has already
+  /// been extracted under a different file. Null until the check has run.
+  /// Shape is `provenanceSchema` in src/provenance.ts.
+  provenance Json?
+
   /// Cost and latency, for judging whether the pipeline is affordable at scale.
   promptTokens     Int?
   completionTokens Int?

@@ -12,6 +12,7 @@ import { extractTerms } from "./extract";
 import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
+import { checkProvenance } from "./provenance";
 import {
   documentKey,
   documentUrl,
@@ -22,6 +23,7 @@ import {
   extractedTermsSchema,
   fieldsNeedingReview,
   mintGate,
+  type ProvenanceVerdict,
   validateTerms,
   type ExtractedTerms,
   type TermField,
@@ -509,6 +511,78 @@ function mergeTerms(
  * The contracts enforce the same three gates; this exists so the UI can explain
  * a refusal before a wallet is opened, rather than surfacing a bare revert.
  */
+/**
+ * The two checks a hash cannot make: is this the issuer's document, and has
+ * this agreement been tokenized already under a different file?
+ *
+ * Runs on demand rather than during extraction, because it needs to know who
+ * is asking. The registered name comes from the caller — the registry is the
+ * authority on membership and the chain enforces that, while this only tells a
+ * reviewer whether the paperwork matches the party in front of them.
+ */
+app.post("/extractions/:id/provenance", async (c) => {
+  const id = c.req.param("id");
+  const body = provenanceRequestSchema.parse(await c.req.json());
+
+  const extraction = await prisma.extraction.findUnique({
+    where: { id },
+    include: { document: true },
+  });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  const terms = extraction.terms as ExtractedTerms;
+
+  /*
+   * A cheap filter before an expensive judgement. Anything sharing a principal
+   * or a party with this agreement is worth comparing; the rest is noise that
+   * would cost tokens and invite the model to find a resemblance. Capped, so a
+   * busy issuer cannot turn one review into an enormous prompt.
+   */
+  const others = await prisma.extraction.findMany({
+    where: { id: { not: id } },
+    include: { document: true },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  const key = (value: string) => value.trim().toLowerCase();
+  const candidates = others
+    .map((other) => {
+      const t = other.terms as ExtractedTerms;
+      return {
+        extractionId: other.id,
+        filename: other.document?.filename ?? "document.pdf",
+        status: other.status,
+        borrower: t.borrower.value,
+        lender: t.lender.value,
+        principal: t.principal.value,
+        agreementDate: t.agreementDate.value,
+        maturityDate: t.maturityDate.value,
+      };
+    })
+    .filter(
+      (other) =>
+        other.principal === terms.principal.value ||
+        key(other.borrower) === key(terms.borrower.value) ||
+        key(other.lender) === key(terms.lender.value),
+    )
+    .slice(0, 8);
+
+  const provenance = await checkProvenance({
+    terms,
+    issuerName: body.issuerName,
+    issuerJurisdiction: body.issuerJurisdiction ?? "—",
+    candidates,
+  });
+
+  const updated = await prisma.extraction.update({
+    where: { id },
+    data: { provenance: asJson(provenance) },
+  });
+
+  return c.json({ provenance, extraction: jsonSafe(updated), candidates });
+});
+
 app.get("/extractions/:id/mint-gate", async (c) => {
   const extraction = await prisma.extraction.findUnique({
     where: { id: c.req.param("id") },
@@ -524,9 +598,18 @@ app.get("/extractions/:id/mint-gate", async (c) => {
     ),
   );
 
-  const gate = mintGate(terms, issuerVerified, { confirmed });
+  const gate = mintGate(terms, issuerVerified, {
+    confirmed,
+    provenance: (extraction.provenance as ProvenanceVerdict | null) ?? undefined,
+  });
 
   return c.json({ gate });
+});
+
+const provenanceRequestSchema = z.object({
+  /// The name the registry holds for the minting wallet.
+  issuerName: z.string().min(1).max(200),
+  issuerJurisdiction: z.string().max(120).optional(),
 });
 
 const mintRecordSchema = z.object({

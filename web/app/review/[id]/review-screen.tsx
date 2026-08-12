@@ -26,10 +26,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  useCheckProvenance,
   useExtraction,
   useRecordMintedNote,
   useReviewExtraction,
 } from "@/lib/queries";
+import type { ApiProvenance } from "@/lib/api";
 import { useMintNote } from "@/lib/mint";
 import { useOpenOfferFor } from "@/lib/sale";
 import { SUPPLY_TOKENS } from "@/lib/issuance";
@@ -38,7 +40,7 @@ import { extractionToNote } from "@/lib/adapt";
 import { useWallet } from "@/lib/wallet";
 import { DEMO_NOW } from "@/lib/clock";
 import { mintGate, LOW_CONFIDENCE_THRESHOLD } from "@tokenforge/core";
-import { money, shortDate } from "@/lib/format";
+import { money, shortDate, confidencePct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   CURRENCIES,
@@ -116,8 +118,14 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
     return mintGate(terms, issuer?.verified ?? false, {
       confirmed,
       now: DEMO_NOW,
+      provenance: remote.data?.provenance ?? undefined,
     });
-  }, [terms, issuer?.verified, remote.data?.unreviewedFields]);
+  }, [
+    terms,
+    issuer?.verified,
+    remote.data?.unreviewedFields,
+    remote.data?.provenance,
+  ]);
 
   if (remote.isPending) return <ReviewLoading />;
   if (remote.isError) {
@@ -350,6 +358,12 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
             </section>
           </div>
 
+          <ProvenanceCheck
+            extractionId={noteId}
+            issuerName={issuer?.name}
+            issuerJurisdiction={issuer?.jurisdiction}
+            result={remote.data?.provenance ?? null}
+          />
           <BorrowerWallet value={borrower} onChange={setBorrower} />
           <SettlementCurrency value={currency} onChange={setCurrency} />
           <OfferingAtIssue
@@ -380,6 +394,126 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Whose document is this, and have we seen it before?
+ *
+ * The document hash already stops the identical file being tokenized twice —
+ * `NoteFactory` refuses a hash it has claimed. Neither that nor registry
+ * membership catches the two things this asks: an agreement re-exported or
+ * rescanned is a different file describing the same loan, and a registered
+ * issuer uploading somebody else's agreement is registered all the same.
+ *
+ * It is a model comparing companies and figures, so it informs rather than
+ * decides. The reason is always shown, because a reviewer who knows the group
+ * structure may reasonably overrule it.
+ */
+function ProvenanceCheck({
+  extractionId,
+  issuerName,
+  issuerJurisdiction,
+  result,
+}: {
+  extractionId: string;
+  issuerName?: string;
+  issuerJurisdiction?: string;
+  result: ApiProvenance | null;
+}) {
+  const check = useCheckProvenance(extractionId);
+
+  return (
+    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <FieldLabel>Provenance</FieldLabel>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Whether this document is yours, and whether it has been tokenized
+            before under another file.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!issuerName || check.isPending}
+          onClick={() =>
+            issuerName &&
+            check.mutate({ issuerName, issuerJurisdiction })
+          }
+        >
+          {check.isPending ? (
+            <>
+              <Loader2 className="animate-spin" /> Checking…
+            </>
+          ) : result ? (
+            "Re-check"
+          ) : (
+            "Run check"
+          )}
+        </Button>
+      </div>
+
+      {check.isError ? (
+        <p className="mt-2 text-xs text-impaired">
+          {(check.error as Error).message}
+        </p>
+      ) : null}
+
+      {result ? (
+        <div className="mt-3 space-y-2">
+          <Verdict
+            ok={result.ownership.belongsToIssuer}
+            label={
+              result.ownership.belongsToIssuer
+                ? "You are the lender on this agreement"
+                : `Lender is ${result.ownership.documentLender}`
+            }
+            confidence={result.ownership.confidence}
+            reason={result.ownership.reason}
+          />
+          <Verdict
+            ok={!result.duplicate.isDuplicate}
+            label={
+              result.duplicate.isDuplicate
+                ? "Already extracted under another file"
+                : "No earlier copy of this agreement"
+            }
+            confidence={result.duplicate.confidence}
+            reason={result.duplicate.reason}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Verdict({
+  ok,
+  label,
+  confidence,
+  reason,
+}: {
+  ok: boolean;
+  label: string;
+  confidence: number;
+  reason: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      {ok ? (
+        <Check className="mt-0.5 size-3.5 shrink-0 text-verified" />
+      ) : (
+        <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-impaired" />
+      )}
+      <span className={ok ? "text-muted-foreground" : "text-foreground"}>
+        <span className="font-medium">{label}</span>
+        <span className="tnum ml-1.5 text-muted-foreground">
+          {confidencePct(confidence)}
+        </span>
+        <span className="mt-0.5 block text-muted-foreground">{reason}</span>
+      </span>
+    </div>
+  );
+}
 
 /**
  * The wallet that will repay.
