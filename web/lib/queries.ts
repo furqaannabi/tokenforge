@@ -1,5 +1,7 @@
 "use client";
 
+import type { Currency } from "@tokenforge/core";
+
 import { useState } from "react";
 import {
   useMutation,
@@ -86,6 +88,33 @@ export function useCheckProvenance(extractionId: string | undefined) {
         queryKey: queryKeys.extraction(extractionId!),
       });
     },
+  });
+}
+
+/** The issuer asks the admin to clear a mint. */
+export function useRequestMint(extractionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      issuer: `0x${string}`;
+      borrower: `0x${string}`;
+      currency: Currency;
+      supplyTokens: number;
+    }) => api.requestMint(extractionId!, input),
+    onSuccess: (extraction) => {
+      queryClient.setQueryData(queryKeys.extraction(extraction.id), extraction);
+      queryClient.invalidateQueries({ queryKey: ["mint-requests"] });
+    },
+  });
+}
+
+/** The admin's queue of mints awaiting a decision. */
+export function useMintRequests() {
+  return useQuery({
+    queryKey: ["mint-requests"],
+    queryFn: api.listMintRequests,
+    retry: false,
+    refetchInterval: 15_000,
   });
 }
 

@@ -28,12 +28,14 @@ import {
 import {
   useCheckProvenance,
   useExtraction,
+  useRequestMint,
   useRecordMintedNote,
   useReviewExtraction,
 } from "@/lib/queries";
 import type { ApiProvenance } from "@/lib/api";
 import { useMintNote } from "@/lib/mint";
 import { useOpenOfferFor } from "@/lib/sale";
+import { useIsMintApproved } from "@/lib/registry";
 import { SUPPLY_TOKENS } from "@/lib/issuance";
 import { CHAIN_ID } from "@/lib/contracts";
 import { extractionToNote } from "@/lib/adapt";
@@ -76,6 +78,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   const [mintError, setMintError] = useState<string | null>(null);
   const minting = useMintNote();
   const openOffer = useOpenOfferFor();
+  const requestMint = useRequestMint(noteId);
   const recordMint = useRecordMintedNote(noteId);
   // Below lg the two panes cannot sit side by side, so one shows at a time.
   const [pane, setPane] = useState<"document" | "terms">("terms");
@@ -90,6 +93,14 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
 
   const remote = useExtraction(noteId);
   const review = useReviewExtraction(noteId);
+
+  // The admin clears an exact set of parameters. Until they have, and until
+  // the chain says so, there is nothing to sign.
+  const mintRequest = remote.data?.mintRequest ?? null;
+  const approval = useIsMintApproved(
+    mintRequest?.issuer,
+    mintRequest?.mintHash,
+  );
 
   const note = useMemo(
     () => (remote.data ? extractionToNote(remote.data, address) : undefined),
@@ -155,19 +166,26 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
    * The service is told only after the chain confirms. Recording on broadcast
    * would index a note that could still revert.
    */
-  const handleMint = async () => {
+  /** Asks the admin to clear this mint. Nothing reaches the chain yet. */
+  const handleRequest = async () => {
     setMintError(null);
     try {
-      const result = await minting.mint({
-        terms,
-        name: note.name,
-        symbol: note.symbol,
+      await requestMint.mutateAsync({
         issuer: address!,
         borrower: borrower.trim() as `0x${string}`,
         currency,
-        documentHash: note.document.hash,
         supplyTokens: SUPPLY_TOKENS,
       });
+    } catch (cause) {
+      setMintError((cause as Error).message);
+    }
+  };
+
+  const handleMint = async () => {
+    setMintError(null);
+    if (!mintRequest) return;
+    try {
+      const result = await minting.mintApproved(mintRequest);
 
       // Only now that the chain has confirmed, and the factory has told us
       // which contracts it created.
@@ -376,6 +394,10 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
           <MintFooter
             gate={gate}
             borrowerReady={isAddress(borrower.trim(), { strict: false })}
+            requested={Boolean(mintRequest)}
+            approved={approval.approved}
+            requesting={requestMint.isPending}
+            onRequest={handleRequest}
             minting={
               minting.isSigning ||
               minting.isConfirming ||
@@ -807,6 +829,10 @@ function ReviewSummary({
 function MintFooter({
   gate,
   borrowerReady,
+  requested,
+  approved,
+  requesting,
+  onRequest,
   minting,
   signing,
   error,
@@ -815,6 +841,12 @@ function MintFooter({
 }: {
   gate: NonNullable<ReturnType<typeof mintGate>>;
   borrowerReady: boolean;
+  /** The issuer has submitted these parameters for a decision. */
+  requested: boolean;
+  /** The chain says the admin cleared them. */
+  approved: boolean;
+  requesting: boolean;
+  onRequest: () => void;
   minting: boolean;
   signing: boolean;
   error: string | null;
@@ -858,24 +890,53 @@ function MintFooter({
         </p>
       ) : null}
 
-      <Button
-        size="lg"
-        onClick={onMint}
-        disabled={!gate.canMint || !borrowerReady || minting}
-        className="w-full"
-      >
-        {signing ? (
-          <>
-            <Loader2 className="animate-spin" /> Confirm in wallet…
-          </>
-        ) : minting ? (
-          <>
-            <Loader2 className="animate-spin" /> Waiting for X Layer…
-          </>
-        ) : (
-          "Approve & mint RWA note"
-        )}
-      </Button>
+      {requested && !approved ? (
+        <p className="mb-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+          <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-review" />
+          <span>
+            Submitted for approval. The registry admin clears these exact
+            parameters on-chain; this becomes signable the moment they do.
+          </span>
+        </p>
+      ) : null}
+
+      {approved ? (
+        <Button
+          size="lg"
+          onClick={onMint}
+          disabled={minting}
+          className="w-full"
+        >
+          {signing ? (
+            <>
+              <Loader2 className="animate-spin" /> Confirm in wallet…
+            </>
+          ) : minting ? (
+            <>
+              <Loader2 className="animate-spin" /> Waiting for X Layer…
+            </>
+          ) : (
+            "Mint RWA note"
+          )}
+        </Button>
+      ) : (
+        <Button
+          size="lg"
+          onClick={onRequest}
+          disabled={!gate.canMint || !borrowerReady || requesting}
+          className="w-full"
+        >
+          {requesting ? (
+            <>
+              <Loader2 className="animate-spin" /> Submitting…
+            </>
+          ) : requested ? (
+            "Resubmit for approval"
+          ) : (
+            "Submit for approval"
+          )}
+        </Button>
+      )}
     </div>
   );
 }

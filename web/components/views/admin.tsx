@@ -12,12 +12,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useApplications } from "@/lib/queries";
+import { useState } from "react";
+import Link from "next/link";
+import { useApplications, useMintRequests } from "@/lib/queries";
+import { useApproveMint } from "@/lib/registry";
+import { money } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 import { useIsRegistryAdmin } from "@/lib/registry";
 import { useWallet } from "@/lib/wallet";
 import { addresses } from "@/lib/contracts";
 import { shortDate, truncateHex } from "@/lib/format";
-import type { ApiIssuerApplication } from "@/lib/api";
+import type { ApiExtractionSummary, ApiIssuerApplication } from "@/lib/api";
 
 /**
  * The registry admin's screen.
@@ -81,6 +86,7 @@ export function AdminView() {
       </div>
 
       <AdminQueue />
+      <MintQueue />
 
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Decisions</h2>
@@ -177,6 +183,102 @@ export function AdminView() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Mints waiting to be cleared.
+ *
+ * Registry admission answers whether a company may issue at all; this is the
+ * decision about one agreement. Approving signs a hash of the exact parameters
+ * the issuer submitted, so anything edited afterwards produces a different
+ * hash and the factory refuses it — the approval cannot be reused for terms
+ * nobody read.
+ */
+function MintQueue() {
+  const requests = useMintRequests();
+  const approve = useApproveMint();
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const rows = requests.data ?? [];
+
+  const onApprove = async (extraction: ApiExtractionSummary) => {
+    const request = extraction.mintRequest;
+    if (!request) return;
+    setError(null);
+    setPending(extraction.id);
+    try {
+      await approve.approve(request.issuer, request.mintHash);
+      void requests.refetch();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-lg font-semibold">Mints awaiting approval</h2>
+
+      {error ? (
+        <p className="mb-3 text-xs text-impaired">{error}</p>
+      ) : null}
+
+      {rows.length === 0 ? (
+        <Card>
+          <CardContent className="text-sm text-muted-foreground">
+            {requests.isError
+              ? "The extraction service is unreachable."
+              : "Nothing waiting."}
+          </CardContent>
+        </Card>
+      ) : (
+        <ul className="space-y-3">
+          {rows.map((extraction) => {
+            const request = extraction.mintRequest!;
+            return (
+              <li
+                key={extraction.id}
+                className="rounded-lg border border-border bg-card p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/review/${extraction.id}`}
+                      className="font-medium hover:text-verified"
+                    >
+                      {extraction.document?.filename ?? "Document"}
+                    </Link>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {money(extraction.terms.principal.value)} ·{" "}
+                      {request.supplyTokens.toLocaleString("en-US")} tokens ·{" "}
+                      {request.currency}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      issuer {truncateHex(request.issuer, 6, 4)} · borrower{" "}
+                      {truncateHex(request.borrower, 6, 4)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={pending === extraction.id}
+                    onClick={() => onApprove(extraction)}
+                  >
+                    {pending === extraction.id ? "Approving…" : "Approve mint"}
+                  </Button>
+                </div>
+                <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                  Approving clears exactly these parameters. The issuer signs
+                  the mint itself; anything changed afterwards is refused.
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
