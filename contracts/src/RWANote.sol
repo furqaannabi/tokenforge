@@ -26,16 +26,10 @@ interface IHolderSync {
  *      plug into.
  */
 contract RWANote is ERC20 {
-    /**
-     * @dev `Pending` is appended rather than placed first so that Active stays
-     *      zero. Notes minted by earlier factories keep their meaning, and a
-     *      renumbering would have silently relabelled every one of them.
-     */
     enum Status {
         Active,
         Impaired,
-        Matured,
-        Pending
+        Matured
     }
 
     // --- Immutable economic terms ------------------------------------------
@@ -53,21 +47,6 @@ contract RWANote is ERC20 {
     /// @notice The address permitted to issue notes of this kind.
     address public immutable issuer;
 
-    /**
-     * @notice The party that owes the money.
-     *
-     * @dev Distinct from `issuer`, and the distinction is the whole point. The
-     *      issuer originated the loan and is selling it to get their capital
-     *      back early; the borrower is who repays. Conflating them made the
-     *      originator appear to owe a debt to the people they had just sold it
-     *      to.
-     *
-     *      This is identity, not permission. `RepaymentVault.settleNextPeriod`
-     *      stays open to anyone — a guarantor, a servicer, or the originator
-     *      covering a shortfall may all legitimately pay, and restricting it to
-     *      one address would let a lost key strand a performing loan.
-     */
-    address public immutable borrower;
     /// @notice Whoever deployed this note — the factory, in the supported path.
     address public immutable deployer;
 
@@ -90,7 +69,6 @@ contract RWANote is ERC20 {
     event StatusChanged(Status previous, Status current);
     event TransferRestrictionSet(bool restricted);
     event AllowlistSet(address indexed account, bool allowed);
-    event Accepted(address indexed borrower);
 
     error NotIssuer();
     error NotVault();
@@ -99,9 +77,6 @@ contract RWANote is ERC20 {
     error ZeroAddress();
     error TransfersBlockedWhileImpaired();
     error RecipientNotAllowlisted(address account);
-    error NotBorrower(address caller);
-    error NotPending();
-    error NotAcceptedYet();
 
     modifier onlyIssuer() {
         if (msg.sender != issuer) revert NotIssuer();
@@ -120,18 +95,13 @@ contract RWANote is ERC20 {
         string memory name_,
         string memory symbol_,
         address issuer_,
-        address borrower_,
         address holder_,
         uint256 supply_,
         Terms memory terms_
     ) ERC20(name_, symbol_) {
         if (issuer_ == address(0) || holder_ == address(0)) revert ZeroAddress();
-        if (borrower_ == address(0)) revert ZeroAddress();
 
         issuer = issuer_;
-        borrower = borrower_;
-        // Nothing may trade or be repaid until the borrower affirms the terms.
-        status = Status.Pending;
         deployer = msg.sender;
         principal = terms_.principal;
         rateBps = terms_.rateBps;
@@ -142,22 +112,6 @@ contract RWANote is ERC20 {
         _mint(holder_, supply_);
     }
 
-    /**
-     * @notice The borrower affirms that they owe these exact terms.
-     *
-     * @dev The economics are immutable and the document is hashed, but until
-     *      this is called all of that is the issuer's assertion *about* someone
-     *      else. One signature from the named borrower turns it into a debt
-     *      they acknowledged, and it is the borrower's own key that does it —
-     *      nobody can accept on their behalf.
-     */
-    function accept() external {
-        if (msg.sender != borrower) revert NotBorrower(msg.sender);
-        if (status != Status.Pending) revert NotPending();
-
-        status = Status.Active;
-        emit Accepted(borrower);
-    }
 
     // -----------------------------------------------------------------------
     // Wiring
@@ -327,7 +281,6 @@ contract RWANote is ERC20 {
         bool isBurn = to == address(0);
 
         if (!isMint && !isBurn) {
-            if (status == Status.Pending) revert NotAcceptedYet();
             if (status == Status.Impaired) revert TransfersBlockedWhileImpaired();
             if (transferRestricted) {
                 if (!allowlisted[from]) revert RecipientNotAllowlisted(from);

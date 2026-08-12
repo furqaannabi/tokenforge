@@ -48,7 +48,6 @@ contract NoteFactory {
 
     /// @dev Carries the address so the rejection names who was refused.
     error IssuerNotRegistered(address caller);
-    error BorrowerNotRegistered(address borrower);
     error MintNotApproved(address issuer, bytes32 mintHash);
     error NotAuthorizedRepresentative(address issuer, address caller);
     error DocumentAlreadyTokenized(bytes32 documentHash, address existingNote);
@@ -63,8 +62,6 @@ contract NoteFactory {
         string name;
         string symbol;
         address issuer;
-        /// @dev Who repays. See `RWANote.borrower` for why this is not `issuer`.
-        address borrower;
         uint256 supply;
         IERC20 currency;
         uint64 gracePeriod;
@@ -104,7 +101,6 @@ contract NoteFactory {
                     params.name,
                     params.symbol,
                     params.issuer,
-                    params.borrower,
                     params.supply,
                     address(params.currency),
                     params.gracePeriod,
@@ -119,12 +115,6 @@ contract NoteFactory {
     {
         if (!registry.isRegisteredIssuer(params.issuer)) {
             revert IssuerNotRegistered(params.issuer);
-        }
-        // A separate roll from the issuers. Both ends of a loan are vouched
-        // for, but for different things: being allowed to owe money is not
-        // being allowed to create notes.
-        if (!registry.isRegisteredBorrower(params.borrower)) {
-            revert BorrowerNotRegistered(params.borrower);
         }
         if (!registry.isAuthorizedRepresentative(params.issuer, msg.sender)) {
             revert NotAuthorizedRepresentative(params.issuer, msg.sender);
@@ -156,9 +146,7 @@ contract NoteFactory {
             params.name,
             params.symbol,
             params.issuer,
-            params.borrower,
-            // The whole supply is minted to the issuer, who sells it down. The
-            // borrower owes the loan; they do not own a share of it.
+            // The whole supply is minted to the issuer, who sells it down.
             params.issuer,
             params.supply,
             params.terms
@@ -166,8 +154,16 @@ contract NoteFactory {
 
         // The vault's constructor rejects a schedule that does not reproduce
         // the note's immutable scheduleHash, so the two cannot disagree.
+        // Read now and frozen into the vault, so a later change to the fee
+        // never touches a note already issued.
         vault = new RepaymentVault(
-            note, params.currency, params.issuer, params.gracePeriod, params.schedule
+            note,
+            params.currency,
+            params.issuer,
+            params.gracePeriod,
+            params.schedule,
+            registry.protocolTreasury(),
+            registry.protocolFeeBps()
         );
 
         note.setVault(address(vault));

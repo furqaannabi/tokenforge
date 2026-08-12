@@ -57,6 +57,15 @@ contract RepaymentVault is ReentrancyGuard {
 
     /// @notice Total deposited by the issuer, for reconciliation.
     uint256 public totalDeposited;
+
+    /// @notice Taken from collections and paid to the protocol treasury.
+    uint256 public totalFees;
+
+    /// @notice Where this note's fee goes. Frozen at mint.
+    address public immutable treasury;
+
+    /// @notice This note's fee, in basis points. Frozen at mint.
+    uint16 public immutable feeBps;
     /// @notice Total withdrawn by holders.
     uint256 public totalClaimed;
 
@@ -65,12 +74,12 @@ contract RepaymentVault is ReentrancyGuard {
     event Impaired(uint256 indexed period, uint64 dueDate);
     event Cured(uint256 indexed period);
     event Matured();
+    event ProtocolFeePaid(uint256 indexed period, uint256 amount);
 
     error NotIssuer();
     error NotNote();
     error ScheduleHashMismatch(bytes32 expected, bytes32 actual);
     error AllPeriodsSettled();
-    error NotAcceptedYet();
     error NothingToClaim();
     error NoSupply();
     error NotDueYet(uint256 period, uint64 dueDate);
@@ -81,7 +90,9 @@ contract RepaymentVault is ReentrancyGuard {
         IERC20 currency_,
         address issuer_,
         uint64 gracePeriod_,
-        Period[] memory schedule_
+        Period[] memory schedule_,
+        address treasury_,
+        uint16 feeBps_
     ) {
         schedule_.validate();
 
@@ -99,6 +110,8 @@ contract RepaymentVault is ReentrancyGuard {
 
         note = note_;
         currency = currency_;
+        treasury = treasury_;
+        feeBps = feeBps_;
         issuer = issuer_;
         gracePeriod = gracePeriod_;
     }
@@ -128,7 +141,7 @@ contract RepaymentVault is ReentrancyGuard {
     }
 
     /**
-     * @notice Collects the next instalment from the borrower, once it is due.
+     * @notice Collects the next instalment from the issuer, once it is due.
      *
      * @dev The automation half of repayment, and deliberately callable by
      *      anyone: a contract cannot wake itself up, so something off-chain has
@@ -136,46 +149,40 @@ contract RepaymentVault is ReentrancyGuard {
      *      standing between a borrower and their own repayment record.
      *
      *      What stops it being abusive is that it moves nobody's money but the
-     *      borrower's, and only with their standing approval on the settlement
+     *      issuer's, and only with their standing approval on the settlement
      *      currency — revoke the allowance and this reverts. It also refuses to
      *      run before the due date, which `settleNextPeriod` does not: paying
-     *      your own debt early is your business, pulling someone else's money
-     *      early is not.
+     *      early out of your own balance is your business, pulling someone
+     *      else's money early is not.
      */
-    function collectFromBorrower() external nonReentrant returns (uint256 amount) {
-        return _settle(note.borrower(), true);
+    function collectScheduledPayment() external nonReentrant returns (uint256 amount) {
+        return _settle(note.issuer(), true);
     }
 
-    /// @notice What the borrower has authorised this vault to pull.
+    /// @notice What the issuer has authorised this vault to pull.
     function authorizedAmount() external view returns (uint256) {
-        return currency.allowance(note.borrower(), address(this));
+        return currency.allowance(note.issuer(), address(this));
     }
 
-    /// @notice Whether `collectFromBorrower` would succeed right now.
+    /// @notice Whether `collectScheduledPayment` would succeed right now.
     function collectible() external view returns (bool) {
         uint256 index = nextPeriod;
         if (index >= _schedule.length) return false;
-        if (note.status() == RWANote.Status.Pending) return false;
 
         Period memory period = _schedule[index];
         if (block.timestamp < period.dueDate) return false;
 
         uint256 due = period.principal + period.interest;
-        address borrower = note.borrower();
+        address payer = note.issuer();
         return
-            currency.allowance(borrower, address(this)) >= due &&
-            currency.balanceOf(borrower) >= due;
+            currency.allowance(payer, address(this)) >= due &&
+            currency.balanceOf(payer) >= due;
     }
 
     function _settle(address payer, bool requireDue)
         private
         returns (uint256 amount)
     {
-        // A note the borrower has not accepted is not yet a debt, and taking
-        // a payment against one would distribute money to holders of an
-        // instrument that could still be repudiated.
-        if (note.status() == RWANote.Status.Pending) revert NotAcceptedYet();
-
         uint256 index = nextPeriod;
         if (index >= _schedule.length) revert AllPeriodsSettled();
 
@@ -192,7 +199,23 @@ contract RepaymentVault is ReentrancyGuard {
         currency.safeTransferFrom(payer, address(this), amount);
         totalDeposited += amount;
 
-        accPerShare += (amount * ACC_PRECISION) / shares;
+        /*
+         * The fee comes out of what was collected, not on top of it.
+         *
+         * Adding it on top would change what the borrower owes, and the whole
+         * point of hashing the schedule is that the obligation is exactly what
+         * was signed. So holders receive the instalment net of servicing, which
+         * is how a participation in a loan actually works — and the rate was
+         * fixed when the note was minted, so a buyer could see it.
+         */
+        uint256 fee = (amount * feeBps) / 10_000;
+        if (fee > 0) {
+            totalFees += fee;
+            currency.safeTransfer(treasury, fee);
+            emit ProtocolFeePaid(index, fee);
+        }
+
+        accPerShare += ((amount - fee) * ACC_PRECISION) / shares;
         nextPeriod = index + 1;
 
         // Principal returned shrinks every balance in step. Interest does not:
@@ -220,11 +243,6 @@ contract RepaymentVault is ReentrancyGuard {
      *         issuer's cooperation to have arrears recognised.
      */
     function flagImpaired() external {
-        // A note the borrower has not accepted is not yet a debt, and taking
-        // a payment against one would distribute money to holders of an
-        // instrument that could still be repudiated.
-        if (note.status() == RWANote.Status.Pending) revert NotAcceptedYet();
-
         uint256 index = nextPeriod;
         if (index >= _schedule.length) revert AllPeriodsSettled();
         if (!_isOverdue(index)) revert NotOverdue();
