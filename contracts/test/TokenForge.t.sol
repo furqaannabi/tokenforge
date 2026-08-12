@@ -568,95 +568,6 @@ contract MintApprovalTest is TokenForgeFixture {
     }
 }
 
-/**
- * The protocol's share of collections.
- *
- * Taken out of what the borrower paid rather than added on top, because the
- * schedule is hashed and enforced: the obligation is exactly what was signed,
- * and a fee that changed it would make that claim false. Holders receive the
- * instalment net of servicing, which is how a loan participation works.
- */
-contract ProtocolFeeTest is TokenForgeFixture {
-    address internal treasury = makeAddr("treasury");
-
-    function _withFee(uint16 bps) internal returns (RepaymentVault vault) {
-        vm.prank(admin);
-        registry.setProtocolFee(treasury, bps);
-        (, vault) = _mint();
-    }
-
-    function test_DefaultsToNoFee() public {
-        (, RepaymentVault vault) = _mint();
-        assertEq(vault.feeBps(), 0);
-        assertEq(vault.treasury(), address(0));
-    }
-
-    function test_FeeIsDeductedFromTheInstalmentNotAddedToIt() public {
-        RepaymentVault vault = _withFee(100); // 1%
-
-        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
-        uint256 borrowerBefore = usdg.balanceOf(issuer);
-
-        _settle(vault);
-
-        assertEq(
-            borrowerBefore - usdg.balanceOf(issuer),
-            due,
-            "the payer owes the schedule, not the schedule plus a fee"
-        );
-        assertEq(usdg.balanceOf(treasury), due / 100, "treasury took its 1%");
-        assertEq(vault.totalFees(), due / 100);
-    }
-
-    function test_HoldersReceiveTheInstalmentNetOfTheFee() public {
-        RepaymentVault vault = _withFee(100);
-        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
-
-        _settle(vault);
-
-        // The issuer holds the whole supply, so the whole net amount is theirs.
-        assertEq(vault.claimable(issuer), due - due / 100);
-    }
-
-    /// A note's fee is fixed when it is minted; later changes miss it.
-    function test_ChangingTheFeeDoesNotTouchNotesAlreadyIssued() public {
-        RepaymentVault vault = _withFee(100);
-
-        vm.prank(admin);
-        registry.setProtocolFee(treasury, 500);
-
-        assertEq(vault.feeBps(), 100, "frozen at mint");
-    }
-
-    function test_FeeIsCapped() public {
-        vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(IssuerRegistry.FeeTooHigh.selector, 501, 500)
-        );
-        registry.setProtocolFee(treasury, 501);
-    }
-
-    function test_OnlyAdminSetsIt() public {
-        vm.prank(issuer);
-        vm.expectRevert(IssuerRegistry.NotAdmin.selector);
-        registry.setProtocolFee(treasury, 100);
-    }
-
-    /// Every unit collected is either distributed or taken as a fee.
-    function test_NothingIsLostBetweenTheTwo() public {
-        RepaymentVault vault = _withFee(250);
-        uint256 due = vault.periodAt(0).principal + vault.periodAt(0).interest;
-
-        _settle(vault);
-
-        assertEq(
-            vault.claimable(issuer) + usdg.balanceOf(treasury),
-            due,
-            "net plus fee is the whole instalment"
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 
 contract IssuerRegistryTest is TokenForgeFixture {
@@ -1360,7 +1271,7 @@ contract ValidationTest is TokenForgeFixture {
         (RWANote note,) = _mint();
 
         vm.expectRevert(ScheduleLib.ScheduleEmpty.selector);
-        new RepaymentVault(note, usdg, issuer, GRACE, new Period[](0), address(0), 0);
+        new RepaymentVault(note, usdg, issuer, GRACE, new Period[](0));
     }
 
     /// @dev Out-of-order due dates would break settlement and impairment both.
@@ -1371,7 +1282,7 @@ contract ValidationTest is TokenForgeFixture {
         (unsorted[2], unsorted[3]) = (unsorted[3], unsorted[2]);
 
         vm.expectRevert(abi.encodeWithSelector(ScheduleLib.ScheduleNotAscending.selector, 3));
-        new RepaymentVault(note, usdg, issuer, GRACE, unsorted, address(0), 0);
+        new RepaymentVault(note, usdg, issuer, GRACE, unsorted);
     }
 
     function test_VaultRejectsDuplicateDueDates() public {
@@ -1381,7 +1292,7 @@ contract ValidationTest is TokenForgeFixture {
         duplicated[5].dueDate = duplicated[4].dueDate;
 
         vm.expectRevert(abi.encodeWithSelector(ScheduleLib.ScheduleNotAscending.selector, 5));
-        new RepaymentVault(note, usdg, issuer, GRACE, duplicated, address(0), 0);
+        new RepaymentVault(note, usdg, issuer, GRACE, duplicated);
     }
 
     function test_ScheduleTotalMatchesObligation() public pure {
