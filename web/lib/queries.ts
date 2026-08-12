@@ -32,8 +32,16 @@ export const queryKeys = {
   documentUrl: (id: string) => ["document-url", id] as const,
   applications: (status?: ApplicationStatus) =>
     ["applications", status ?? "all"] as const,
+  /**
+   * Lower-cased, because the two ends of this key disagreed about case.
+   *
+   * Reads pass wagmi's checksummed address; the service stores and returns a
+   * lower-cased one, so writing the mutation result to the cache landed under a
+   * different key than the panel was reading. The application was saved, and
+   * the applicant was shown the empty form again — and could submit it again.
+   */
   applicationForWallet: (address?: string) =>
-    ["application", address ?? ""] as const,
+    ["application", address?.toLowerCase() ?? ""] as const,
 };
 
 // --- Issuer onboarding -----------------------------------------------------
@@ -70,7 +78,11 @@ export function useApply() {
         queryKeys.applicationForWallet(application.walletAddress),
         application,
       );
+      // The admin queue, and any other view of this wallet's application.
       queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.applicationForWallet(application.walletAddress),
+      });
     },
   });
 }
