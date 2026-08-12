@@ -49,6 +49,7 @@ contract NoteFactory {
     /// @dev Carries the address so the rejection names who was refused.
     error IssuerNotRegistered(address caller);
     error BorrowerNotRegistered(address borrower);
+    error MintNotApproved(address issuer, bytes32 mintHash);
     error NotAuthorizedRepresentative(address issuer, address caller);
     error DocumentAlreadyTokenized(bytes32 documentHash, address existingNote);
     error ZeroDocumentHash();
@@ -76,6 +77,42 @@ contract NoteFactory {
      * @dev Reverts unless `msg.sender` is `params.issuer` itself or one of its
      *      authorized representatives.
      */
+    /**
+     * @notice A commitment to every parameter this mint would carry.
+     *
+     * @dev What the admin approves and what the factory checks. `schedule` is
+     *      covered through `terms.scheduleHash`, which the vault's constructor
+     *      independently refuses to contradict — so the schedule cannot change
+     *      either without changing this.
+     */
+    function mintHash(MintParams calldata params) public pure returns (bytes32) {
+        // Two rounds rather than one: twelve values in a single abi.encode
+        // put the stack one slot too deep for the legacy pipeline.
+        bytes32 termsHash = keccak256(
+            abi.encode(
+                params.terms.principal,
+                params.terms.rateBps,
+                params.terms.maturity,
+                params.terms.documentHash,
+                params.terms.scheduleHash
+            )
+        );
+
+        return
+            keccak256(
+                abi.encode(
+                    params.name,
+                    params.symbol,
+                    params.issuer,
+                    params.borrower,
+                    params.supply,
+                    address(params.currency),
+                    params.gracePeriod,
+                    termsHash
+                )
+            );
+    }
+
     function mintNote(MintParams calldata params)
         external
         returns (RWANote note, RepaymentVault vault)
@@ -93,7 +130,22 @@ contract NoteFactory {
             revert NotAuthorizedRepresentative(params.issuer, msg.sender);
         }
         if (params.terms.documentHash == bytes32(0)) revert ZeroDocumentHash();
+
         if (params.supply == 0) revert ZeroSupply();
+
+        /*
+         * The admin cleared exactly these parameters for this issuer.
+         *
+         * Approving the document alone would have left everything else free to
+         * change between the decision and the transaction — principal, supply,
+         * borrower, schedule — while the approval still held. Hashing the whole
+         * set means any edit after approval is a different mint, and refused.
+         */
+        bytes32 approvalHash = mintHash(params);
+        if (!registry.isMintApproved(params.issuer, approvalHash)) {
+            revert MintNotApproved(params.issuer, approvalHash);
+        }
+
 
         address existing = noteByDocument[params.terms.documentHash];
         if (existing != address(0)) {

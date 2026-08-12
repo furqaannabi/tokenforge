@@ -73,6 +73,7 @@ contract RepaymentVault is ReentrancyGuard {
     error NotAcceptedYet();
     error NothingToClaim();
     error NoSupply();
+    error NotDueYet(uint256 period, uint64 dueDate);
     error NotOverdue();
 
     constructor(
@@ -117,7 +118,59 @@ contract RepaymentVault is ReentrancyGuard {
      *      credits it across the supply. Anyone may fund a payment on the
      *      issuer's behalf — what matters to holders is that it arrives.
      */
+    /**
+     * @notice Pays the next instalment from the caller's own balance.
+     * @dev Early payment is allowed. A borrower who wants to clear a period
+     *      ahead of its due date is doing nothing anyone needs protecting from.
+     */
     function settleNextPeriod() external nonReentrant returns (uint256 amount) {
+        return _settle(msg.sender, false);
+    }
+
+    /**
+     * @notice Collects the next instalment from the borrower, once it is due.
+     *
+     * @dev The automation half of repayment, and deliberately callable by
+     *      anyone: a contract cannot wake itself up, so something off-chain has
+     *      to make the call. Making that a privileged role would mean one key
+     *      standing between a borrower and their own repayment record.
+     *
+     *      What stops it being abusive is that it moves nobody's money but the
+     *      borrower's, and only with their standing approval on the settlement
+     *      currency — revoke the allowance and this reverts. It also refuses to
+     *      run before the due date, which `settleNextPeriod` does not: paying
+     *      your own debt early is your business, pulling someone else's money
+     *      early is not.
+     */
+    function collectFromBorrower() external nonReentrant returns (uint256 amount) {
+        return _settle(note.borrower(), true);
+    }
+
+    /// @notice What the borrower has authorised this vault to pull.
+    function authorizedAmount() external view returns (uint256) {
+        return currency.allowance(note.borrower(), address(this));
+    }
+
+    /// @notice Whether `collectFromBorrower` would succeed right now.
+    function collectible() external view returns (bool) {
+        uint256 index = nextPeriod;
+        if (index >= _schedule.length) return false;
+        if (note.status() == RWANote.Status.Pending) return false;
+
+        Period memory period = _schedule[index];
+        if (block.timestamp < period.dueDate) return false;
+
+        uint256 due = period.principal + period.interest;
+        address borrower = note.borrower();
+        return
+            currency.allowance(borrower, address(this)) >= due &&
+            currency.balanceOf(borrower) >= due;
+    }
+
+    function _settle(address payer, bool requireDue)
+        private
+        returns (uint256 amount)
+    {
         // A note the borrower has not accepted is not yet a debt, and taking
         // a payment against one would distribute money to holders of an
         // instrument that could still be repudiated.
@@ -132,7 +185,11 @@ contract RepaymentVault is ReentrancyGuard {
         Period memory period = _schedule[index];
         amount = period.principal + period.interest;
 
-        currency.safeTransferFrom(msg.sender, address(this), amount);
+        if (requireDue && block.timestamp < period.dueDate) {
+            revert NotDueYet(index, period.dueDate);
+        }
+
+        currency.safeTransferFrom(payer, address(this), amount);
         totalDeposited += amount;
 
         accPerShare += (amount * ACC_PRECISION) / shares;

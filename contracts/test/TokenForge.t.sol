@@ -60,6 +60,8 @@ abstract contract TokenForgeFixture is Test {
 
         // Enough to service the loan several times over.
         usdg.mint(issuer, 10_000_000e6);
+
+
     }
 
     // -- Fixture builders ----------------------------------------------------
@@ -100,6 +102,15 @@ abstract contract TokenForgeFixture is Test {
         });
     }
 
+    /// @dev Clears an exact set of mint parameters, as the admin would.
+    function _approveMint(NoteFactory.MintParams memory params) internal {
+        // Read the hash before the prank: a call in the argument list consumes
+        // it, and the approval would arrive from the test contract instead.
+        bytes32 approval = factory.mintHash(params);
+        vm.prank(admin);
+        registry.approveMint(params.issuer, approval);
+    }
+
     /// @dev Mints the fixture note as `issuer`, accepted by the borrower.
     function _mint() internal returns (RWANote note, RepaymentVault vault) {
         (note, vault) = _mintPending();
@@ -113,6 +124,7 @@ abstract contract TokenForgeFixture is Test {
         params.issuer = issuer;
         params.currency = usdg;
 
+        _approveMint(params);
         vm.prank(issuer);
         (note, vault) = factory.mintNote(params);
     }
@@ -287,6 +299,258 @@ contract AcceptanceTest is TokenForgeFixture {
     }
 }
 
+/**
+ * Automated repayment.
+ *
+ * A contract cannot wake itself up, so something off-chain has to call — but
+ * the money moved is the borrower's, and only as far as their own standing
+ * approval allows. These tests are the difference between automation and a
+ * service quietly holding a mandate over someone's balance.
+ */
+contract AutomatedRepaymentTest is TokenForgeFixture {
+    RWANote internal note;
+    RepaymentVault internal vault;
+
+    function setUp() public override {
+        super.setUp();
+        (note, vault) = _mint();
+        usdg.mint(borrower, 10_000_000e6);
+    }
+
+    function _due() internal view returns (uint256) {
+        uint256 i = vault.nextPeriod();
+        return vault.periodAt(i).principal + vault.periodAt(i).interest;
+    }
+
+    function test_NothingIsCollectibleWithoutAuthorization() public {
+        vm.warp(vault.periodAt(0).dueDate);
+        assertFalse(vault.collectible(), "no allowance, nothing to pull");
+        assertEq(vault.authorizedAmount(), 0);
+    }
+
+    /// One approval covers the whole schedule; no signature per instalment.
+    function test_OneAuthorizationCoversEveryInstalment() public {
+        vm.prank(borrower);
+        usdg.approve(address(vault), type(uint256).max);
+
+        for (uint256 i = 0; i < PERIODS; i++) {
+            vm.warp(vault.periodAt(vault.nextPeriod()).dueDate);
+            assertTrue(vault.collectible());
+            vault.collectFromBorrower();
+        }
+
+        assertEq(vault.nextPeriod(), PERIODS);
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Matured));
+    }
+
+    function test_CollectionIsRefusedBeforeTheDueDate() public {
+        vm.prank(borrower);
+        usdg.approve(address(vault), type(uint256).max);
+
+        uint64 due = vault.periodAt(0).dueDate;
+        vm.warp(due - 1);
+
+        assertFalse(vault.collectible());
+        vm.expectRevert(
+            abi.encodeWithSelector(RepaymentVault.NotDueYet.selector, 0, due)
+        );
+        vault.collectFromBorrower();
+    }
+
+    /// The borrower may still pay early out of their own pocket.
+    function test_BorrowerCanStillPayEarlyThemselves() public {
+        uint256 due = _due();
+        vm.startPrank(borrower);
+        usdg.approve(address(vault), due);
+        vault.settleNextPeriod();
+        vm.stopPrank();
+
+        assertEq(vault.nextPeriod(), 1);
+    }
+
+    /**
+     * Anyone may trigger it, and it costs them nothing.
+     *
+     * The keeper is an outsider here. The money leaves the borrower, and the
+     * outsider is out only their gas — which is what makes a permissionless
+     * keeper safe rather than merely convenient.
+     */
+    function test_AnyKeeperCanTriggerItAndPaysNothing() public {
+        vm.prank(borrower);
+        usdg.approve(address(vault), type(uint256).max);
+        vm.warp(vault.periodAt(0).dueDate);
+
+        uint256 due = _due();
+        uint256 keeperBefore = usdg.balanceOf(outsider);
+        uint256 borrowerBefore = usdg.balanceOf(borrower);
+
+        vm.prank(outsider);
+        vault.collectFromBorrower();
+
+        assertEq(usdg.balanceOf(outsider), keeperBefore, "keeper paid nothing");
+        assertEq(borrowerBefore - usdg.balanceOf(borrower), due, "borrower paid");
+    }
+
+    /// Revoking the approval stops it. The mandate is the borrower's to end.
+    function test_RevokingTheApprovalStopsCollection() public {
+        vm.prank(borrower);
+        usdg.approve(address(vault), type(uint256).max);
+        vm.warp(vault.periodAt(0).dueDate);
+        vault.collectFromBorrower();
+
+        vm.prank(borrower);
+        usdg.approve(address(vault), 0);
+
+        vm.warp(vault.periodAt(1).dueDate);
+        assertFalse(vault.collectible(), "authorization withdrawn");
+        vm.expectRevert();
+        vault.collectFromBorrower();
+    }
+
+    /// Collected money reaches holders the same way a manual payment does.
+    function test_CollectedPaymentReachesHolders() public {
+        vm.prank(issuer);
+        note.transfer(alice, SUPPLY / 4);
+
+        vm.prank(borrower);
+        usdg.approve(address(vault), type(uint256).max);
+        vm.warp(vault.periodAt(0).dueDate);
+
+        uint256 due = _due();
+        vault.collectFromBorrower();
+
+        assertEq(vault.claimable(alice), due / 4);
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The admin clears a document before it can be tokenized.
+ *
+ * Registry membership answers whether a company may issue at all. This answers
+ * whether it may issue *this* — the judgement a reviewer actually makes about
+ * one agreement.
+ */
+contract MintApprovalTest is TokenForgeFixture {
+    function _params() internal view returns (NoteFactory.MintParams memory params) {
+        params = _mintParams();
+        params.issuer = issuer;
+        params.currency = usdg;
+    }
+
+    function test_RegisteredIssuerStillNeedsApproval() public {
+        NoteFactory.MintParams memory params = _params();
+
+        bytes32 expected = factory.mintHash(params);
+        vm.prank(issuer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NoteFactory.MintNotApproved.selector, issuer, expected
+            )
+        );
+        factory.mintNote(params);
+    }
+
+    function test_ApprovalLetsExactlyThoseParametersThrough() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        vm.prank(issuer);
+        (RWANote note,) = factory.mintNote(params);
+        assertEq(note.documentHash(), DOCUMENT_HASH);
+    }
+
+    /**
+     * The point of hashing the whole mint rather than the document.
+     *
+     * An interface that could raise the supply, move the borrower, or restate
+     * the principal after the admin decided would make the approval a
+     * formality. Each of these is the approved document and the approved
+     * issuer, and each is refused.
+     */
+    function test_SupplyCannotBeChangedAfterApproval() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        params.supply = SUPPLY * 2;
+        bytes32 tampered = factory.mintHash(params);
+        vm.prank(issuer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NoteFactory.MintNotApproved.selector, issuer, tampered
+            )
+        );
+        factory.mintNote(params);
+    }
+
+    function test_PrincipalCannotBeChangedAfterApproval() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        params.terms.principal = PRINCIPAL + 1;
+        vm.prank(issuer);
+        vm.expectRevert();
+        factory.mintNote(params);
+    }
+
+    function test_BorrowerCannotBeChangedAfterApproval() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        params.borrower = outsider;
+        vm.prank(issuer);
+        vm.expectRevert();
+        factory.mintNote(params);
+    }
+
+    function test_ScheduleCannotBeChangedAfterApproval() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        Period[] memory tampered = _schedule();
+        tampered[0].interest = COUPON * 2;
+        params.schedule = tampered;
+        params.terms.scheduleHash = ScheduleLib.hash(tampered);
+
+        vm.prank(issuer);
+        vm.expectRevert();
+        factory.mintNote(params);
+    }
+
+    /// An approval belongs to one issuer; another cannot ride on it.
+    function test_ApprovalDoesNotTransferToAnotherIssuer() public {
+        NoteFactory.MintParams memory params = _params();
+        _approveMint(params);
+
+        address rival = makeAddr("rival");
+        vm.prank(admin);
+        registry.admitIssuer(rival, "Rival Capital", "Delaware, USA");
+
+        params.issuer = rival;
+        vm.prank(rival);
+        vm.expectRevert();
+        factory.mintNote(params);
+    }
+
+    function test_OnlyAdminApproves() public {
+        vm.prank(issuer);
+        vm.expectRevert(IssuerRegistry.NotAdmin.selector);
+        registry.approveMint(issuer, keccak256("anything"));
+    }
+
+    function test_ApprovalCanBeWithdrawnBeforeItIsUsed() public {
+        NoteFactory.MintParams memory params = _params();
+        bytes32 h = factory.mintHash(params);
+        _approveMint(params);
+        assertTrue(registry.isMintApproved(issuer, h));
+
+        vm.prank(admin);
+        registry.revokeMintApproval(issuer, h);
+        assertFalse(registry.isMintApproved(issuer, h));
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 contract IssuerRegistryTest is TokenForgeFixture {
@@ -407,6 +671,7 @@ contract NoteFactoryTest is TokenForgeFixture {
         NoteFactory.MintParams memory params = _mintParams();
         params.issuer = issuer;
         params.currency = usdg;
+        _approveMint(params);
 
         vm.prank(representative);
         (RWANote note,) = factory.mintNote(params);
@@ -482,6 +747,11 @@ contract NoteFactoryTest is TokenForgeFixture {
         bytes32 approved = ScheduleLib.hash(_schedule());
         bytes32 tampered = ScheduleLib.hash(params.schedule);
         assertTrue(approved != tampered, "fixture must actually differ");
+
+        // The admin cleared these terms, which commit to the honest schedule.
+        // Swapping the array afterwards leaves the approval intact — that is
+        // precisely the substitution the vault's own check exists to catch.
+        _approveMint(params);
 
         vm.prank(issuer);
         vm.expectRevert(
@@ -1141,6 +1411,8 @@ contract AmortizingScheduleTest is TokenForgeFixture {
             schedule: schedule
         });
 
+        _approveMint(params);
+        _approveMint(params);
         vm.prank(issuer);
         (note, vault) = factory.mintNote(params);
 

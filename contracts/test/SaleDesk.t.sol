@@ -59,6 +59,7 @@ abstract contract SaleFixture is Test {
         vm.prank(admin);
         registry.admitIssuer(borrower, "Northbridge Trading Ltd", "Delaware, USA");
 
+
         usdg.mint(issuer, 10_000e6);
         usdg.mint(alice, 10_000e6);
         usdg.mint(bob, 10_000e6);
@@ -97,6 +98,10 @@ abstract contract SaleFixture is Test {
             }),
             schedule: schedule
         });
+
+        bytes32 approval = factory.mintHash(params);
+        vm.prank(admin);
+        registry.approveMint(issuer, approval);
 
         vm.prank(issuer);
         (note_, vault_) = factory.mintNote(params);

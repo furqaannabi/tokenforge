@@ -7,21 +7,20 @@
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0x57873ccC430f7709ed77dA7da1EC521CED877F59",
-      "txHash": "0x7c80bb2a38a76a344cbed1207734b2a7712ed2918d87a6ad300bc5f379a33fc0",
+      "address": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
-      }
+      },
+      "supersedes": "0x57873ccC430f7709ed77dA7da1EC521CED877F59",
+      "note": "Adds approveMint: the admin clears one exact set of mint parameters for one issuer. Keyed by NoteFactory.mintHash, so editing anything after approval produces a different hash and is refused."
     },
     "NoteFactory": {
-      "address": "0x4941ed1f4785bf68083620566CC2c64D78c15aE4",
-      "txHash": "0x4077d5d6c71d5468f5c2bc610fceb30e5c49eaf1891da73f204b49d5394b199d",
-      "deployedAtBlock": null,
+      "address": "0xc190e6F26cE14e40D30251fDe25927A73a5D58b6",
       "constructorArgs": {
-        "registry": "0x57873ccC430f7709ed77dA7da1EC521CED877F59"
+        "registry": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be"
       },
-      "supersedes": "0xc430C8EE28AaaCbaBFE06CdB6A6900cE616DD357",
-      "note": "Names a borrower distinct from the issuer, requires both to be in the registry, and mints notes Pending until the borrower calls accept(). Notes from earlier factories have no borrower and are Active from mint."
+      "supersedes": "0x4941ed1f4785bf68083620566CC2c64D78c15aE4",
+      "note": "Requires an admin approval bound to the exact mint parameters."
     },
     "MockUSDG": {
       "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",
@@ -42,15 +41,15 @@
       "note": "Primary offering desk. One instance serves every note; authority is read from each note's issuer(). No price can be set \u2014 a token is a claim on one unit of principal, so the desk computes par from the note's own terms. 0x9df0003b quoted zero for amounts that rounded down, giving those tokens away free; 0x3efB366e let the issuer override the price."
     }
   },
-  "notes": [
-    "RWANote and RepaymentVault are not listed here: one pair is deployed per agreement, by NoteFactory.mintNote. Read them from the factory's NoteMinted events or its deployments() view.",
-    "Chain 1952 was confirmed against the RPC (eth_chainId returns 0x7a0). The 195 figure that circulates for X Layer testnet is wrong."
-  ],
+  "notes": [],
   "demoNote": {
     "note": "0x58312Cd745B214Dcab5728c31204B1DEDF5B0B35",
     "vault": "0x6A22eeAa78088085099C17AfdDdc9714F3324cD5",
     "terms": "1,000 USDG at 10% over the term; five instalments of 200 principal + 20 interest",
     "supply": "1,000 tokens",
     "note_": "Minted through the deployed factory to exercise the flow on a real network. One period has settled: supply fell from 1,000 to 800 tokens while shares stayed at 1,000, and 220 USDG became claimable."
+  },
+  "demo": {
+    "note_": "Cleared with the database. Earlier notes remain on-chain under the superseded factories but are no longer indexed."
   }
 }

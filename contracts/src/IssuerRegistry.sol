@@ -45,6 +45,7 @@ contract IssuerRegistry {
     error NotAdmin();
     error NotPendingAdmin();
     error ZeroAddress();
+    error ZeroMintHash();
     error AlreadyRegistered();
     error NotRegistered();
 
@@ -57,6 +58,60 @@ contract IssuerRegistry {
         if (admin_ == address(0)) revert ZeroAddress();
         admin = admin_;
         emit AdminTransferred(address(0), admin_);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mint approval
+    // -----------------------------------------------------------------------
+
+    /**
+     * @notice Exact mints the admin has cleared, per issuer.
+     *
+     * @dev Membership answers "may this company issue at all". This answers
+     *      "may it issue *these terms*", which is the judgement a reviewer
+     *      actually makes about one agreement.
+     *
+     *      The key is `NoteFactory.mintHash` — a commitment to every parameter
+     *      the note will carry, not merely the document. Approving the document
+     *      alone would leave the interface free to change the principal, the
+     *      supply, the borrower or the schedule between the admin's decision
+     *      and the transaction, and the approval would still hold. Here any
+     *      such edit produces a different hash and is refused.
+     *
+     *      Keyed by issuer too, so an approval cannot be lifted by whoever
+     *      submits the same parameters next.
+     */
+    mapping(address issuer => mapping(bytes32 mintHash => bool))
+        public mintApproved;
+
+    event MintApproved(address indexed issuer, bytes32 indexed mintHash);
+    event MintApprovalRevoked(address indexed issuer, bytes32 indexed mintHash);
+
+    /// @notice Clears one exact set of mint parameters, for one issuer.
+    function approveMint(address issuer, bytes32 mintHash) external onlyAdmin {
+        if (issuer == address(0)) revert ZeroAddress();
+        if (mintHash == bytes32(0)) revert ZeroMintHash();
+
+        mintApproved[issuer][mintHash] = true;
+        emit MintApproved(issuer, mintHash);
+    }
+
+    /// @notice Withdraws an approval that has not been used yet.
+    function revokeMintApproval(address issuer, bytes32 mintHash)
+        external
+        onlyAdmin
+    {
+        mintApproved[issuer][mintHash] = false;
+        emit MintApprovalRevoked(issuer, mintHash);
+    }
+
+    /// @notice Whether this issuer may mint exactly these parameters.
+    function isMintApproved(address issuer, bytes32 mintHash)
+        external
+        view
+        returns (bool)
+    {
+        return mintApproved[issuer][mintHash];
     }
 
     // -----------------------------------------------------------------------

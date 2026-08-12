@@ -136,6 +136,116 @@ export const noteFactoryAbi = [
     },
     {
       "type": "function",
+      "name": "mintHash",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "internalType": "struct NoteFactory.MintParams",
+          "components": [
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "symbol",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "issuer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "supply",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "currency",
+              "type": "address",
+              "internalType": "contract IERC20"
+            },
+            {
+              "name": "gracePeriod",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "terms",
+              "type": "tuple",
+              "internalType": "struct RWANote.Terms",
+              "components": [
+                {
+                  "name": "principal",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "rateBps",
+                  "type": "uint16",
+                  "internalType": "uint16"
+                },
+                {
+                  "name": "maturity",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "documentHash",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "scheduleHash",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                }
+              ]
+            },
+            {
+              "name": "schedule",
+              "type": "tuple[]",
+              "internalType": "struct Period[]",
+              "components": [
+                {
+                  "name": "dueDate",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "principal",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "interest",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
       "name": "mintNote",
       "inputs": [
         {
@@ -353,6 +463,22 @@ export const noteFactoryAbi = [
           "name": "caller",
           "type": "address",
           "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "MintNotApproved",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "mintHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ]
     },

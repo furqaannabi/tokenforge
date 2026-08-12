@@ -54,8 +54,7 @@ contract ExampleTest is Test {
             });
         }
 
-        vm.prank(issuer);
-        (note, vault) = factory.mintNote(
+        NoteFactory.MintParams memory params =
             NoteFactory.MintParams({
                 name: "Example Note",
                 symbol: "EX",
@@ -72,8 +71,11 @@ contract ExampleTest is Test {
                     scheduleHash: ScheduleLib.hash(schedule)
                 }),
                 schedule: schedule
-            })
-        );
+            });
+        registry.approveMint(issuer, factory.mintHash(params));
+
+        vm.prank(issuer);
+        (note, vault) = factory.mintNote(params);
 
         vm.prank(borrower);
         note.accept();

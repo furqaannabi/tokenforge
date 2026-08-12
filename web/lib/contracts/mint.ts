@@ -1,4 +1,9 @@
-import { encodeAbiParameters, keccak256, parseUnits } from "viem";
+import {
+  encodeAbiParameters,
+  keccak256,
+  parseAbiParameters,
+  parseUnits,
+} from "viem";
 import type { Currency, ExtractedTerms, PaymentPeriod } from "@tokenforge/core";
 
 /**
@@ -104,6 +109,50 @@ export interface MintArgs {
     scheduleHash: `0x${string}`;
   };
   schedule: ChainPeriod[];
+}
+
+/**
+ * The commitment the admin approves, reproduced exactly.
+ *
+ * Must equal `NoteFactory.mintHash` byte for byte or an approved mint reverts.
+ * Two rounds of encoding, and the field order below is the contract's — this
+ * is the same class of hazard as `hashSchedule`, and a mismatch shows up only
+ * as a mint the chain refuses for no visible reason.
+ *
+ * `MintHashParityTest` in contracts/test pins a shared value for fixed inputs,
+ * so a change to either implementation fails there rather than in a demo.
+ */
+export function hashMintArgs(args: MintArgs): `0x${string}` {
+  const termsHash = keccak256(
+    encodeAbiParameters(
+      parseAbiParameters("uint256, uint16, uint64, bytes32, bytes32"),
+      [
+        args.terms.principal,
+        args.terms.rateBps,
+        args.terms.maturity,
+        args.terms.documentHash,
+        args.terms.scheduleHash,
+      ],
+    ),
+  );
+
+  return keccak256(
+    encodeAbiParameters(
+      parseAbiParameters(
+        "string, string, address, address, uint256, address, uint64, bytes32",
+      ),
+      [
+        args.name,
+        args.symbol,
+        args.issuer,
+        args.borrower,
+        args.supply,
+        args.currency,
+        args.gracePeriod,
+        termsHash,
+      ],
+    ),
+  );
 }
 
 export function buildMintArgs(input: {
