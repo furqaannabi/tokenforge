@@ -1,3 +1,4 @@
+import type { Currency } from "@tokenforge/core";
 import type {
   ExtractedTerms,
   MintGate,
@@ -88,6 +89,7 @@ export interface ApiExtraction {
   document?: ApiDocument;
   note?: ApiNote | null;
   provenance?: ApiProvenance | null;
+  mintRequest?: ApiMintRequest | null;
 }
 
 /**
@@ -112,6 +114,40 @@ export interface ApiProvenance {
     ofExtractionId: string | null;
     confidence: number;
     reason: string;
+  };
+}
+
+/**
+ * What the issuer asked to mint, and the hash the admin approves.
+ *
+ * `args` are the parameters the service derived from the reviewed terms. They
+ * come back whole at mint time rather than being rebuilt in the browser —
+ * rebuilding is exactly what could drift from what the admin cleared. BigInts
+ * arrive as strings, as everything numeric does over JSON.
+ */
+export interface ApiMintRequest {
+  issuer: `0x${string}`;
+  borrower: `0x${string}`;
+  currency: Currency;
+  supplyTokens: number;
+  mintHash: `0x${string}`;
+  requestedAt: string;
+  args: {
+    name: string;
+    symbol: string;
+    issuer: `0x${string}`;
+    borrower: `0x${string}`;
+    supply: string;
+    currency: `0x${string}`;
+    gracePeriod: string;
+    terms: {
+      principal: string;
+      rateBps: number;
+      maturity: string;
+      documentHash: `0x${string}`;
+      scheduleHash: `0x${string}`;
+    };
+    schedule: { dueDate: string; principal: string; interest: string }[];
   };
 }
 
@@ -207,6 +243,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }).then((r) => r.application),
+
+  requestMint: (
+    extractionId: string,
+    body: {
+      issuer: `0x${string}`;
+      borrower: `0x${string}`;
+      currency: Currency;
+      supplyTokens: number;
+    },
+  ) =>
+    request<{ extraction: ApiExtraction }>(
+      `/extractions/${extractionId}/mint-request`,
+      { method: "POST", body: JSON.stringify(body) },
+    ).then((r) => r.extraction),
+
+  mintArgs: (extractionId: string) =>
+    request<{ mintRequest: ApiMintRequest }>(
+      `/extractions/${extractionId}/mint-args`,
+    ).then((r) => r.mintRequest),
+
+  listMintRequests: () =>
+    request<{ extractions: ApiExtractionSummary[] }>("/mint-requests").then(
+      (r) => r.extractions,
+    ),
 
   checkProvenance: (
     extractionId: string,

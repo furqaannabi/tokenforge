@@ -39,6 +39,29 @@ export const issuerRegistryAbi = [
     },
     {
       "type": "function",
+      "name": "admitBorrower",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "jurisdiction",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "admitIssuer",
       "inputs": [
         {
@@ -80,6 +103,47 @@ export const issuerRegistryAbi = [
     },
     {
       "type": "function",
+      "name": "borrowerInfo",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct IssuerRegistry.Issuer",
+          "components": [
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "jurisdiction",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "registered",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "admittedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "isAuthorizedRepresentative",
       "inputs": [
         {
@@ -115,6 +179,25 @@ export const issuerRegistryAbi = [
           "name": "mintHash",
           "type": "bytes32",
           "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isRegisteredBorrower",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "outputs": [
@@ -225,6 +308,19 @@ export const issuerRegistryAbi = [
     },
     {
       "type": "function",
+      "name": "revokeBorrower",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "revokeIssuer",
       "inputs": [
         {
@@ -321,6 +417,44 @@ export const issuerRegistryAbi = [
         },
         {
           "name": "to",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BorrowerAdmitted",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "jurisdiction",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BorrowerRevoked",
+      "inputs": [
+        {
+          "name": "borrower",
           "type": "address",
           "indexed": true,
           "internalType": "address"

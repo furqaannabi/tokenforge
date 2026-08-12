@@ -17,7 +17,7 @@ import {
   useVaultProgress,
 } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
-import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+import { CURRENCY_DECIMALS } from "@tokenforge/core";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 import { truncateHex } from "@/lib/format";

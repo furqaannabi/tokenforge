@@ -14,3 +14,7 @@
 
 export * from "./schema";
 export * from "./validator";
+// Building and hashing a mint. Here rather than in the web app because the
+// service now sends the transaction, and two implementations of `mintHash`
+// would disagree the moment either was edited.
+export * from "./mint";

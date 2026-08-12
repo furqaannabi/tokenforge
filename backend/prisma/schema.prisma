@@ -141,6 +141,12 @@ model Extraction {
   /// Shape is `provenanceSchema` in src/provenance.ts.
   provenance Json?
 
+  /// The exact parameters the issuer intends to mint, and the hash of them
+  /// the admin approves on-chain. Stored so the admin's queue shows what is
+  /// being asked for, and so the mint that follows uses the same values —
+  /// anything else produces a different hash and the factory refuses it.
+  mintRequest Json?
+
   /// Cost and latency, for judging whether the pipeline is affordable at scale.
   promptTokens     Int?
   completionTokens Int?

@@ -57,7 +57,7 @@ abstract contract SaleFixture is Test {
         vm.prank(admin);
         registry.admitIssuer(issuer, "Northbridge Credit Partners", "Delaware, USA");
         vm.prank(admin);
-        registry.admitIssuer(borrower, "Northbridge Trading Ltd", "Delaware, USA");
+        registry.admitBorrower(borrower, "Northbridge Trading Ltd", "Delaware, USA");
 
 
         usdg.mint(issuer, 10_000e6);

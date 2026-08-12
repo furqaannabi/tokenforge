@@ -7,20 +7,20 @@
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be",
+      "address": "0x0422508c0aFB8fEa40365E7781e0248699824375",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
       },
-      "supersedes": "0x57873ccC430f7709ed77dA7da1EC521CED877F59",
-      "note": "Adds approveMint: the admin clears one exact set of mint parameters for one issuer. Keyed by NoteFactory.mintHash, so editing anything after approval produces a different hash and is refused."
+      "supersedes": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be",
+      "note": "Issuers and borrowers are separate rolls. Reading borrowers out of the issuer list gave every admitted borrower the right to mint. Also holds approveMint, keyed by NoteFactory.mintHash."
     },
     "NoteFactory": {
-      "address": "0xc190e6F26cE14e40D30251fDe25927A73a5D58b6",
+      "address": "0xDAce270A9991E838bC858884156022fd5ae43aDa",
       "constructorArgs": {
-        "registry": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be"
+        "registry": "0x0422508c0aFB8fEa40365E7781e0248699824375"
       },
-      "supersedes": "0x4941ed1f4785bf68083620566CC2c64D78c15aE4",
-      "note": "Requires an admin approval bound to the exact mint parameters."
+      "supersedes": "0xc190e6F26cE14e40D30251fDe25927A73a5D58b6",
+      "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved."
     },
     "MockUSDG": {
       "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",

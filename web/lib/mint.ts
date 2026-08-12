@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePublicClient, useWriteContract } from "wagmi";
 import { decodeEventLog } from "viem";
 import { CHAIN_ID, addresses, noteFactoryAbi } from "./contracts";
-import { buildMintArgs } from "./contracts/mint";
+import { buildMintArgs } from "@tokenforge/core";
 import type { Currency, ExtractedTerms } from "@tokenforge/core";
 
 /**

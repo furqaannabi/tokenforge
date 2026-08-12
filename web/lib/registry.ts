@@ -6,6 +6,7 @@ import {
   addresses,
   contractsConfigured,
   issuerRegistryAbi,
+  issuerRegistryAddress,
 } from "./contracts";
 
 /**
@@ -36,6 +37,53 @@ export function useIsRegisteredIssuer(address?: `0x${string}`) {
     ...query,
     /** Never optimistic: unknown reads as not registered. */
     verified: query.data === true,
+  };
+}
+
+/**
+ * Whether the admin has cleared exactly these parameters for this issuer.
+ *
+ * The hash commits to every value the note will carry, so this answers "may
+ * this exact mint proceed" rather than "is this company allowed to issue".
+ */
+export function useIsMintApproved(
+  issuer?: `0x${string}`,
+  mintHash?: `0x${string}`,
+) {
+  const query = useReadContract({
+    abi: issuerRegistryAbi,
+    address: addresses.issuerRegistry,
+    functionName: "isMintApproved",
+    args: issuer && mintHash ? [issuer, mintHash] : undefined,
+    chainId: CHAIN_ID,
+    query: {
+      enabled: Boolean(issuer && mintHash && contractsConfigured),
+      refetchInterval: 10_000,
+    },
+  });
+
+  return { ...query, approved: query.data === true };
+}
+
+/** The admin clears one exact mint. Signed by their own wallet, as admission is. */
+export function useApproveMint() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
+
+  return {
+    hash,
+    error,
+    isSigning: isPending,
+    isConfirming: receipt.isLoading,
+    isConfirmed: receipt.isSuccess,
+    approve: (issuer: `0x${string}`, mintHash: `0x${string}`) =>
+      writeContractAsync({
+        abi: issuerRegistryAbi,
+        address: issuerRegistryAddress(),
+        functionName: "approveMint",
+        args: [issuer, mintHash],
+        chainId: CHAIN_ID,
+      }),
   };
 }
 

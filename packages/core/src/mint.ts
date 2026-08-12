@@ -4,7 +4,7 @@ import {
   parseAbiParameters,
   parseUnits,
 } from "viem";
-import type { Currency, ExtractedTerms, PaymentPeriod } from "@tokenforge/core";
+import type { Currency, ExtractedTerms, PaymentPeriod } from "./schema";
 
 /**
  * Turns reviewed terms into the arguments `NoteFactory.mintNote` expects.

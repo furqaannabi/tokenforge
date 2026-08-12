@@ -23,7 +23,7 @@ import {
 } from "@/lib/sale";
 import { useHolderPosition, useNoteState } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
-import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+import { CURRENCY_DECIMALS } from "@tokenforge/core";
 import { ReceiptsDialog } from "@/components/receipts-dialog";
 import { addresses } from "@/lib/contracts";
 import type { Currency } from "@tokenforge/core";

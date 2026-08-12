@@ -5,7 +5,7 @@ import { streamSSE } from "hono/streaming";
 import { HTTPException } from "hono/http-exception";
 import { keccak256, toBytes } from "viem";
 import { z } from "zod";
-import type { Prisma } from "../generated/prisma/client";
+import { Prisma } from "../generated/prisma/client";
 import { prisma } from "./db";
 import { ConfigurationError } from "./errors";
 import { extractTerms } from "./extract";
@@ -13,6 +13,7 @@ import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
+import { isAddress } from "viem";
 import {
   documentKey,
   documentUrl,
@@ -23,6 +24,9 @@ import {
   extractedTermsSchema,
   fieldsNeedingReview,
   mintGate,
+  buildMintArgs,
+  hashMintArgs,
+  CURRENCIES,
   type ProvenanceVerdict,
   validateTerms,
   type ExtractedTerms,
@@ -583,6 +587,106 @@ app.post("/extractions/:id/provenance", async (c) => {
   return c.json({ provenance, extraction: jsonSafe(updated), candidates });
 });
 
+/**
+ * The issuer asks the admin to clear a mint.
+ *
+ * Stores the exact parameters, not a summary. The admin approves a hash of
+ * them, and the factory recomputes that hash from whatever is finally
+ * submitted — so a request that drifts before it is minted is refused on
+ * chain rather than quietly honoured.
+ */
+app.post("/extractions/:id/mint-request", async (c) => {
+  const id = c.req.param("id");
+  const body = mintRequestSchema.parse(await c.req.json());
+
+  const extraction = await prisma.extraction.findUnique({ where: { id } });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+  if (extraction.status === "MINTED") {
+    throw new HTTPException(409, { message: "This note has already been minted." });
+  }
+
+  const document = await prisma.document.findUnique({
+    where: { id: extraction.documentId },
+  });
+  if (!document) throw new HTTPException(404, { message: "Unknown document." });
+
+  const currencyAddress = process.env[`${body.currency}_ADDRESS`];
+  if (!currencyAddress) {
+    throw new ConfigurationError(
+      `No address configured for ${body.currency}. Set ${body.currency}_ADDRESS.`,
+    );
+  }
+
+  /*
+   * Built here, not received. The browser sends what the issuer chose — who
+   * repays, in what currency, how many tokens — and this derives the actual
+   * mint parameters from the reviewed terms. The admin then approves a hash of
+   * these, and the same values come back at mint time, so nothing the browser
+   * holds can drift between the decision and the transaction.
+   */
+  const args = buildMintArgs({
+    terms: extraction.terms as ExtractedTerms,
+    name: `${(extraction.terms as ExtractedTerms).borrower.value} Note`,
+    symbol: "NOTE",
+    issuer: body.issuer,
+    borrower: body.borrower,
+    currency: body.currency,
+    currencyAddress: currencyAddress as `0x${string}`,
+    documentHash: document.contentHash as `0x${string}`,
+    supplyTokens: body.supplyTokens,
+  });
+
+  const updated = await prisma.extraction.update({
+    where: { id },
+    data: {
+      mintRequest: asJson({
+        ...body,
+        mintHash: hashMintArgs(args),
+        args: jsonSafe(args),
+        requestedAt: new Date().toISOString(),
+      }),
+    },
+  });
+
+  return c.json({ extraction: jsonSafe(updated) });
+});
+
+/**
+ * The approved parameters, for the issuer's wallet to sign.
+ *
+ * Handed back whole rather than rebuilt in the browser. Rebuilding is what
+ * would let a form's state diverge from what the admin cleared — and the
+ * factory would refuse the result, which is correct but arrives as an
+ * unexplained revert.
+ */
+app.get("/extractions/:id/mint-args", async (c) => {
+  const extraction = await prisma.extraction.findUnique({
+    where: { id: c.req.param("id") },
+  });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+  if (!extraction.mintRequest) {
+    throw new HTTPException(409, {
+      message: "No mint has been requested for this extraction.",
+    });
+  }
+
+  return c.json({ mintRequest: jsonSafe(extraction.mintRequest) });
+});
+
+/** The admin's queue: everything waiting to be cleared for minting. */
+app.get("/mint-requests", async (c) => {
+  const extractions = await prisma.extraction.findMany({
+    where: { mintRequest: { not: Prisma.DbNull }, status: { not: "MINTED" } },
+    include: {
+      document: { select: { id: true, filename: true, contentHash: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  return c.json({ extractions: jsonSafe(extractions) });
+});
+
 app.get("/extractions/:id/mint-gate", async (c) => {
   const extraction = await prisma.extraction.findUnique({
     where: { id: c.req.param("id") },
@@ -610,6 +714,23 @@ const provenanceRequestSchema = z.object({
   /// The name the registry holds for the minting wallet.
   issuerName: z.string().min(1).max(200),
   issuerJurisdiction: z.string().max(120).optional(),
+});
+
+const addressLike = z
+  .string()
+  .refine((value) => isAddress(value, { strict: false }), "Not an address.")
+  .transform((value) => value as `0x${string}`);
+
+/**
+ * What the issuer chooses at issuance. Not the mint parameters themselves —
+ * those are derived here from the reviewed terms, so a browser cannot submit
+ * one thing for approval and another to the chain.
+ */
+const mintRequestSchema = z.object({
+  issuer: addressLike,
+  borrower: addressLike,
+  currency: z.enum(CURRENCIES),
+  supplyTokens: z.number().positive().max(1_000_000_000),
 });
 
 const mintRecordSchema = z.object({

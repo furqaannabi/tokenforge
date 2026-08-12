@@ -56,7 +56,7 @@ abstract contract TokenForgeFixture is Test {
         registry.admitIssuer(issuer, "Meridian Freight Holdings LLC", "Delaware, USA");
         // Both ends of a loan are admitted through the same registry.
         vm.prank(admin);
-        registry.admitIssuer(borrower, "Meridian Freight Operating Co", "Delaware, USA");
+        registry.admitBorrower(borrower, "Meridian Freight Operating Co", "Delaware, USA");
 
         // Enough to service the loan several times over.
         usdg.mint(issuer, 10_000_000e6);
@@ -282,6 +282,23 @@ contract AcceptanceTest is TokenForgeFixture {
         vm.expectRevert(RepaymentVault.NotAcceptedYet.selector);
         vault.settleNextPeriod();
         vm.stopPrank();
+    }
+
+    /**
+     * The two roles are separate rights.
+     *
+     * Reading borrowers out of the issuer list handed every admitted borrower
+     * the right to mint — a company allowed to owe money became one allowed to
+     * create notes.
+     */
+    function test_BorrowerIsNotThereforeAnIssuer() public {
+        assertTrue(registry.isRegisteredBorrower(borrower));
+        assertFalse(registry.isRegisteredIssuer(borrower), "borrowing is not issuing");
+    }
+
+    function test_IssuerIsNotThereforeABorrower() public view {
+        assertTrue(registry.isRegisteredIssuer(issuer));
+        assertFalse(registry.isRegisteredBorrower(issuer));
     }
 
     /// Both ends of the loan must be admitted before either can be named.

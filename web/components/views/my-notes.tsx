@@ -16,7 +16,7 @@ import {
 import { useHoldings, type Holding } from "@/lib/portfolio";
 import { useClaim } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
-import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+import { CURRENCY_DECIMALS } from "@tokenforge/core";
 
 /**
  * What the connected wallet holds.

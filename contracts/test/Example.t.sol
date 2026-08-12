@@ -41,7 +41,7 @@ contract ExampleTest is Test {
         IssuerRegistry registry = new IssuerRegistry(address(this));
         NoteFactory factory = new NoteFactory(registry);
         usdg = new MockUSDG();
-        registry.admitIssuer(borrower, "Borrower Co", "Delaware, USA");
+        registry.admitBorrower(borrower, "Borrower Co", "Delaware, USA");
         registry.admitIssuer(issuer, "Example Co", "Delaware, USA");
         usdg.mint(issuer, 10_000e6);
 

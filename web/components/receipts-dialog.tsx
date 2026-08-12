@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSchedule, useVaultProgress, useNoteState } from "@/lib/repayment";
-import { CURRENCY_DECIMALS } from "@/lib/contracts/mint";
+import { CURRENCY_DECIMALS } from "@tokenforge/core";
 import type { Currency } from "@tokenforge/core";
 
 /**

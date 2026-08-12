@@ -120,10 +120,10 @@ contract NoteFactory {
         if (!registry.isRegisteredIssuer(params.issuer)) {
             revert IssuerNotRegistered(params.issuer);
         }
-        // The borrower is admitted through the same registry. It is really a
-        // list of counterparties this deployment will deal with, and a loan
-        // needs both ends of it vouched for.
-        if (!registry.isRegisteredIssuer(params.borrower)) {
+        // A separate roll from the issuers. Both ends of a loan are vouched
+        // for, but for different things: being allowed to owe money is not
+        // being allowed to create notes.
+        if (!registry.isRegisteredBorrower(params.borrower)) {
             revert BorrowerNotRegistered(params.borrower);
         }
         if (!registry.isAuthorizedRepresentative(params.issuer, msg.sender)) {

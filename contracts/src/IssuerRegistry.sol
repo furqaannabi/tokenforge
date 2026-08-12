@@ -30,12 +30,28 @@ contract IssuerRegistry {
 
     mapping(address issuer => Issuer) private _issuers;
 
+    /**
+     * @notice Counterparties admitted to borrow, which is not the same right.
+     *
+     * @dev Both ends of a loan must be vouched for, but they are vouched for to
+     *      do different things. Reading borrowers out of the issuer list, as an
+     *      earlier version did, quietly handed every admitted borrower the
+     *      right to mint — a company allowed to owe money became a company
+     *      allowed to create notes. An address may hold both roles, by being
+     *      admitted twice.
+     */
+    mapping(address borrower => Issuer) private _borrowers;
+
     /// @dev An issuer is always its own representative; extras are opt-in.
     mapping(address issuer => mapping(address representative => bool))
         private _representatives;
 
     event IssuerAdmitted(address indexed issuer, string name, string jurisdiction);
     event IssuerRevoked(address indexed issuer);
+    event BorrowerAdmitted(
+        address indexed borrower, string name, string jurisdiction
+    );
+    event BorrowerRevoked(address indexed borrower);
     event RepresentativeSet(
         address indexed issuer, address indexed representative, bool authorized
     );
@@ -58,6 +74,38 @@ contract IssuerRegistry {
         if (admin_ == address(0)) revert ZeroAddress();
         admin = admin_;
         emit AdminTransferred(address(0), admin_);
+    }
+
+    /// @notice Admits a counterparty to be named as a borrower.
+    function admitBorrower(
+        address borrower,
+        string calldata name,
+        string calldata jurisdiction
+    ) external onlyAdmin {
+        if (borrower == address(0)) revert ZeroAddress();
+        Issuer storage record = _borrowers[borrower];
+        if (record.registered) revert AlreadyRegistered();
+
+        record.name = name;
+        record.jurisdiction = jurisdiction;
+        record.registered = true;
+        if (record.admittedAt == 0) record.admittedAt = uint64(block.timestamp);
+
+        emit BorrowerAdmitted(borrower, name, jurisdiction);
+    }
+
+    function revokeBorrower(address borrower) external onlyAdmin {
+        if (!_borrowers[borrower].registered) revert NotRegistered();
+        _borrowers[borrower].registered = false;
+        emit BorrowerRevoked(borrower);
+    }
+
+    function isRegisteredBorrower(address borrower) external view returns (bool) {
+        return _borrowers[borrower].registered;
+    }
+
+    function borrowerInfo(address borrower) external view returns (Issuer memory) {
+        return _borrowers[borrower];
     }
 
     // -----------------------------------------------------------------------
