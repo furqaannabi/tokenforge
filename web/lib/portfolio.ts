@@ -151,7 +151,15 @@ export function useNotesMarket() {
     [minted, reads.data],
   );
 
-  return { rows, isPending, isError };
+  /*
+   * A note whose borrower has not accepted is not an issued note yet. It
+   * cannot be transferred, offered, or repaid, and listing it publicly would
+   * advertise an instrument nobody has agreed to owe. Its issuer still sees it
+   * on their own tab, which is where the acceptance is being waited on.
+   */
+  const live = rows.filter((row) => row.status !== 3);
+
+  return { rows: live, pending: rows.filter((r) => r.status === 3), isPending, isError };
 }
 
 /**

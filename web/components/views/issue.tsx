@@ -5,6 +5,7 @@ import { BadgeCheck, ShieldOff, Trash2, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { X_LAYER_TESTNET } from "@/lib/wagmi";
 import { useDeleteExtraction, useExtractions } from "@/lib/queries";
+import { useNotesMarket } from "@/lib/portfolio";
 import { money, percent, monthYear, truncateHex } from "@/lib/format";
 import Link from "next/link";
 import { FieldLabel, Stamp } from "@/components/primitives";
@@ -30,6 +31,7 @@ import {
 export function IssueView() {
   const { issuer, connected, address } = useWallet();
   const extractions = useExtractions();
+  const market = useNotesMarket();
 
   /*
    * This tab is the issuer's own desk, so it shows their own work. Pending ones
@@ -47,6 +49,15 @@ export function IssueView() {
     extractions.data?.filter(
       (e) => e.status === "MINTED" && mine(e.note?.issuerAddress),
     ) ?? [];
+
+  /*
+   * Minted, but the borrower has not accepted, so it is absent from the public
+   * list. The issuer is the one waiting on that signature, so this is where it
+   * has to appear or nobody would know it was stuck.
+   */
+  const awaitingAcceptance = market.pending.filter((row) =>
+    mine(row.note.issuerAddress),
+  );
 
   return (
     <div>
@@ -69,6 +80,47 @@ export function IssueView() {
         <IssuerPanel />
       </div>
 
+
+      {awaitingAcceptance.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="mb-1 text-lg font-semibold">Awaiting acceptance</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Minted, and not listed publicly until the borrower signs. Until then
+            it cannot be transferred, offered, or repaid.
+          </p>
+          <Card className="py-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Note</TableHead>
+                  <TableHead>Borrower</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {awaitingAcceptance.map((row) => (
+                  <TableRow key={row.extraction.id}>
+                    <TableCell className="font-medium">
+                      {row.note.name}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {row.extraction.terms.borrower.value}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link
+                        href={`/note/${row.extraction.id}`}
+                        className="text-sm hover:text-verified"
+                      >
+                        View
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </section>
+      ) : null}
 
       {pending.length > 0 ? (
         <section className="mt-8">
