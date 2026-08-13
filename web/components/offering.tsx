@@ -239,8 +239,11 @@ function IssuerOffering({
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {tokens(amount)} tokens at {money(offer?.price ?? par, decimals)}{" "}
-              {currency} each — par, computed by the desk from this note&rsquo;s
-              principal. There is no price to set.
+              {currency} each — par, computed by the desk from this
+              note&rsquo;s principal. There is no price to set. A 0.25%
+              protocol fee comes out of the proceeds, so a full sale nets{" "}
+              {money(proceeds - (proceeds === 0n ? 0n : ceilDiv(proceeds * 25n, 10_000n)), decimals)}{" "}
+              {currency}.
               {wanted > position.balance
                 ? " Capped at what you still hold."
                 : ""}
@@ -356,12 +359,21 @@ function InvestorOffering({
   }
 
   // Rounded down, so the tokens derived from a budget never cost more than it.
-  const amount =
-    offer.price > 0n ? (spend * 10n ** 18n) / offer.price : 0n;
+  /*
+   * The amount typed is what leaves the wallet, so the fee comes out of it
+   * before tokens are derived. Deriving from the gross and adding the fee on
+   * top would charge more than the figure the buyer entered.
+   */
+  const net = (spend * 10_000n) / 10_025n;
+  const amount = offer.price > 0n ? (net * 10n ** 18n) / offer.price : 0n;
 
   // Rounded up, matching `SaleDesk.quote`. Rounding down here would display a
   // figure one unit under what the contract actually charges.
   const cost = ceilDiv(amount * offer.price, 10n ** 18n);
+  // 25 bps, matching `SaleDesk.feeOn`, which rounds up for the same reason
+  // `quote` does: a trade small enough to round the fee to zero would be free.
+  const buyerFee = cost === 0n ? 0n : ceilDiv(cost * 25n, 10_000n);
+  const total = cost + buyerFee;
   const tooMuch = amount > offer.available;
   const maxSpend = ceilDiv(offer.available * offer.price, 10n ** 18n);
 
@@ -372,7 +384,7 @@ function InvestorOffering({
    * that always fails is worse than no button.
    */
   const affordable = balance < maxSpend ? balance : maxSpend;
-  const shortOfFunds = cost > balance;
+  const shortOfFunds = total > balance;
   const busy = buy.isApproving || buy.isBuying;
 
   const onBuy = async () => {
@@ -381,7 +393,9 @@ function InvestorOffering({
       // A little headroom on the cap: the price is read on-chain at execution,
       // and a note that amortizes between quote and confirmation would
       // otherwise revert a buy the investor had already approved.
-      await buy.run(amount, cost + cost / 100n);
+      // A little headroom over the quoted total, for a note that amortizes
+      // between the quote on screen and the transaction landing.
+      await buy.run(amount, total + total / 100n);
       setSpendInput("");
       onChange();
     } catch (cause) {
@@ -481,18 +495,35 @@ function InvestorOffering({
                 </span>
               </span>
             </div>
-            <div className="mt-1 flex items-baseline justify-between gap-3">
-              <span className="text-xs text-muted-foreground">You pay</span>
-              <span className="tnum text-xs text-muted-foreground">
-                {money(cost, decimals)} {currency}
-              </span>
+            <div className="mt-2 space-y-1 border-t border-border pt-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-muted-foreground">Price</span>
+                <span className="tnum text-xs text-muted-foreground">
+                  {money(cost, decimals)} {currency}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-muted-foreground">
+                  Protocol fee (0.25%)
+                </span>
+                <span className="tnum text-xs text-muted-foreground">
+                  {money(buyerFee, decimals)} {currency}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-medium">You pay</span>
+                <span className="tnum text-xs font-medium">
+                  {money(total, decimals)} {currency}
+                </span>
+              </div>
             </div>
           </div>
 
           {shortOfFunds && !tooMuch ? (
             <p className="text-xs text-review">
               That is more than this wallet holds — you have{" "}
-              {money(balance, decimals)} {currency}.
+              {money(balance, decimals)} {currency}, and this costs{" "}
+              {money(total, decimals)} with the fee.
             </p>
           ) : null}
 

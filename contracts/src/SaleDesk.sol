@@ -47,6 +47,31 @@ contract SaleDesk is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /**
+     * @notice Protocol fee on a primary sale, in basis points, charged to each
+     *         side. 25 bps is 0.25%.
+     *
+     * @dev Immutable, and set once at deployment. A desk that could reprice its
+     *      own cut after an offer opened would let the protocol change what a
+     *      sale costs between a buyer's quote and their confirmation — the same
+     *      objection that took the price out of the issuer's hands.
+     *
+     *      Charged symmetrically: the buyer pays the price plus 25 bps, the
+     *      seller receives the price less 25 bps. On a 1,000 sale the buyer
+     *      pays 1,002.50, the seller receives 997.50, and 5.00 reaches the
+     *      treasury. Quoting one side only would have hidden half the cost from
+     *      whichever party did not see it.
+     */
+    uint16 public constant FEE_BPS = 25;
+
+    uint16 private constant BPS = 10_000;
+
+    /// @notice Where the fee goes. Immutable for the same reason as the rate.
+    address public immutable treasury;
+
+    /// @notice Fee collected per note, both sides together.
+    mapping(address note => uint256) public feesCollected;
+
+    /**
      * @notice An open offering.
      * @dev No price is stored, because the issuer does not set one. A token is
      *      a claim on one unit of principal, so the price follows from the
@@ -76,6 +101,12 @@ contract SaleDesk is ReentrancyGuard {
         uint256 amount,
         uint256 cost
     );
+    /// @dev Both legs of the fee for one trade, so the take is auditable.
+    event FeeCharged(
+        address indexed note,
+        uint256 fromBuyer,
+        uint256 fromSeller
+    );
     event Swept(address indexed note, uint256 amount);
 
     error NotIssuer(address note, address caller);
@@ -85,6 +116,12 @@ contract SaleDesk is ReentrancyGuard {
     error ZeroAmount();
     error NoteNotActive(address note);
     error CostAboveMax();
+    error ZeroTreasury();
+
+    constructor(address treasury_) {
+        if (treasury_ == address(0)) revert ZeroTreasury();
+        treasury = treasury_;
+    }
 
     modifier onlyIssuer(address note) {
         address issuer = IRWANote(note).issuer();
@@ -207,20 +244,36 @@ contract SaleDesk is ReentrancyGuard {
         if (amount > pool) revert InsufficientPool(note, amount, pool);
 
         uint256 cost = quote(note, amount);
-        if (cost > maxCost) revert CostAboveMax();
+
+        /*
+         * `maxCost` covers everything the buyer parts with, fee included.
+         * Capping the price alone would let the total exceed the number they
+         * agreed to, which is precisely what the cap exists to prevent.
+         */
+        uint256 buyerFee = feeOn(cost);
+        uint256 sellerFee = feeOn(cost);
+        uint256 charged = cost + buyerFee;
+        if (charged > maxCost) revert CostAboveMax();
 
         address vault = IRWANote(note).vault();
         IERC20 currency = IERC20(IRepaymentVault(vault).currency());
 
         raised[note] += cost;
+        feesCollected[note] += buyerFee + sellerFee;
 
-        // Paid straight to the seller rather than held here. This desk is a
-        // counter, not an escrow: it never holds anyone's money between calls,
-        // so there is no balance for a bug elsewhere to drain.
-        currency.safeTransferFrom(msg.sender, offer.seller, cost);
+        /*
+         * Paid straight through rather than held here. This desk is a counter,
+         * not an escrow: it never holds anyone's money between calls, so there
+         * is no balance for a bug elsewhere to drain. The seller's fee is
+         * deducted on the way past rather than billed afterwards, so there is
+         * no moment where the protocol is owed something it has to chase.
+         */
+        currency.safeTransferFrom(msg.sender, offer.seller, cost - sellerFee);
+        currency.safeTransferFrom(msg.sender, treasury, buyerFee + sellerFee);
         IERC20(note).safeTransfer(msg.sender, amount);
 
         emit Bought(note, msg.sender, amount, cost);
+        emit FeeCharged(note, buyerFee, sellerFee);
     }
 
     function _fund(address note, uint256 amount) private {
@@ -229,6 +282,38 @@ contract SaleDesk is ReentrancyGuard {
     }
 
     // --- Quotes -------------------------------------------------------------
+
+    /**
+     * @notice One side's fee on a given price. Rounded up.
+     *
+     * Up rather than down for the same reason `quote` rounds up: a trade small
+     * enough to round the fee to zero would otherwise be free, and "free below
+     * a threshold" is not a property a fee should have.
+     */
+    function feeOn(uint256 price_) public pure returns (uint256) {
+        if (price_ == 0) return 0;
+        return (price_ * FEE_BPS + BPS - 1) / BPS;
+    }
+
+    /// @notice Everything a buyer parts with for `amount`: price plus their fee.
+    function totalCost(address note, uint256 amount)
+        external
+        view
+        returns (uint256)
+    {
+        uint256 cost = quote(note, amount);
+        return cost + feeOn(cost);
+    }
+
+    /// @notice What the seller keeps from a sale of `amount`.
+    function sellerProceeds(address note, uint256 amount)
+        external
+        view
+        returns (uint256)
+    {
+        uint256 cost = quote(note, amount);
+        return cost - feeOn(cost);
+    }
 
     /// @notice Tokens currently for sale.
     function available(address note) public view returns (uint256) {

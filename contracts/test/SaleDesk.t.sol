@@ -37,6 +37,7 @@ abstract contract SaleFixture is Test {
     address internal borrower = makeAddr("borrower");
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
+    address internal treasury = makeAddr("treasury");
 
     uint64 internal constant START = 1_790_812_800;
     uint64 internal constant PERIOD = 30 days;
@@ -52,7 +53,7 @@ abstract contract SaleFixture is Test {
         registry = new IssuerRegistry(admin);
         factory = new NoteFactory(registry);
         usdg = new MockUSDG();
-        desk = new SaleDesk();
+        desk = new SaleDesk(treasury);
 
         vm.prank(admin);
         registry.admitIssuer(issuer, "Northbridge Credit Partners", "Delaware, USA");
@@ -201,12 +202,16 @@ contract SaleDeskBuyTest is SaleFixture {
         uint256 issuerBefore = usdg.balanceOf(issuer);
 
         vm.startPrank(alice);
-        usdg.approve(address(desk), 100e6);
-        desk.buy(address(note), 100e18, 100e6);
+        usdg.approve(address(desk), 101e6);
+        desk.buy(address(note), 100e18, 101e6);
         vm.stopPrank();
 
         assertEq(note.balanceOf(alice), 100e18, "alice holds what she bought");
-        assertEq(usdg.balanceOf(issuer) - issuerBefore, 100e6, "issuer received par");
+        assertEq(
+            usdg.balanceOf(issuer) - issuerBefore,
+            100e6 - 0.25e6,
+            "issuer received par less their side of the fee"
+        );
         assertEq(desk.available(address(note)), 400e18, "pool shrank by the sale");
         assertEq(desk.raised(address(note)), 100e6);
     }
@@ -244,6 +249,84 @@ contract SaleDeskBuyTest is SaleFixture {
         );
         desk.buy(address(note), 1e18, 100e6);
         vm.stopPrank();
+    }
+
+    /**
+     * The fee, both legs of it, on a round trade.
+     *
+     * 0.25% each side of a 100 sale: the buyer parts with 100.25, the seller
+     * keeps 99.75, and the treasury takes 0.50. The buyer receives the tokens
+     * they paid the price for — the fee buys nothing extra, which is what makes
+     * it a fee rather than a worse price.
+     */
+    function test_BothSidesPayTwentyFiveBasisPoints() public {
+        _openAtPar(10_000);
+
+        uint256 buyerBefore = usdg.balanceOf(alice);
+        uint256 sellerBefore = usdg.balanceOf(issuer);
+        uint256 treasuryBefore = usdg.balanceOf(treasury);
+
+        vm.startPrank(alice);
+        usdg.approve(address(desk), 200e6);
+        desk.buy(address(note), 100e18, 200e6);
+        vm.stopPrank();
+
+        assertEq(buyerBefore - usdg.balanceOf(alice), 100.25e6, "buyer paid price plus 25bps");
+        assertEq(usdg.balanceOf(issuer) - sellerBefore, 99.75e6, "seller kept price less 25bps");
+        assertEq(usdg.balanceOf(treasury) - treasuryBefore, 0.5e6, "treasury took both legs");
+        assertEq(note.balanceOf(alice), 100e18, "the fee bought no extra tokens");
+    }
+
+    /// Nothing is lost between the three of them.
+    function test_TheThreeLegsReconcile() public {
+        _openAtPar(10_000);
+
+        uint256 buyerBefore = usdg.balanceOf(alice);
+        uint256 sellerBefore = usdg.balanceOf(issuer);
+        uint256 treasuryBefore = usdg.balanceOf(treasury);
+
+        vm.startPrank(alice);
+        usdg.approve(address(desk), 500e6);
+        desk.buy(address(note), 333e18, 500e6);
+        vm.stopPrank();
+
+        uint256 paid = buyerBefore - usdg.balanceOf(alice);
+        uint256 received = usdg.balanceOf(issuer) - sellerBefore;
+        uint256 fee = usdg.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(paid, received + fee, "every unit the buyer paid arrived somewhere");
+        assertEq(fee, desk.feesCollected(address(note)));
+    }
+
+    /// The cap covers the fee too, or it would not be a cap on what is paid.
+    function test_MaxCostIncludesTheBuyersFee() public {
+        _openAtPar(10_000);
+
+        vm.startPrank(alice);
+        usdg.approve(address(desk), 200e6);
+        // 100 tokens cost 100 plus 0.25 of fee; a cap of exactly 100 is short.
+        vm.expectRevert(SaleDesk.CostAboveMax.selector);
+        desk.buy(address(note), 100e18, 100e6);
+        vm.stopPrank();
+    }
+
+    /// The quoted totals match what the transfer actually moves.
+    function test_QuotedTotalsMatchTheTrade() public {
+        _openAtPar(10_000);
+
+        uint256 total = desk.totalCost(address(note), 100e18);
+        uint256 proceeds = desk.sellerProceeds(address(note), 100e18);
+
+        uint256 buyerBefore = usdg.balanceOf(alice);
+        uint256 sellerBefore = usdg.balanceOf(issuer);
+
+        vm.startPrank(alice);
+        usdg.approve(address(desk), total);
+        desk.buy(address(note), 100e18, total);
+        vm.stopPrank();
+
+        assertEq(buyerBefore - usdg.balanceOf(alice), total);
+        assertEq(usdg.balanceOf(issuer) - sellerBefore, proceeds);
     }
 
     /**
@@ -289,8 +372,8 @@ contract SaleDeskPoolTest is SaleFixture {
         _openAtPar(4_000);
 
         vm.startPrank(alice);
-        usdg.approve(address(desk), 100e6);
-        desk.buy(address(note), 100e18, 100e6);
+        usdg.approve(address(desk), 101e6);
+        desk.buy(address(note), 100e18, 101e6);
         vm.stopPrank();
 
         // 300 unsold remain; the issuer reclaims 200 of them.
@@ -365,8 +448,8 @@ contract SaleDeskAmortizationTest is SaleFixture {
         _settle();
 
         vm.startPrank(alice);
-        usdg.approve(address(desk), 100e6);
-        desk.buy(address(note), 100e18, 100e6);
+        usdg.approve(address(desk), 101e6);
+        desk.buy(address(note), 100e18, 101e6);
         vm.stopPrank();
 
         assertEq(
