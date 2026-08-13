@@ -864,21 +864,27 @@ function MintFooter({
   onMint: () => void;
   issuerVerified: boolean;
 }) {
+  const reasons = [
+    ...gate.blockers,
+    ...(borrowerReady
+      ? []
+      : [
+          "Name the borrower's wallet above. The factory rejects a mint without one, and the note would have nobody to accept it.",
+        ]),
+  ];
   return (
     <div className="border-t border-border bg-card px-4 py-3 sm:px-5 sm:py-4">
-      {gate.canMint && !borrowerReady ? (
-        <p className="mb-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-          <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-review" />
-          <span>
-            Name the borrower&rsquo;s wallet. The factory rejects a mint without
-            one, and the note has nobody to accept it.
-          </span>
-        </p>
-      ) : null}
-
-      {gate.canMint ? null : (
+      {/*
+        Every reason at once, including the borrower.
+        
+        The borrower hint used to appear only once everything else passed, so
+        while a field still needed review the button sat disabled with nothing
+        saying a wallet was also required — which reads as permanently broken
+        rather than as a step not yet done.
+      */}
+      {reasons.length > 0 ? (
         <ul className="mb-3 space-y-1.5">
-          {gate.blockers.map((blocker, index) => (
+          {reasons.map((reason, index) => (
             <li
               key={index}
               className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
@@ -888,11 +894,11 @@ function MintFooter({
               ) : (
                 <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-review" />
               )}
-              <span>{blocker}</span>
+              <span>{reason}</span>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
 
       {error ? (
         <p className="mb-2 flex items-start gap-1.5 text-xs text-impaired">
@@ -934,7 +940,7 @@ function MintFooter({
         <Button
           size="lg"
           onClick={onRequest}
-          disabled={!gate.canMint || !borrowerReady || requesting}
+          disabled={reasons.length > 0 || requesting}
           className="w-full"
         >
           {requesting ? (
