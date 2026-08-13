@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  usePublicClient,
   useReadContract,
   useReadContracts,
   useWaitForTransactionReceipt,
@@ -118,6 +119,7 @@ export function useNoteAllowance(note?: `0x${string}`, owner?: `0x${string}`) {
  * was granted for.
  */
 export function useFundOffer(note?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const approve = useWriteContract();
   const fund = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -147,13 +149,18 @@ export function useFundOffer(note?: `0x${string}`) {
       }
 
       if (amount > 0n) {
-        await approve.writeContractAsync({
+        const hash = await approve.writeContractAsync({
           abi: rwaNoteAbi,
           address: note,
           functionName: "approve",
           args: [addresses.saleDesk, amount],
           chainId: CHAIN_ID,
         });
+        // Mined, not merely broadcast. Sending the next call immediately runs
+        // its transferFrom against an allowance that does not exist yet, and
+        // the desk reverts for a reason that has already stopped being true by
+        // the time anyone looks.
+        await publicClient?.waitForTransactionReceipt({ hash });
       }
 
       return fund.writeContractAsync({
@@ -175,6 +182,7 @@ export function useFundOffer(note?: `0x${string}`) {
  * address arrives with the mint receipt and has to be passed to `run` instead.
  */
 export function useOpenOfferFor() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const approve = useWriteContract();
   const open = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -198,13 +206,14 @@ export function useOpenOfferFor() {
       }
       if (amount <= 0n) return undefined;
 
-      await approve.writeContractAsync({
+      const approvalHash = await approve.writeContractAsync({
         abi: rwaNoteAbi,
         address: note,
         functionName: "approve",
         args: [addresses.saleDesk, amount],
         chainId: CHAIN_ID,
       });
+      await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
 
       return open.writeContractAsync({
         abi: saleDeskAbi,
@@ -268,6 +277,7 @@ export function useCloseOffer(note?: `0x${string}`) {
  * transaction lands, and this is what stops that becoming the buyer's problem.
  */
 export function useBuyFromOffer(note?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const approve = useWriteContract();
   const buy = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -291,13 +301,14 @@ export function useBuyFromOffer(note?: `0x${string}`) {
         throw new Error("Contract addresses are not configured.");
       }
 
-      await approve.writeContractAsync({
+      const approvalHash = await approve.writeContractAsync({
         abi: erc20Abi,
         address: addresses.usdg,
         functionName: "approve",
         args: [addresses.saleDesk, maxCost],
         chainId: CHAIN_ID,
       });
+      await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
 
       return buy.writeContractAsync({
         abi: saleDeskAbi,

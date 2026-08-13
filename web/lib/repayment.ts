@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  usePublicClient,
   useReadContract,
   useReadContracts,
   useWaitForTransactionReceipt,
@@ -227,6 +228,7 @@ export function useAllowance(owner?: `0x${string}`, spender?: `0x${string}`) {
  * issuer's balance after the payment it was granted for.
  */
 export function useSettlePeriod(vault?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const approve = useWriteContract();
   const settle = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -252,13 +254,17 @@ export function useSettlePeriod(vault?: `0x${string}`) {
       }
 
       if (currentAllowance < amount) {
-        await approve.writeContractAsync({
+        const approvalHash = await approve.writeContractAsync({
           abi: erc20Abi,
           address: addresses.usdg,
           functionName: "approve",
           args: [vault, amount],
           chainId: CHAIN_ID,
         });
+
+        // Mined before the pull, or `settleNextPeriod` runs its transferFrom
+        // against an allowance that has not landed yet.
+        await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
       }
 
       return settle.writeContractAsync({
