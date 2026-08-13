@@ -13,6 +13,7 @@ import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
+import { ask } from "./zoya";
 import { isAddress } from "viem";
 import {
   documentKey,
@@ -673,6 +674,19 @@ app.get("/extractions/:id/mint-args", async (c) => {
   return c.json({ mintRequest: jsonSafe(extraction.mintRequest) });
 });
 
+/**
+ * The assistant.
+ *
+ * Every figure she returns came from a tool that read the chain or the
+ * database; none of those tools can write. `sources` names what ran, so an
+ * answer can be checked rather than taken on faith.
+ */
+app.post("/zoya/messages", async (c) => {
+  const body = zoyaSchema.parse(await c.req.json());
+  const turn = await ask(body);
+  return c.json(jsonSafe(turn));
+});
+
 /** The admin's queue: everything waiting to be cleared for minting. */
 app.get("/mint-requests", async (c) => {
   const extractions = await prisma.extraction.findMany({
@@ -708,6 +722,17 @@ app.get("/extractions/:id/mint-gate", async (c) => {
   });
 
   return c.json({ gate });
+});
+
+const zoyaSchema = z.object({
+  message: z.string().min(1).max(4_000),
+  history: z.array(z.any()).max(40).optional(),
+  context: z
+    .object({
+      extractionId: z.string().optional(),
+      address: z.string().optional(),
+    })
+    .optional(),
 });
 
 const provenanceRequestSchema = z.object({
