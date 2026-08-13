@@ -15,7 +15,12 @@ import {
 import { useState } from "react";
 import Link from "next/link";
 import { useApplications, useMintRequests } from "@/lib/queries";
-import { useApproveMint, useIsMintApproved } from "@/lib/registry";
+import {
+  useAdmitBorrower,
+  useApproveMint,
+  useIsMintApproved,
+  useIsRegisteredBorrower,
+} from "@/lib/registry";
 import { money } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useIsRegistryAdmin } from "@/lib/registry";
@@ -302,6 +307,8 @@ function ApproveAction({
     request?.issuer,
     request?.mintHash,
   );
+  const { registered } = useIsRegisteredBorrower(request?.borrower);
+  const admit = useAdmitBorrower();
 
   if (approved) {
     return (
@@ -311,9 +318,51 @@ function ApproveAction({
     );
   }
 
+  /*
+   * Nothing to approve until the borrower has agreed.
+   *
+   * The admin is signing off on a loan that a named company will owe. Clearing
+   * it before that company has accepted would have the registry vouch for an
+   * obligation nobody had consented to, and the mint would be refused anyway.
+   */
+  if (!request?.borrowerAccepted) {
+    return (
+      <Stamp tone="review">Awaiting the borrower</Stamp>
+    );
+  }
+
+  /*
+   * Admitting the borrower is part of approving, not a separate errand.
+   *
+   * The factory refuses a borrower the registry does not know, so approving
+   * without it produces a mint that reverts for a reason nobody saw coming.
+   * The name comes from the agreement — the same name the provenance check
+   * held this wallet against.
+   */
+  const run = async () => {
+    if (!registered) {
+      await admit.admit(
+        request.borrower,
+        extraction.terms.borrower.value,
+        "—",
+      );
+    }
+    onApprove();
+  };
+
   return (
-    <Button size="sm" disabled={busy || isLoading} onClick={onApprove}>
-      {busy ? "Approving…" : "Approve mint"}
+    <Button
+      size="sm"
+      disabled={busy || isLoading || admit.isPending}
+      onClick={run}
+    >
+      {admit.isPending
+        ? "Admitting borrower…"
+        : busy
+          ? "Approving…"
+          : registered
+            ? "Approve mint"
+            : "Admit borrower & approve"}
     </Button>
   );
 }

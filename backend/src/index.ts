@@ -871,6 +871,62 @@ const acceptanceSchema = z.object({
  * factory would refuse the result, which is correct but arrives as an
  * unexplained revert.
  */
+/**
+ * The borrower agrees to the terms, before anything is minted.
+ *
+ * `RWANote.accept()` cannot serve here: it is a function on a note that does
+ * not exist yet, so on-chain acceptance can only ever come after issuance. A
+ * signature over the mint hash gives the same assurance earlier and costs the
+ * borrower no gas — they sign those exact parameters, and the factory refuses
+ * any others, so agreeing to this hash is agreeing to that note and no other.
+ *
+ * Checked against the borrower named in the request rather than whoever posted
+ * it. A signature from the wrong wallet is not acceptance.
+ */
+app.post("/extractions/:id/borrower-acceptance", async (c) => {
+  const id = c.req.param("id");
+  const body = acceptanceSchema.parse(await c.req.json());
+
+  const extraction = await prisma.extraction.findUnique({ where: { id } });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  const request = extraction.mintRequest as
+    | { borrower: string; mintHash: string }
+    | null;
+  if (!request) {
+    throw new HTTPException(409, {
+      message: "No mint has been requested, so there are no terms to accept.",
+    });
+  }
+
+  const valid = await verifyMessage({
+    address: request.borrower as `0x${string}`,
+    message: acceptanceMessage(request.mintHash),
+    signature: body.signature as `0x${string}`,
+  });
+  if (!valid) {
+    throw new HTTPException(401, {
+      message:
+        "That signature is not from the wallet named as borrower on this note.",
+    });
+  }
+
+  const updated = await prisma.extraction.update({
+    where: { id },
+    data: {
+      mintRequest: asJson({
+        ...(extraction.mintRequest as object),
+        borrowerAccepted: {
+          signature: body.signature,
+          at: new Date().toISOString(),
+        },
+      }),
+    },
+  });
+
+  return c.json({ extraction: jsonSafe(updated) });
+});
+
 app.get("/extractions/:id/mint-args", async (c) => {
   const extraction = await prisma.extraction.findUnique({
     where: { id: c.req.param("id") },
@@ -957,11 +1013,11 @@ app.get("/extractions/:id/mint-gate", async (c) => {
 
   /*
    * A fact about this request rather than about the terms, so it is added here
-   * rather than inside `mintGate`, which has no idea a mint was asked for.
+   * rather than inside the validator, which has no idea a mint was asked for.
    */
-  const pendingRequest = extraction.mintRequest as {
-    borrowerAccepted?: unknown;
-  } | null;
+  const pendingRequest = extraction.mintRequest as
+    | { borrowerAccepted?: unknown }
+    | null;
   if (pendingRequest && !pendingRequest.borrowerAccepted) {
     gate.blockers.push(
       "The borrower has not accepted these terms yet. Nothing is minted until they do.",

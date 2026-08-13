@@ -65,6 +65,40 @@ export function useIsMintApproved(
   return { ...query, approved: query.data === true };
 }
 
+/** Whether an address may be named as a borrower. */
+export function useIsRegisteredBorrower(address?: `0x${string}`) {
+  const query = useReadContract({
+    abi: issuerRegistryAbi,
+    address: addresses.issuerRegistry,
+    functionName: "isRegisteredBorrower",
+    args: address ? [address] : undefined,
+    chainId: CHAIN_ID,
+    query: { enabled: Boolean(address && contractsConfigured) },
+  });
+  return { ...query, registered: query.data === true };
+}
+
+/** Admits a counterparty to borrow. A separate right from issuing. */
+export function useAdmitBorrower() {
+  const { writeContractAsync, isPending, error } = useWriteContract();
+  return {
+    error,
+    isPending,
+    admit: (
+      borrower: `0x${string}`,
+      name: string,
+      jurisdiction: string,
+    ) =>
+      writeContractAsync({
+        abi: issuerRegistryAbi,
+        address: issuerRegistryAddress(),
+        functionName: "admitBorrower",
+        args: [borrower, name, jurisdiction],
+        chainId: CHAIN_ID,
+      }),
+  };
+}
+
 /** The admin clears one exact mint. Signed by their own wallet, as admission is. */
 export function useApproveMint() {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
