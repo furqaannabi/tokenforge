@@ -13,7 +13,7 @@ import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
-import { ask } from "./zoya";
+import { ask, loadHistory } from "./zoya";
 import { isAddress } from "viem";
 import {
   documentKey,
@@ -683,8 +683,51 @@ app.get("/extractions/:id/mint-args", async (c) => {
  */
 app.post("/zoya/messages", async (c) => {
   const body = zoyaSchema.parse(await c.req.json());
-  const turn = await ask(body);
+  const wallet = body.context?.address?.toLowerCase() ?? null;
+
+  /*
+   * History comes from here, not from the request. A browser that supplied its
+   * own transcript could put words in her mouth and ask her to reason from
+   * them, which would defeat the one property she is built around.
+   */
+  const history = await loadHistory(body.conversationId);
+  const turn = await ask({ ...body, history });
+
+  await prisma.zoyaMessage.createMany({
+    data: [
+      {
+        conversationId: body.conversationId,
+        walletAddress: wallet,
+        role: "USER",
+        content: body.message,
+      },
+      {
+        conversationId: body.conversationId,
+        walletAddress: wallet,
+        role: "ZOYA",
+        content: turn.reply,
+        sources: asJson(turn.sources),
+      },
+    ],
+  });
+
   return c.json(jsonSafe(turn));
+});
+
+/** A thread, for the panel to restore after a reload. */
+app.get("/zoya/messages", async (c) => {
+  const conversationId = c.req.query("conversationId");
+  if (!conversationId) {
+    throw new HTTPException(400, { message: "conversationId is required." });
+  }
+
+  const messages = await prisma.zoyaMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  });
+
+  return c.json({ messages: jsonSafe(messages) });
 });
 
 /** The admin's queue: everything waiting to be cleared for minting. */
@@ -726,7 +769,8 @@ app.get("/extractions/:id/mint-gate", async (c) => {
 
 const zoyaSchema = z.object({
   message: z.string().min(1).max(4_000),
-  history: z.array(z.any()).max(40).optional(),
+  /// Groups a thread. The browser generates it and keeps it in local storage.
+  conversationId: z.string().min(8).max(64),
   context: z
     .object({
       extractionId: z.string().optional(),

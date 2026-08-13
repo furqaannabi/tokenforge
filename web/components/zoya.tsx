@@ -31,11 +31,30 @@ interface Turn {
   sources?: { tool: string }[];
 }
 
+/**
+ * The thread this browser is in.
+ *
+ * Kept in local storage so a reload resumes rather than restarts, and sent with
+ * every message. The transcript itself lives on the server — a browser that
+ * supplied its own history could put words in her mouth and ask her to reason
+ * from them.
+ */
+function conversationId(): string {
+  const KEY = "zoya-conversation";
+  let id = window.localStorage.getItem(KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
 export function Zoya() {
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [thread, setThread] = useState<string>();
 
   const { address } = useWallet();
   const pathname = usePathname();
@@ -49,13 +68,45 @@ export function Zoya() {
       ? pathname.slice("/review/".length)
       : undefined;
 
+  // `crypto.randomUUID` and localStorage are browser-only, so the id is
+  // resolved after mount rather than during render.
+  useEffect(() => setThread(conversationId()), []);
+
+  /* Restore the thread the first time the panel is opened, not on every mount:
+     most visits never open it, and this is a database round trip. */
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!open || !thread || restored.current) return;
+    restored.current = true;
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${BASE_URL}/zoya/messages?conversationId=${thread}`,
+        );
+        const data = await response.json();
+        setTurns(
+          (data.messages ?? []).map(
+            (message: { role: string; content: string; sources?: { tool: string }[] }) => ({
+              role: message.role === "USER" ? "user" : "zoya",
+              text: message.content,
+              sources: message.sources ?? undefined,
+            }),
+          ),
+        );
+      } catch {
+        // A thread that cannot be restored is not worth blocking the panel for.
+      }
+    })();
+  }, [open, thread]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
 
   const send = async () => {
     const message = draft.trim();
-    if (!message || busy) return;
+    if (!message || busy || !thread) return;
 
     setDraft("");
     setTurns((was) => [...was, { role: "user", text: message }]);
@@ -67,6 +118,7 @@ export function Zoya() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           message,
+          conversationId: thread,
           context: { extractionId, address },
         }),
       });
@@ -200,7 +252,7 @@ export function Zoya() {
           disabled={busy}
           className="text-sm"
         />
-        <Button type="submit" size="sm" disabled={busy || !draft.trim()}>
+        <Button type="submit" size="sm" disabled={busy || !draft.trim() || !thread}>
           <Send />
         </Button>
       </form>

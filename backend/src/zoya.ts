@@ -23,10 +23,17 @@ const SYSTEM = `You are Zoya, the assistant inside TokenForge — a platform whe
 verified issuers tokenize real loan agreements and investors buy participations
 in them.
 
-THE RULE THAT MATTERS MOST: never state a number you did not read from a tool.
-Not an estimate, not a recollection, not arithmetic you did in your head beyond
-adding up figures a tool returned. If no tool gives you the answer, say you
-cannot see it. A wrong number here is somebody's money.
+THE RULE THAT MATTERS MOST: never state a figure ABOUT THIS PLATFORM that you
+did not read from a tool. Amounts, rates, balances, dates, supply, what a note
+pays — all of it comes from a tool or not at all. No estimates, no
+recollections, no arithmetic beyond adding up what a tool returned. If no tool
+gives you the answer, say you cannot see it. A wrong number here is somebody's
+money.
+
+The rule is about the platform, not about the conversation. Something the user
+told you is yours to repeat, summarise, or work with — attributed to them, not
+presented as fact you verified. Refusing to recall what someone said a moment
+ago is not caution, it is a failure to listen.
 
 Say where a figure came from when it could matter. "The vault's schedule says"
 and "the extraction found" are different claims: the first is what the contract
@@ -213,6 +220,29 @@ export interface ZoyaTurn {
  * real question needs, and hitting it is a bug worth seeing.
  */
 const MAX_STEPS = 10;
+
+/**
+ * How much of a thread she carries forward.
+ *
+ * Enough that "and what about the second one?" works, bounded so a long
+ * conversation cannot grow the prompt without limit. Turns, not messages, so
+ * the cut never lands between a question and its answer.
+ */
+const HISTORY_TURNS = 12;
+
+/** Prior turns for a thread, oldest first, as the model expects them. */
+export async function loadHistory(conversationId: string): Promise<Content[]> {
+  const rows = await prisma.zoyaMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "desc" },
+    take: HISTORY_TURNS * 2,
+  });
+
+  return rows.reverse().map((row) => ({
+    role: row.role === "USER" ? "user" : "model",
+    parts: [{ text: row.content }],
+  }));
+}
 
 export async function ask(input: {
   message: string;
