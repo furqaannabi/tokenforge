@@ -91,6 +91,22 @@ export function useCheckProvenance(extractionId: string | undefined) {
   });
 }
 
+/**
+ * The words the borrower signs, identical to the service's.
+ *
+ * Carries the mint hash, so a signature cannot be lifted onto another note.
+ */
+export function acceptanceMessage(mintHash: string): string {
+  return [
+    "TokenForge \u2014 borrower acceptance",
+    "",
+    "I confirm that the company I represent is the borrower on this agreement,",
+    "and I accept the terms recorded under the following mint:",
+    "",
+    mintHash,
+  ].join("\n");
+}
+
 /** Discards an extraction. Refused by the service once a note exists. */
 export function useDeleteExtraction() {
   const queryClient = useQueryClient();

@@ -141,6 +141,8 @@ export interface ApiMintRequest {
   supplyTokens: number;
   mintHash: `0x${string}`;
   requestedAt: string;
+  /** Present once the borrower has signed for these exact terms. */
+  borrowerAccepted?: { signature: string; at: string } | null;
   args: {
     name: string;
     symbol: string;
@@ -276,6 +278,12 @@ export const api = {
     request<{ extractions: ApiExtractionSummary[] }>("/mint-requests").then(
       (r) => r.extractions,
     ),
+
+  acceptAsBorrower: (extractionId: string, signature: string) =>
+    request<{ extraction: ApiExtraction }>(
+      `/extractions/${extractionId}/borrower-acceptance`,
+      { method: "POST", body: JSON.stringify({ signature }) },
+    ).then((r) => r.extraction),
 
   deleteExtraction: (extractionId: string) =>
     request<{ deleted: string }>(`/extractions/${extractionId}`, {
