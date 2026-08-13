@@ -13,6 +13,7 @@ import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
+import { readParty } from "./chain";
 import { ask, loadHistory } from "./zoya";
 import { isAddress } from "viem";
 import {
@@ -307,6 +308,22 @@ app.post("/documents/:id/extract", async (c) => {
     },
   });
 
+  /*
+   * The provenance check runs on its own, not on a button.
+   *
+   * It answers questions a reviewer would not think to ask — whose agreement
+   * is this, and have we seen it before — and a check nobody presses is a
+   * check that does not happen. Deliberately not awaited: it costs a model
+   * call, and an extraction that succeeded should not appear to fail because
+   * a secondary check was slow. The verdict lands on the record and the review
+   * screen picks it up.
+   */
+  void runProvenance(extraction.id).catch((cause) => {
+    // Not fatal to the extraction, but not silent either: a check that fails
+    // without saying so is indistinguishable from one that passed.
+    console.error("provenance failed for", extraction.id, cause);
+  });
+
   return c.json({ extraction }, 201);
 });
 
@@ -517,23 +534,30 @@ function mergeTerms(
  * a refusal before a wallet is opened, rather than surfacing a bare revert.
  */
 /**
- * The two checks a hash cannot make: is this the issuer's document, and has
- * this agreement been tokenized already under a different file?
+ * Gathers what the check needs and runs it.
  *
- * Runs on demand rather than during extraction, because it needs to know who
- * is asking. The registered name comes from the caller — the registry is the
- * authority on membership and the chain enforces that, while this only tells a
- * reviewer whether the paperwork matches the party in front of them.
+ * Shared so the automatic run after extraction and the re-run when a borrower
+ * is named produce the same verdicts from the same evidence. Identities are
+ * read from the registry rather than taken from the caller — the question is
+ * whether a party is who they say they are, so accepting their own answer
+ * would be circular.
  */
-app.post("/extractions/:id/provenance", async (c) => {
-  const id = c.req.param("id");
-  const body = provenanceRequestSchema.parse(await c.req.json());
-
+async function runProvenance(extractionId: string, borrowerAddress?: string) {
   const extraction = await prisma.extraction.findUnique({
-    where: { id },
+    where: { id: extractionId },
     include: { document: true },
   });
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  const uploader = extraction.document?.uploadedBy;
+  if (!uploader) return null;
+
+  const issuerParty = await readParty(uploader as `0x${string}`);
+  if (!issuerParty) return null;
+
+  const borrowerParty = borrowerAddress
+    ? await readParty(borrowerAddress as `0x${string}`)
+    : null;
 
   const terms = extraction.terms as ExtractedTerms;
 
@@ -544,7 +568,7 @@ app.post("/extractions/:id/provenance", async (c) => {
    * busy issuer cannot turn one review into an enormous prompt.
    */
   const others = await prisma.extraction.findMany({
-    where: { id: { not: id } },
+    where: { id: { not: extractionId } },
     include: { document: true },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -575,17 +599,107 @@ app.post("/extractions/:id/provenance", async (c) => {
 
   const provenance = await checkProvenance({
     terms,
-    issuerName: body.issuerName,
-    issuerJurisdiction: body.issuerJurisdiction ?? "—",
+    issuer: {
+      address: uploader,
+      name: issuerParty.name,
+      jurisdiction: issuerParty.jurisdiction,
+    },
+    borrower: borrowerParty
+      ? {
+          address: borrowerAddress!,
+          name: borrowerParty.name,
+          jurisdiction: borrowerParty.jurisdiction,
+        }
+      : undefined,
     candidates,
   });
 
-  const updated = await prisma.extraction.update({
-    where: { id },
+  await prisma.extraction.update({
+    where: { id: extractionId },
     data: { provenance: asJson(provenance) },
   });
 
-  return c.json({ provenance, extraction: jsonSafe(updated), candidates });
+  return provenance;
+}
+
+/**
+ * The three checks a hash cannot make: is this the issuer's document, is the
+ * named borrower the one it names, and has this agreement been tokenized
+ * already under a different file?
+ *
+ * Runs on demand rather than during extraction, because it needs to know who
+ * is asking. The registered name comes from the caller — the registry is the
+ * authority on membership and the chain enforces that, while this only tells a
+ * reviewer whether the paperwork matches the party in front of them.
+ */
+app.post("/extractions/:id/provenance", async (c) => {
+  const body = provenanceRequestSchema.parse(await c.req.json().catch(() => ({})));
+  const provenance = await runProvenance(c.req.param("id"), body.borrowerAddress);
+
+  if (!provenance) {
+    throw new HTTPException(409, {
+      message:
+        "This document has no uploader in the registry, so there is nobody to check it against.",
+    });
+  }
+
+  return c.json({ provenance });
+});
+
+/**
+ * The assistant.
+ *
+ * Every figure she returns came from a tool that read the chain or the
+ * database; none of those tools can write. `sources` names what ran, so an
+ * answer can be checked rather than taken on faith.
+ */
+app.post("/zoya/messages", async (c) => {
+  const body = zoyaSchema.parse(await c.req.json());
+  const wallet = body.context?.address?.toLowerCase() ?? null;
+
+  /*
+   * History comes from here, not from the request. A browser that supplied its
+   * own transcript could put words in her mouth and ask her to reason from
+   * them, which would defeat the one property she is built around.
+   */
+  const history = await loadHistory(body.conversationId);
+  const turn = await ask({ ...body, history });
+
+  await prisma.zoyaMessage.createMany({
+    data: [
+      {
+        conversationId: body.conversationId,
+        walletAddress: wallet,
+        role: "USER",
+        content: body.message,
+      },
+      {
+        conversationId: body.conversationId,
+        walletAddress: wallet,
+        role: "ZOYA",
+        content: turn.reply,
+        sources: asJson(turn.sources),
+      },
+    ],
+  });
+
+  return c.json(jsonSafe(turn));
+});
+
+/** A thread, for the panel to restore after a reload. */
+app.get("/zoya/messages", async (c) => {
+  const conversationId = c.req.query("conversationId");
+  if (!conversationId) {
+    throw new HTTPException(400, { message: "conversationId is required." });
+  }
+
+  const messages = await prisma.zoyaMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  });
+
+  return c.json({ messages: jsonSafe(messages) });
 });
 
 /**
@@ -649,6 +763,15 @@ app.post("/extractions/:id/mint-request", async (c) => {
     },
   });
 
+  /*
+   * The borrower is known now, which is a question the first run could not
+   * answer — so the verdict is recomputed rather than left half-finished.
+   * Not awaited: naming a borrower should not wait on a model call.
+   */
+  void runProvenance(id, body.borrower).catch((cause) => {
+    console.error("provenance failed for", id, cause);
+  });
+
   return c.json({ extraction: jsonSafe(updated) });
 });
 
@@ -672,62 +795,6 @@ app.get("/extractions/:id/mint-args", async (c) => {
   }
 
   return c.json({ mintRequest: jsonSafe(extraction.mintRequest) });
-});
-
-/**
- * The assistant.
- *
- * Every figure she returns came from a tool that read the chain or the
- * database; none of those tools can write. `sources` names what ran, so an
- * answer can be checked rather than taken on faith.
- */
-app.post("/zoya/messages", async (c) => {
-  const body = zoyaSchema.parse(await c.req.json());
-  const wallet = body.context?.address?.toLowerCase() ?? null;
-
-  /*
-   * History comes from here, not from the request. A browser that supplied its
-   * own transcript could put words in her mouth and ask her to reason from
-   * them, which would defeat the one property she is built around.
-   */
-  const history = await loadHistory(body.conversationId);
-  const turn = await ask({ ...body, history });
-
-  await prisma.zoyaMessage.createMany({
-    data: [
-      {
-        conversationId: body.conversationId,
-        walletAddress: wallet,
-        role: "USER",
-        content: body.message,
-      },
-      {
-        conversationId: body.conversationId,
-        walletAddress: wallet,
-        role: "ZOYA",
-        content: turn.reply,
-        sources: asJson(turn.sources),
-      },
-    ],
-  });
-
-  return c.json(jsonSafe(turn));
-});
-
-/** A thread, for the panel to restore after a reload. */
-app.get("/zoya/messages", async (c) => {
-  const conversationId = c.req.query("conversationId");
-  if (!conversationId) {
-    throw new HTTPException(400, { message: "conversationId is required." });
-  }
-
-  const messages = await prisma.zoyaMessage.findMany({
-    where: { conversationId },
-    orderBy: { createdAt: "asc" },
-    take: 200,
-  });
-
-  return c.json({ messages: jsonSafe(messages) });
 });
 
 /** The admin's queue: everything waiting to be cleared for minting. */
@@ -779,16 +846,15 @@ const zoyaSchema = z.object({
     .optional(),
 });
 
-const provenanceRequestSchema = z.object({
-  /// The name the registry holds for the minting wallet.
-  issuerName: z.string().min(1).max(200),
-  issuerJurisdiction: z.string().max(120).optional(),
-});
-
 const addressLike = z
   .string()
   .refine((value) => isAddress(value, { strict: false }), "Not an address.")
   .transform((value) => value as `0x${string}`);
+
+const provenanceRequestSchema = z.object({
+  /// Named only once the issuer has chosen who repays.
+  borrowerAddress: addressLike.optional(),
+});
 
 /**
  * What the issuer chooses at issuance. Not the mint parameters themselves —

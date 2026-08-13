@@ -365,6 +365,12 @@ export interface ProvenanceVerdict {
     documentLender: string;
     reason: string;
   };
+  borrower?: {
+    matchesDocument: boolean;
+    confidence: number;
+    documentBorrower: string;
+    reason: string;
+  } | null;
   duplicate?: {
     isDuplicate: boolean;
     ofExtractionId: string | null;
@@ -434,6 +440,11 @@ export function mintGate(
   if (provenance?.ownership && !provenance.ownership.belongsToIssuer) {
     blockers.push(
       `This document names ${provenance.ownership.documentLender} as the lender, not the issuing wallet. ${provenance.ownership.reason}`,
+    );
+  }
+  if (provenance?.borrower && !provenance.borrower.matchesDocument) {
+    blockers.push(
+      `The wallet named as borrower is not the company this document says is borrowing. ${provenance.borrower.reason}`,
     );
   }
   if (provenance?.duplicate?.isDuplicate) {

@@ -1,5 +1,11 @@
 import { createPublicClient, http } from "viem";
-import { repaymentVaultAbi, rwaNoteAbi, saleDeskAbi } from "./abi";
+import { xLayerTestnet } from "viem/chains";
+import {
+  issuerRegistryAbi,
+  repaymentVaultAbi,
+  rwaNoteAbi,
+  saleDeskAbi,
+} from "./abi";
 
 /**
  * Reading the chain, for the assistant.
@@ -12,21 +18,69 @@ import { repaymentVaultAbi, rwaNoteAbi, saleDeskAbi } from "./abi";
  * one would be confidently wrong about money.
  */
 
-const CHAIN_ID = Number(process.env.CHAIN_ID ?? 1952);
 const RPC =
   process.env.XLAYER_TESTNET_RPC_URL ?? "https://xlayertestrpc.okx.com";
 
-const chain = {
-  id: CHAIN_ID,
-  name: "X Layer testnet",
-  nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
-  rpcUrls: { default: { http: [RPC] } },
-} as const;
-
+/*
+ * viem's own definition rather than a hand-rolled one.
+ *
+ * A literal with just an id, a name and an RPC looks sufficient and is not: it
+ * carries no `multicall3` address, and every batched read here fails with
+ * "Chain does not support contract multicall3". That failure stayed hidden
+ * because nothing had been minted to read, so the first thing it broke was a
+ * check running in the background with its error swallowed.
+ */
 export const publicClient = createPublicClient({
-  chain,
+  chain: xLayerTestnet,
   transport: http(RPC),
 });
+
+/**
+ * Who the registry says an address is.
+ *
+ * The name a party is admitted under is the only thing that can be compared
+ * against a document — an address means nothing to an agreement, and a company
+ * name means nothing to the chain. This is the join between them, and it is
+ * read from the registry rather than taken from the browser, because the check
+ * is precisely whether the party is who they say they are.
+ */
+export async function readParty(
+  address: `0x${string}`,
+): Promise<{ name: string; jurisdiction: string; registered: boolean } | null> {
+  const registry = process.env.ISSUER_REGISTRY_ADDRESS as
+    | `0x${string}`
+    | undefined;
+  if (!registry) return null;
+
+  const [issuer, borrower] = await publicClient.multicall({
+    contracts: [
+      {
+        abi: issuerRegistryAbi,
+        address: registry,
+        functionName: "issuerInfo",
+        args: [address],
+      },
+      {
+        abi: issuerRegistryAbi,
+        address: registry,
+        functionName: "borrowerInfo",
+        args: [address],
+      },
+    ],
+    allowFailure: true,
+  });
+
+  for (const entry of [issuer, borrower]) {
+    if (entry.status !== "success") continue;
+    const record = entry.result as {
+      name: string;
+      jurisdiction: string;
+      registered: boolean;
+    };
+    if (record.registered) return record;
+  }
+  return null;
+}
 
 /** 0 Active · 1 Impaired · 2 Matured · 3 Pending */
 export const NOTE_STATUS = ["Active", "Impaired", "Matured", "Pending"] as const;

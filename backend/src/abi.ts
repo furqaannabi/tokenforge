@@ -972,3 +972,224 @@ export const saleDeskAbi = [
       "stateMutability": "view"
     }
   ] as const;
+
+export const issuerRegistryAbi = [
+    {
+      "type": "function",
+      "name": "admin",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "borrowerInfo",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct IssuerRegistry.Issuer",
+          "components": [
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "jurisdiction",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "registered",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "admittedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isAuthorizedRepresentative",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "representative",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isMintApproved",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "mintHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isRegisteredBorrower",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isRegisteredIssuer",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "issuerInfo",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct IssuerRegistry.Issuer",
+          "components": [
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "jurisdiction",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "registered",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "admittedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "mintApproved",
+      "inputs": [
+        {
+          "name": "issuer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "mintHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingAdmin",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    }
+  ] as const;

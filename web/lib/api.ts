@@ -109,6 +109,12 @@ export interface ApiProvenance {
     documentLender: string;
     reason: string;
   };
+  borrower: {
+    matchesDocument: boolean;
+    confidence: number;
+    documentBorrower: string;
+    reason: string;
+  } | null;
   duplicate: {
     isDuplicate: boolean;
     ofExtractionId: string | null;

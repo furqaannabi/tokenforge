@@ -449,8 +449,9 @@ function ProvenanceCheck({
         <div>
           <FieldLabel>Provenance</FieldLabel>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Whether this document is yours, and whether it has been tokenized
-            before under another file.
+            Runs on its own after extraction: whether this document is yours,
+            whether the borrower wallet matches it, and whether the same
+            agreement has been tokenized before under another file.
           </p>
         </div>
         <Button
@@ -466,10 +467,8 @@ function ProvenanceCheck({
             <>
               <Loader2 className="animate-spin" /> Checking…
             </>
-          ) : result ? (
-            "Re-check"
           ) : (
-            "Run check"
+            "Re-check"
           )}
         </Button>
       </div>
@@ -492,6 +491,18 @@ function ProvenanceCheck({
             confidence={result.ownership.confidence}
             reason={result.ownership.reason}
           />
+          {result.borrower ? (
+            <Verdict
+              ok={result.borrower.matchesDocument}
+              label={
+                result.borrower.matchesDocument
+                  ? "Borrower wallet matches the agreement"
+                  : `Document names ${result.borrower.documentBorrower} as borrower`
+              }
+              confidence={result.borrower.confidence}
+              reason={result.borrower.reason}
+            />
+          ) : null}
           <Verdict
             ok={!result.duplicate.isDuplicate}
             label={

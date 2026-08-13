@@ -29,6 +29,16 @@ export const provenanceSchema = z.object({
     documentLender: z.string(),
     reason: z.string(),
   }),
+  /** Null when no borrower wallet has been named yet. */
+  borrower: z
+    .object({
+      matchesDocument: z.boolean(),
+      confidence: z.number().min(0).max(1),
+      /** The borrower exactly as the document names it. */
+      documentBorrower: z.string(),
+      reason: z.string(),
+    })
+    .nullable(),
   duplicate: z.object({
     isDuplicate: z.boolean(),
     /** The extraction this repeats, or null. */
@@ -40,7 +50,13 @@ export const provenanceSchema = z.object({
 
 export type Provenance = z.infer<typeof provenanceSchema>;
 
-/** A previously extracted agreement, reduced to what identifies it. */
+/** A party as the registry knows them, ready to be held against a document. */
+export interface Party {
+  address: string;
+  name: string;
+  jurisdiction: string;
+}
+
 export interface Candidate {
   extractionId: string;
   filename: string;
@@ -54,7 +70,7 @@ export interface Candidate {
 
 const PROMPT = `You are checking a loan agreement before it is tokenized.
 
-Answer two independent questions.
+Answer three independent questions.
 
 1. OWNERSHIP — is the party applying to tokenize this agreement the lender in
    it? You are given the name the applicant is registered under and the lender
@@ -68,7 +84,18 @@ Answer two independent questions.
    Judge the names as legal entities, not as strings. Report what the document
    actually calls the lender in documentLender, verbatim.
 
-2. DUPLICATE — does this agreement already appear among the candidates? They
+2. BORROWER — is the wallet named as borrower the same company the document
+   says is borrowing? You are given the name that wallet is registered under.
+   Judge it exactly as you judge the lender: entities, not strings. A parent
+   and a named subsidiary are not the same company; say which you think it is
+   rather than guessing quietly. If no borrower wallet has been named yet,
+   return null for this whole section rather than inventing a verdict.
+
+   This matters as much as ownership. The borrower is the party that will owe
+   the money and sign the acceptance, and naming the wrong wallet creates an
+   obligation for a company that never agreed to it.
+
+3. DUPLICATE — does this agreement already appear among the candidates? They
    have different file hashes by construction, so identical bytes are not the
    question. The question is whether two files describe the same underlying
    loan: same parties, same principal, same dates, same schedule. A re-exported
@@ -86,23 +113,27 @@ that agrees on principal but not on dates, is not unambiguous.
 Keep each reason to one or two sentences, and cite the detail that decided it.`;
 
 /**
- * Runs both checks in one call.
+ * Runs all three checks in one call.
  *
- * One call rather than two because they share the expensive context — the
+ * One call rather than three because they share the expensive context — the
  * agreement's parties and figures — and splitting it would send the same
- * material twice for no gain in answer quality.
+ * material repeatedly for no gain in answer quality.
  */
 export async function checkProvenance(input: {
   terms: ExtractedTerms;
-  issuerName: string;
-  issuerJurisdiction: string;
+  issuer: Party;
+  /** Absent until a borrower wallet has been chosen for the mint. */
+  borrower?: Party;
   candidates: Candidate[];
 }): Promise<Provenance> {
-  const { terms, issuerName, issuerJurisdiction, candidates } = input;
+  const { terms, issuer, borrower, candidates } = input;
 
   const question = [
-    `Applicant registered name: ${issuerName}`,
-    `Applicant jurisdiction: ${issuerJurisdiction}`,
+    `Applicant (issuer) registered name: ${issuer.name}`,
+    `Applicant jurisdiction: ${issuer.jurisdiction}`,
+    borrower
+      ? `Wallet named as borrower is registered as: ${borrower.name} (${borrower.jurisdiction})`
+      : "No borrower wallet has been named yet.",
     "",
     "This agreement, as extracted:",
     JSON.stringify(
@@ -148,6 +179,9 @@ export async function checkProvenance(input: {
    * trusted. The verdict stands; only the pointer is discarded.
    */
   const result = parsed.data;
+
+  // A verdict about a party nobody has named is noise, whatever the model says.
+  if (!borrower) result.borrower = null;
   if (
     result.duplicate.ofExtractionId &&
     !candidates.some((c) => c.extractionId === result.duplicate.ofExtractionId)
