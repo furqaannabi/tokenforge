@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useConnection,
   usePublicClient,
   useReadContract,
   useReadContracts,
@@ -118,8 +119,49 @@ export function useNoteAllowance(note?: `0x${string}`, owner?: `0x${string}`) {
  * leave the desk able to move the issuer's whole holding long after the sale it
  * was granted for.
  */
+
+/**
+ * Approves only when the existing allowance is short.
+ *
+ * An ERC-20 approval is a transaction: gas, a wallet prompt, and a wait. Asking
+ * for one that changes nothing is the most common way a two-step flow feels
+ * broken. The allowance is read at call time rather than from a hook, so a
+ * grant that landed a moment ago — including one from an attempt that failed
+ * further along — is seen rather than duplicated.
+ *
+ * Returns true when it actually sent one.
+ */
+async function ensureAllowance(input: {
+  publicClient: ReturnType<typeof usePublicClient>;
+  token: `0x${string}`;
+  abi: typeof erc20Abi | typeof rwaNoteAbi;
+  owner?: `0x${string}`;
+  spender: `0x${string}`;
+  amount: bigint;
+  approve: () => Promise<`0x${string}`>;
+}): Promise<boolean> {
+  const { publicClient, token, abi, owner, spender, amount } = input;
+
+  if (publicClient && owner) {
+    const current = (await publicClient.readContract({
+      abi,
+      address: token,
+      functionName: "allowance",
+      args: [owner, spender],
+    })) as bigint;
+    if (current >= amount) return false;
+  }
+
+  const hash = await input.approve();
+  // Mined, not merely broadcast: the call that spends it runs a transferFrom
+  // against an allowance that would not exist yet.
+  await publicClient?.waitForTransactionReceipt({ hash });
+  return true;
+}
+
 export function useFundOffer(note?: `0x${string}`) {
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const { address } = useConnection();
   const approve = useWriteContract();
   const fund = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -149,18 +191,22 @@ export function useFundOffer(note?: `0x${string}`) {
       }
 
       if (amount > 0n) {
-        const hash = await approve.writeContractAsync({
+        await ensureAllowance({
+          publicClient,
+          token: note,
           abi: rwaNoteAbi,
-          address: note,
-          functionName: "approve",
-          args: [addresses.saleDesk, amount],
-          chainId: CHAIN_ID,
+          owner: address,
+          spender: addresses.saleDesk,
+          amount,
+          approve: () =>
+            approve.writeContractAsync({
+              abi: rwaNoteAbi,
+              address: note,
+              functionName: "approve",
+              args: [addresses.saleDesk!, amount],
+              chainId: CHAIN_ID,
+            }),
         });
-        // Mined, not merely broadcast. Sending the next call immediately runs
-        // its transferFrom against an allowance that does not exist yet, and
-        // the desk reverts for a reason that has already stopped being true by
-        // the time anyone looks.
-        await publicClient?.waitForTransactionReceipt({ hash });
       }
 
       return fund.writeContractAsync({
@@ -183,6 +229,7 @@ export function useFundOffer(note?: `0x${string}`) {
  */
 export function useOpenOfferFor() {
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const { address } = useConnection();
   const approve = useWriteContract();
   const open = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -206,14 +253,22 @@ export function useOpenOfferFor() {
       }
       if (amount <= 0n) return undefined;
 
-      const approvalHash = await approve.writeContractAsync({
+      await ensureAllowance({
+        publicClient,
+        token: note,
         abi: rwaNoteAbi,
-        address: note,
-        functionName: "approve",
-        args: [addresses.saleDesk, amount],
-        chainId: CHAIN_ID,
+        owner: address,
+        spender: addresses.saleDesk,
+        amount,
+        approve: () =>
+          approve.writeContractAsync({
+            abi: rwaNoteAbi,
+            address: note,
+            functionName: "approve",
+            args: [addresses.saleDesk!, amount],
+            chainId: CHAIN_ID,
+          }),
       });
-      await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
 
       return open.writeContractAsync({
         abi: saleDeskAbi,
@@ -278,6 +333,7 @@ export function useCloseOffer(note?: `0x${string}`) {
  */
 export function useBuyFromOffer(note?: `0x${string}`) {
   const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const { address } = useConnection();
   const approve = useWriteContract();
   const buy = useWriteContract();
   const approveReceipt = useWaitForTransactionReceipt({
@@ -301,14 +357,22 @@ export function useBuyFromOffer(note?: `0x${string}`) {
         throw new Error("Contract addresses are not configured.");
       }
 
-      const approvalHash = await approve.writeContractAsync({
+      await ensureAllowance({
+        publicClient,
+        token: addresses.usdg,
         abi: erc20Abi,
-        address: addresses.usdg,
-        functionName: "approve",
-        args: [addresses.saleDesk, maxCost],
-        chainId: CHAIN_ID,
+        owner: address,
+        spender: addresses.saleDesk,
+        amount: maxCost,
+        approve: () =>
+          approve.writeContractAsync({
+            abi: erc20Abi,
+            address: addresses.usdg!,
+            functionName: "approve",
+            args: [addresses.saleDesk!, maxCost],
+            chainId: CHAIN_ID,
+          }),
       });
-      await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
 
       return buy.writeContractAsync({
         abi: saleDeskAbi,
