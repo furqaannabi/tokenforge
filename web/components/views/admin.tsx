@@ -15,7 +15,7 @@ import {
 import { useState } from "react";
 import Link from "next/link";
 import { useApplications, useMintRequests } from "@/lib/queries";
-import { useApproveMint } from "@/lib/registry";
+import { useApproveMint, useIsMintApproved } from "@/lib/registry";
 import { money } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useIsRegistryAdmin } from "@/lib/registry";
@@ -261,13 +261,11 @@ function MintQueue() {
                       {truncateHex(request.borrower, 6, 4)}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={pending === extraction.id}
-                    onClick={() => onApprove(extraction)}
-                  >
-                    {pending === extraction.id ? "Approving…" : "Approve mint"}
-                  </Button>
+                  <ApproveAction
+                    extraction={extraction}
+                    busy={pending === extraction.id}
+                    onApprove={() => onApprove(extraction)}
+                  />
                 </div>
                 <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
                   Approving clears exactly these parameters. The issuer signs
@@ -279,6 +277,44 @@ function MintQueue() {
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * The button, or the fact that it has already been pressed.
+ *
+ * Approval lives on the registry, not in this database, so the queue asks the
+ * chain rather than assuming. Without this an admin who had already cleared a
+ * mint saw the same row with the same live button and no sign their signature
+ * had landed — and pressing it again costs gas to change nothing.
+ */
+function ApproveAction({
+  extraction,
+  busy,
+  onApprove,
+}: {
+  extraction: ApiExtractionSummary;
+  busy: boolean;
+  onApprove: () => void;
+}) {
+  const request = extraction.mintRequest;
+  const { approved, isLoading } = useIsMintApproved(
+    request?.issuer,
+    request?.mintHash,
+  );
+
+  if (approved) {
+    return (
+      <Stamp tone="verified">
+        <BadgeCheck /> Approved
+      </Stamp>
+    );
+  }
+
+  return (
+    <Button size="sm" disabled={busy || isLoading} onClick={onApprove}>
+      {busy ? "Approving…" : "Approve mint"}
+    </Button>
   );
 }
 

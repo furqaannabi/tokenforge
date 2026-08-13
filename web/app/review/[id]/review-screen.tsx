@@ -374,22 +374,32 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                 </Table>
               </div>
             </section>
+
+            {/*
+              Issuance decisions scroll with the terms rather than stacking
+              under them. Pinned to the bottom, these four blocks plus the
+              action bar took roughly 420px of a 900px viewport and squeezed
+              the terms into a sliver — and on a shorter screen they collided.
+              Only the action bar is chrome; the rest is form.
+            */}
+            <div className="mt-6 space-y-px overflow-hidden rounded-lg border border-border">
+              <ProvenanceCheck
+                extractionId={noteId}
+                issuerName={issuer?.name}
+                issuerJurisdiction={issuer?.jurisdiction}
+                result={remote.data?.provenance ?? null}
+              />
+              <BorrowerWallet value={borrower} onChange={setBorrower} />
+              <SettlementCurrency value={currency} onChange={setCurrency} />
+              <OfferingAtIssue
+                currency={currency}
+                principal={terms.principal.value}
+                pct={salePct}
+                onPct={setSalePct}
+              />
+            </div>
           </div>
 
-          <ProvenanceCheck
-            extractionId={noteId}
-            issuerName={issuer?.name}
-            issuerJurisdiction={issuer?.jurisdiction}
-            result={remote.data?.provenance ?? null}
-          />
-          <BorrowerWallet value={borrower} onChange={setBorrower} />
-          <SettlementCurrency value={currency} onChange={setCurrency} />
-          <OfferingAtIssue
-            currency={currency}
-            principal={terms.principal.value}
-            pct={salePct}
-            onPct={setSalePct}
-          />
 
           <MintFooter
             gate={gate}
@@ -444,7 +454,7 @@ function ProvenanceCheck({
   const check = useCheckProvenance(extractionId);
 
   return (
-    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+    <div className="bg-card px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <FieldLabel>Provenance</FieldLabel>
@@ -572,7 +582,7 @@ function BorrowerWallet({
   const malformed = trimmed.length > 0 && !isAddress(trimmed, { strict: false });
 
   return (
-    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+    <div className="bg-card px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <FieldLabel>Borrower wallet</FieldLabel>
@@ -631,7 +641,7 @@ function OfferingAtIssue({
   const proceeds = poolTokens * perToken;
 
   return (
-    <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+    <div className="bg-card px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <FieldLabel>Offer for sale</FieldLabel>
@@ -691,7 +701,7 @@ function SettlementCurrency({
   onChange: (next: Currency) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 sm:px-5">
+    <div className="flex items-center justify-between gap-3 bg-card px-4 py-3 sm:px-5">
       <div>
         <FieldLabel>Settlement currency</FieldLabel>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -882,8 +892,14 @@ function MintFooter({
         saying a wallet was also required — which reads as permanently broken
         rather than as a step not yet done.
       */}
+      {/*
+        Capped, and scrolled if it needs to be. Four blocking reasons written
+        out in full grew this bar to a third of the column and pushed the terms
+        it is meant to serve off the screen — an action bar that eats the work
+        surface is worse than one that makes you scroll two lines.
+      */}
       {reasons.length > 0 ? (
-        <ul className="mb-3 space-y-1.5">
+        <ul className="mb-3 max-h-24 space-y-1.5 overflow-y-auto pr-1">
           {reasons.map((reason, index) => (
             <li
               key={index}
