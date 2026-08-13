@@ -60,6 +60,15 @@ export function Zoya() {
   const pathname = usePathname();
   const endRef = useRef<HTMLDivElement>(null);
 
+  /*
+   * The review screen is dense along its bottom-right: settlement currency,
+   * the provenance verdicts, the borrower wallet, the size of the offering,
+   * and the submit bar under all of it. A launcher in that corner covers a
+   * control whatever height it sits at. Its bottom-left is the document pane,
+   * which scrolls and has nothing to click.
+   */
+  const onReview = pathname.startsWith("/review/");
+
   // A note page is /note/[id], where the id is the extraction. Passing it lets
   // "what does this pay?" resolve without anyone quoting an id at her.
   const extractionId = pathname.startsWith("/note/")
@@ -148,7 +157,10 @@ export function Zoya() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ask Zoya"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-border bg-card py-1.5 pl-1.5 pr-4 shadow-lg transition-colors hover:border-verified"
+        className={cn(
+          "fixed z-50 flex items-center gap-2 rounded-full border border-border bg-card py-1.5 pl-1.5 pr-4 shadow-lg transition-colors hover:border-verified",
+          onReview ? "bottom-28 left-4" : "bottom-4 right-4",
+        )}
       >
         <Image
           src="/zoya.png"
@@ -163,7 +175,14 @@ export function Zoya() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex h-[min(34rem,calc(100dvh-2rem))] w-[min(24rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-card shadow-2xl">
+    <div
+      className={cn(
+        "fixed z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-card shadow-2xl",
+        onReview
+          ? "bottom-28 left-4 h-[min(30rem,calc(100dvh-9rem))]"
+          : "bottom-4 right-4 h-[min(34rem,calc(100dvh-2rem))]",
+      )}
+    >
       <header className="flex items-center gap-3 border-b border-border px-4 py-3">
         <Image
           src="/zoya.png"
