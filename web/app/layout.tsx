@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { Suspense } from "react";
 import { TopNav } from "@/components/top-nav";
+import { Zoya } from "@/components/zoya";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({
@@ -33,6 +35,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Providers>
           <TopNav />
           <main className="flex-1">{children}</main>
+          {/* Reads the route to know which note is on screen, so it needs the
+              same Suspense treatment the workspace does. */}
+          <Suspense fallback={null}>
+            <Zoya />
+          </Suspense>
         </Providers>
       </body>
     </html>

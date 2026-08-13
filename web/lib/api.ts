@@ -15,7 +15,7 @@ import type {
  * here and the service is told about it afterwards.
  */
 
-const BASE_URL =
+export const BASE_URL =
   process.env.NEXT_PUBLIC_EXTRACTION_API_URL ?? "http://localhost:8787";
 
 export type ApplicationStatus =
