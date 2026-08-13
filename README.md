@@ -106,6 +106,23 @@ validator blocking: Scheduled interest totals 211,500, but 6% on a
 
 The model extracted the *stated* rate rather than quietly reconciling it, and the validator caught the contradiction independently.
 
+## Zoya
+
+An assistant that can only read. She answers questions about notes, schedules,
+positions and blocked mints by calling tools that query the chain and the
+extraction records — the same reads the interface makes — and the panel prints
+which tools an answer rested on, so a figure can be checked rather than
+believed.
+
+She may not state a number she did not read from a tool. That constraint is the
+point rather than a caveat: this product's whole claim is that it does not trust
+a copy, and an assistant is the easiest place to abandon that quietly. Asked for
+a typical yield she declines and offers to look up a specific note; asked to buy
+she says she cannot and points at the button; told to confirm the notes are
+protocol-guaranteed she refuses and says where credit risk actually sits.
+
+Nothing she can call writes. `backend/src/abi.ts` carries view functions only.
+
 ## Layout
 
 ```text
@@ -125,8 +142,15 @@ contracts       Foundry · deployed and verified on X Layer testnet
 |---|---|---|
 | `IssuerRegistry` | [`0x0422508c0aFB8fEa40365E7781e0248699824375`](https://www.oklink.com/xlayer-test/address/0x0422508c0afb8fea40365e7781e0248699824375) | Verified |
 | `NoteFactory` | [`0xDAce270A9991E838bC858884156022fd5ae43aDa`](https://www.oklink.com/xlayer-test/address/0xdace270a9991e838bc858884156022fd5ae43ada) | Verified |
-| `SaleDesk` | [`0xDA9DD5Ab32372507fFcD662f6FE1608901c1bbF5`](https://www.oklink.com/xlayer-test/address/0xda9dd5ab32372507ffcd662f6fe1608901c1bbf5) | Verified |
+| `SaleDesk` | [`0x33C3Da08E7e214c9F02Dae4C92D0CD55747f8181`](https://www.oklink.com/xlayer-test/address/0x33c3da08e7e214c9f02dae4c92d0cd55747f8181) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
+
+A primary sale carries a protocol fee of 25 basis points on **each** side: the
+buyer pays the price plus 0.25%, the seller receives it less 0.25%, and both
+legs reach the treasury in the same transaction. On a 1,000 sale that is
+1,002.50 out, 997.50 in, and 5.00 to the protocol. The rate and the treasury are
+immutable, so a sale cannot be repriced between a buyer's quote and their
+confirmation.
 
 `RWANote` and `RepaymentVault` are deployed per agreement by `NoteFactory`; read them from its `NoteMinted` events. Full record in [contracts/deployments/xlayer-testnet.json](contracts/deployments/xlayer-testnet.json), including superseded addresses and why each was replaced.
 
@@ -159,7 +183,7 @@ cp .env.example .env.local        # addresses are in the deployments JSON
 pnpm dev                          # :3000
 
 cd ../contracts
-forge test                        # 118 tests
+forge test                        # 122 tests
 ```
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
@@ -174,7 +198,7 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 **Partially stubbed:** issuer verification. The `IssuerRegistry` and its on-chain enforcement are real — an unregistered address genuinely cannot mint — but admission to the registry is a manual off-chain decision here, not a KYB integration.
 
-**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 118 passing tests.
+**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 122 passing tests.
 
 ## What is not built yet
 
@@ -186,6 +210,10 @@ Stated plainly, because a demo can hide these:
   buy are all wired to the contracts and signed by the connected wallet, and
   every one has been exercised on testnet — but by a scripted signer. That gap
   remains the largest untested surface.
+- **Zoya does not stream.** The reply arrives in one piece after the tool loop
+  finishes, so there is a pause with a spinner. She has also never had to answer
+  from real data — with no notes minted, every question so far has been
+  answerable with "there are none", which is the easy case for a grounding rule.
 - **Automated repayment has no interface yet.** `collectFromBorrower` and the
   standing authorization it needs are on-chain and covered by tests; nothing in
   the app shows the authorization or triggers a collection, and no keeper runs.
@@ -198,4 +226,4 @@ Stated plainly, because a demo can hide these:
 
 ## Status
 
-Day 6 of 12.
+Day 7 of 12.

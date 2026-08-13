@@ -83,6 +83,20 @@ Repay is shown to the borrower alone. `settleNextPeriod` pulls from whoever
 signs it, so offering it to a holder offered them the chance to pay someone
 else's loan out of their own pocket.
 
+## Zoya
+
+A panel pinned bottom-right on every screen. She reads the route, so on
+`/note/[id]` and `/review/[id]` "what does this pay?" resolves without anyone
+quoting an id, and the connected wallet goes with it so "what do I hold?" works
+too.
+
+Each answer prints the tools it rested on — `read listNotes` under the reply —
+so a number can be checked rather than believed.
+
+The avatar is photoreal, which makes the "AI assistant · reads only" line under
+her name load-bearing rather than decorative. Someone asking what a note will
+pay them should never be unsure whether a person told them.
+
 ## Design
 
 Dark navy and slate. Depth comes from tonal layers and 1px outlines, never

@@ -4,7 +4,7 @@ Foundry. Deployed and verified on X Layer testnet — addresses in
 [deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
 
 ```bash
-forge test          # 118 tests
+forge test          # 122 tests
 forge coverage      # 96% of lines, 76% of branches
 ```
 
@@ -14,7 +14,7 @@ forge coverage      # 96% of lines, 76% of branches
 | `NoteFactory` | The only supported way on-chain. Requires a registered issuer, a registered borrower, and an admin approval of the exact parameters; claims the document hash and deploys note and vault atomically |
 | `RWANote` | ERC-20 with immutable terms, a named borrower, a `Pending` state until they accept, impairment, and a transfer restriction hook |
 | `RepaymentVault` | Schedule, USDG deposits, pro-rata claims, redemption, impairment and cure. Collects from the borrower against a standing approval once a period is due |
-| `SaleDesk` | The primary offering. The issuer places a share of a note; the price is par, computed by the desk, and nobody can set it |
+| `SaleDesk` | The primary offering. The issuer places a share of a note; the price is par, computed by the desk, and nobody can set it. Charges 25 bps to each side of a trade |
 | `Schedule` | The `Period` type and the canonical schedule hash, shared by the above |
 
 ## A worked example
@@ -133,6 +133,16 @@ else: after a 20% paydown a half-sold note is still half sold. Payment goes
 straight from buyer to seller in the same call that delivers the tokens, so the
 desk never holds anyone's money between calls. `quote` rounds *up*, because
 rounding down let amounts small enough to zero the cost be taken for free.
+
+**The fee is charged to both sides and is immutable.** 25 basis points from the
+buyer on top of the price, 25 from the seller out of the proceeds, both moved to
+the treasury in the same call that delivers the tokens. Quoting one side only
+would have hidden half the cost from whoever did not see it. The rate and the
+treasury are fixed at deployment for the same reason the price is not the
+issuer's to set: a desk that could reprice its own cut after an offer opened
+would change what a sale costs between a buyer's quote and their confirmation.
+`maxCost` covers the fee as well as the price, or it would not be a cap on what
+the buyer actually parts with.
 
 **Revoking an issuer does not touch notes already issued.** Their terms are
 immutable and their holders' claims should survive the issuer losing the right

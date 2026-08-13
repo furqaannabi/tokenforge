@@ -99,6 +99,7 @@ intended to publish.
 | `POST /extractions/:id/mint-request` | The issuer submits what they intend to mint. The service derives the parameters from the reviewed terms and hashes them |
 | `GET /extractions/:id/mint-args` | The approved parameters, for the issuer's wallet to sign |
 | `GET /mint-requests` | The admin's queue of mints awaiting a decision |
+| `POST /zoya/messages` | The assistant. Returns her reply and the tools it rested on |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |
 | `POST /extractions/:id/mint` | Record a mint that already happened on-chain |
 | `POST /issuers/applications` | Apply to the registry — corporate detail that has no business on-chain |
@@ -126,6 +127,30 @@ the fields already cleared are merged with it rather than replaced — passing
 only the current request's set meant confirming a second field silently
 un-confirmed the first, and a reviewer working one field at a time never
 converged.
+
+## Zoya
+
+`zoya.ts` is a bounded tool loop over reads that already exist: the minted
+notes, a note's live chain state, its vault schedule, what is on offer, a
+wallet's position, and the extracted terms with their confidence. `chain.ts`
+does the reading and `abi.ts` carries view functions only, so there is nothing
+here that could write even if something asked it to.
+
+Her system prompt's first rule is that she may not state a number she did not
+read from a tool. The second is that she says which source a figure came from,
+because "the vault's schedule says" and "the extraction found" are different
+claims — the first is what the contract will pay, the second is what a model
+read off a PDF and may still be under review.
+
+One trap worth knowing: thinking models attach a `thoughtSignature` to each
+function call, and rebuilding the model's turn from `functionCalls` drops it.
+The API then rejects the history with a 400 that names neither cause nor fix.
+Echo the candidate's own `content` back instead.
+
+Document text reaches her only as data. An uploaded agreement is untrusted
+input — anyone admitted can upload one — and a PDF carrying instructions is a
+realistic attack on a lending product, not a theoretical one. Figures come from
+the chain and the validator, which no document can reach.
 
 ## Known gaps
 
