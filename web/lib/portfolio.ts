@@ -95,6 +95,12 @@ export function useNotesMarket() {
             functionName: "status",
           },
           {
+            abi: rwaNoteAbi,
+            address: note.noteAddress,
+            chainId: CHAIN_ID,
+            functionName: "borrower",
+          },
+          {
             abi: repaymentVaultAbi,
             address: note.vaultAddress,
             chainId: CHAIN_ID,
@@ -141,8 +147,9 @@ export function useNotesMarket() {
           note: extraction.note!,
           outstanding: (at(0) as bigint | undefined) ?? null,
           status: Number((at(1) as number | undefined) ?? 0),
-          periodsPaid: Number((at(2) as bigint | undefined) ?? 0n),
-          periodCount: Number((at(3) as bigint | undefined) ?? 0n),
+          borrower: (at(2) as `0x${string}` | undefined) ?? "0x",
+          periodsPaid: Number((at(3) as bigint | undefined) ?? 0n),
+          periodCount: Number((at(4) as bigint | undefined) ?? 0n),
           /** Tokens on offer right now, or 0n when nothing is for sale. */
           forSale: (at(4) as bigint | undefined) ?? 0n,
           pricePerToken: (at(5) as bigint | undefined) ?? 0n,

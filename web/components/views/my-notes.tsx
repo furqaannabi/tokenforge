@@ -13,7 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useHoldings, type Holding } from "@/lib/portfolio";
+import { useHoldings, useNotesMarket, type Holding } from "@/lib/portfolio";
+import { money } from "@/lib/format";
 import { useClaim } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
 import { CURRENCY_DECIMALS } from "@tokenforge/core";
@@ -29,6 +30,20 @@ import { CURRENCY_DECIMALS } from "@tokenforge/core";
 export function MyNotesView() {
   const { address, connected } = useWallet();
   const { holdings, isPending, isError, refetch } = useHoldings(address);
+  const market = useNotesMarket();
+
+  /*
+   * Notes this wallet owes rather than owns.
+   *
+   * A borrower holds none of the loan, so nothing else on this page would ever
+   * show them anything — and the note is deliberately absent from the public
+   * list until they sign, which left the one party who has to act with no way
+   * to reach it short of being sent a link.
+   */
+  const toAccept = market.pending.filter(
+    (row) =>
+      address && row.borrower.toLowerCase() === address.toLowerCase(),
+  );
 
   if (!connected) {
     return (
@@ -77,6 +92,39 @@ export function MyNotesView() {
           sub={holdings.length === 1 ? "note held" : "notes held"}
         />
       </div>
+
+      {toAccept.length > 0 ? (
+        <Card className="mb-6 border-review/40">
+          <CardHeader>
+            <CardTitle>Awaiting your acceptance</CardTitle>
+            <CardDescription>
+              You are named as the borrower on{" "}
+              {toAccept.length === 1 ? "a note" : `${toAccept.length} notes`}.
+              Nothing can be transferred, offered, or repaid until you confirm
+              the terms.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {toAccept.map((row) => (
+              <div
+                key={row.extraction.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{row.note.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {money(row.extraction.terms.principal.value)} ·{" "}
+                    {row.extraction.terms.lender.value}
+                  </p>
+                </div>
+                <Button asChild size="sm">
+                  <Link href={`/note/${row.extraction.id}`}>Review and accept</Link>
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {holdings.length ? (
         <div className="space-y-4">
