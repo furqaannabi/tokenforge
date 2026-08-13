@@ -567,8 +567,21 @@ async function runProvenance(extractionId: string, borrowerAddress?: string) {
    * would cost tokens and invite the model to find a resemblance. Capped, so a
    * busy issuer cannot turn one review into an enormous prompt.
    */
+  /*
+   * Other documents, not other extractions.
+   *
+   * Re-running extraction on the same upload produces a second row for one
+   * agreement, and comparing them would report a document as a duplicate of
+   * itself. The identical-bytes case is already covered twice over — the
+   * documents table is unique on content hash and `NoteFactory` refuses a hash
+   * it has tokenized — so what is left for this check is the only thing those
+   * miss: a different file describing the same loan.
+   */
   const others = await prisma.extraction.findMany({
-    where: { id: { not: extractionId } },
+    where: {
+      id: { not: extractionId },
+      documentId: { not: extraction.documentId },
+    },
     include: { document: true },
     orderBy: { createdAt: "desc" },
     take: 100,
