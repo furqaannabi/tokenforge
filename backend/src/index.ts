@@ -815,13 +815,49 @@ app.get("/mint-requests", async (c) => {
   const extractions = await prisma.extraction.findMany({
     where: { mintRequest: { not: Prisma.DbNull }, status: { not: "MINTED" } },
     include: {
-      document: { select: { id: true, filename: true, contentHash: true } },
+      document: {
+        select: {
+          id: true,
+          filename: true,
+          contentHash: true,
+          uploadedBy: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 
   return c.json({ extractions: jsonSafe(extractions) });
+});
+
+/**
+ * Discards an extraction that is not going anywhere.
+ *
+ * A minted one is refused. The note and its vault exist on chain whatever this
+ * database says, and deleting the record would strand them — no document hash,
+ * no terms, nothing to explain what the token is. Everything else is working
+ * paper: a bad scan, a duplicate upload, an agreement that failed validation
+ * and will be replaced.
+ */
+app.delete("/extractions/:id", async (c) => {
+  const id = c.req.param("id");
+
+  const extraction = await prisma.extraction.findUnique({
+    where: { id },
+    include: { note: true },
+  });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  if (extraction.status === "MINTED" || extraction.note) {
+    throw new HTTPException(409, {
+      message:
+        "This one has been minted. The note exists on chain and deleting its record would leave nothing to explain what the token is.",
+    });
+  }
+
+  await prisma.extraction.delete({ where: { id } });
+  return c.json({ deleted: id });
 });
 
 app.get("/extractions/:id/mint-gate", async (c) => {

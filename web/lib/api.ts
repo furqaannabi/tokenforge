@@ -98,7 +98,10 @@ export interface ApiExtraction {
  * rows would otherwise carry a hundred loan agreements' worth of prose.
  */
 export interface ApiExtractionSummary extends Omit<ApiExtraction, "document"> {
-  document?: Pick<ApiDocument, "id" | "filename" | "contentHash">;
+  document?: Pick<
+    ApiDocument,
+    "id" | "filename" | "contentHash" | "uploadedBy"
+  >;
 }
 
 /** The two checks a hash cannot make. Null until they have been run. */
@@ -273,6 +276,11 @@ export const api = {
     request<{ extractions: ApiExtractionSummary[] }>("/mint-requests").then(
       (r) => r.extractions,
     ),
+
+  deleteExtraction: (extractionId: string) =>
+    request<{ deleted: string }>(`/extractions/${extractionId}`, {
+      method: "DELETE",
+    }),
 
   checkProvenance: (
     extractionId: string,

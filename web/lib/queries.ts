@@ -91,6 +91,18 @@ export function useCheckProvenance(extractionId: string | undefined) {
   });
 }
 
+/** Discards an extraction. Refused by the service once a note exists. */
+export function useDeleteExtraction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteExtraction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["extractions"] });
+      queryClient.invalidateQueries({ queryKey: ["mint-requests"] });
+    },
+  });
+}
+
 /** The issuer asks the admin to clear a mint. */
 export function useRequestMint(extractionId: string | undefined) {
   const queryClient = useQueryClient();

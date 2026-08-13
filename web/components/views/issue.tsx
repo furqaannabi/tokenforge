@@ -1,9 +1,10 @@
 "use client";
 
-import { BadgeCheck, ShieldOff, Wallet } from "lucide-react";
+import { useState } from "react";
+import { BadgeCheck, ShieldOff, Trash2, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { X_LAYER_TESTNET } from "@/lib/wagmi";
-import { useExtractions } from "@/lib/queries";
+import { useDeleteExtraction, useExtractions } from "@/lib/queries";
 import { money, percent, monthYear, truncateHex } from "@/lib/format";
 import Link from "next/link";
 import { FieldLabel, Stamp } from "@/components/primitives";
@@ -27,9 +28,25 @@ import {
 } from "@/components/ui/table";
 
 export function IssueView() {
-  const { issuer, connected } = useWallet();
+  const { issuer, connected, address } = useWallet();
   const extractions = useExtractions();
-  const notes = extractions.data?.filter((e) => e.status === "MINTED") ?? [];
+
+  /*
+   * This tab is the issuer's own desk, so it shows their own work. Pending ones
+   * are matched on who uploaded the document; minted ones on the issuer the
+   * factory recorded, which is the only claim that survives the database.
+   */
+  const mine = (value?: string | null) =>
+    Boolean(address) && value?.toLowerCase() === address!.toLowerCase();
+
+  const pending =
+    extractions.data?.filter(
+      (e) => e.status !== "MINTED" && mine(e.document?.uploadedBy),
+    ) ?? [];
+  const notes =
+    extractions.data?.filter(
+      (e) => e.status === "MINTED" && mine(e.note?.issuerAddress),
+    ) ?? [];
 
   return (
     <div>
@@ -52,6 +69,34 @@ export function IssueView() {
         <IssuerPanel />
       </div>
 
+
+      {pending.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="mb-1 text-lg font-semibold">Pending</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Extracted but not yet on-chain. Nothing here is permanent — a bad
+            scan or a document you did not mean to upload can be discarded.
+          </p>
+          <Card className="py-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Document</TableHead>
+                  <TableHead className="text-right">Principal</TableHead>
+                  <TableHead>Maturity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map((extraction) => (
+                  <PendingRow key={extraction.id} extraction={extraction} />
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Your notes</h2>
@@ -91,6 +136,91 @@ export function IssueView() {
         </Card>
       </section>
     </div>
+  );
+}
+
+/**
+ * One extraction still waiting on someone.
+ *
+ * Deleting is offered because an upload is not a commitment — a rescan, a
+ * duplicate, a document that failed validation and will be replaced. The
+ * service refuses to delete a minted one: the note exists on chain whatever
+ * this table says, and removing the record would leave nothing to explain what
+ * the token is.
+ */
+function PendingRow({ extraction }: { extraction: ApiExtractionSummary }) {
+  const { terms, status } = extraction;
+  const remove = useDeleteExtraction();
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">
+        {extraction.document?.filename ?? "Document"}
+      </TableCell>
+      <TableCell className="tnum text-right">
+        {money(terms.principal.value)}
+      </TableCell>
+      <TableCell className="tnum">
+        {monthYear(terms.maturityDate.value)}
+      </TableCell>
+      <TableCell>
+        <Stamp
+          tone={
+            status === "INVALID"
+              ? "impaired"
+              : status === "VALIDATED"
+                ? "verified"
+                : "review"
+          }
+        >
+          {status === "NEEDS_REVIEW"
+            ? "Needs review"
+            : status === "VALIDATED"
+              ? "Ready to mint"
+              : status.charAt(0) + status.slice(1).toLowerCase()}
+        </Stamp>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-3">
+          <Link
+            href={`/review/${extraction.id}`}
+            className="text-sm hover:text-verified"
+          >
+            {status === "VALIDATED" ? "Mint" : "Review"}
+          </Link>
+
+          {confirming ? (
+            <span className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => remove.mutate(extraction.id)}
+                disabled={remove.isPending}
+                className="text-xs text-impaired hover:underline"
+              >
+                {remove.isPending ? "Deleting…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              aria-label={`Delete ${extraction.document?.filename ?? "extraction"}`}
+              className="text-muted-foreground transition-colors hover:text-impaired"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
