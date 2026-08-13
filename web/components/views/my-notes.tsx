@@ -14,6 +14,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useHoldings, useNotesMarket, type Holding } from "@/lib/portfolio";
+import { useSignMessage } from "wagmi";
+import { acceptanceMessage, useMintRequests } from "@/lib/queries";
+import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 import { useClaim } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
@@ -92,6 +95,8 @@ export function MyNotesView() {
           sub={holdings.length === 1 ? "note held" : "notes held"}
         />
       </div>
+
+      <TermsToAccept address={address} />
 
       {toAccept.length > 0 ? (
         <Card className="mb-6 border-review/40">
@@ -248,6 +253,92 @@ function HoldingCard({
             </span>
           ) : null}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Terms a borrower is being asked to agree to, before anything is minted.
+ *
+ * `accept()` on the note cannot cover this — the note does not exist yet — so
+ * the borrower signs the mint hash instead. Same assurance, earlier, and no
+ * gas: the factory refuses any parameters but these, so signing this hash is
+ * agreeing to that note and nothing else.
+ */
+function TermsToAccept({ address }: { address?: `0x${string}` }) {
+  const requests = useMintRequests();
+  const { signMessageAsync } = useSignMessage();
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const mine = (requests.data ?? []).filter(
+    (e) =>
+      e.mintRequest &&
+      !e.mintRequest.borrowerAccepted &&
+      address &&
+      e.mintRequest.borrower.toLowerCase() === address.toLowerCase(),
+  );
+
+  if (mine.length === 0) return null;
+
+  const onAccept = async (extractionId: string, mintHash: string) => {
+    setError(null);
+    setPending(extractionId);
+    try {
+      const signature = await signMessageAsync({
+        message: acceptanceMessage(mintHash),
+      });
+      await api.acceptAsBorrower(extractionId, signature);
+      void requests.refetch();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <Card className="mb-6 border-review/40">
+      <CardHeader>
+        <CardTitle>Terms awaiting your agreement</CardTitle>
+        <CardDescription>
+          You are named as the borrower. Nothing is minted until you accept —
+          this is a signature, not a transaction, so it costs no gas.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {error ? <p className="text-xs text-impaired">{error}</p> : null}
+        {mine.map((extraction) => (
+          <div
+            key={extraction.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {extraction.document?.filename ?? "Agreement"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {money(extraction.terms.principal.value)} from{" "}
+                {extraction.terms.lender.value}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/review/${extraction.id}`}>Read terms</Link>
+              </Button>
+              <Button
+                size="sm"
+                disabled={pending === extraction.id}
+                onClick={() =>
+                  onAccept(extraction.id, extraction.mintRequest!.mintHash)
+                }
+              >
+                {pending === extraction.id ? "Signing…" : "Accept terms"}
+              </Button>
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

@@ -15,7 +15,7 @@ import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
 import { readParty } from "./chain";
 import { ask, loadHistory } from "./zoya";
-import { isAddress } from "viem";
+import { isAddress, verifyMessage } from "viem";
 import {
   documentKey,
   documentUrl,
@@ -789,6 +789,81 @@ app.post("/extractions/:id/mint-request", async (c) => {
 });
 
 /**
+ * The borrower agrees to the terms, before anything is minted.
+ *
+ * `RWANote.accept()` cannot serve here: it is a function on a note that does
+ * not exist yet, so on-chain acceptance can only ever come after issuance. A
+ * signature over the mint hash gives the same assurance earlier and costs the
+ * borrower no gas — they sign the exact parameters, and the factory refuses
+ * anything else, so agreeing to this hash is agreeing to that note.
+ *
+ * Verified against the borrower named in the request rather than against
+ * whoever posted it. A signature from the wrong wallet is not acceptance.
+ */
+app.post("/extractions/:id/borrower-acceptance", async (c) => {
+  const id = c.req.param("id");
+  const body = acceptanceSchema.parse(await c.req.json());
+
+  const extraction = await prisma.extraction.findUnique({ where: { id } });
+  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  const request = extraction.mintRequest as {
+    borrower: string;
+    mintHash: string;
+  } | null;
+  if (!request) {
+    throw new HTTPException(409, {
+      message: "No mint has been requested, so there are no terms to accept.",
+    });
+  }
+
+  const valid = await verifyMessage({
+    address: request.borrower as `0x${string}`,
+    message: acceptanceMessage(request.mintHash),
+    signature: body.signature as `0x${string}`,
+  }).catch(() => false);
+
+  if (!valid) {
+    throw new HTTPException(401, {
+      message:
+        "That signature is not from the wallet named as borrower on this note.",
+    });
+  }
+
+  const updated = await prisma.extraction.update({
+    where: { id },
+    data: {
+      mintRequest: asJson({
+        ...(extraction.mintRequest as object),
+        borrowerAccepted: {
+          signature: body.signature,
+          at: new Date().toISOString(),
+        },
+      }),
+    },
+  });
+
+  return c.json({ extraction: jsonSafe(updated) });
+});
+
+/** The exact words the borrower signs. Carries the hash so it cannot be reused. */
+function acceptanceMessage(mintHash: string): string {
+  return [
+    "TokenForge \u2014 borrower acceptance",
+    "",
+    "I confirm that the company I represent is the borrower on this agreement,",
+    "and I accept the terms recorded under the following mint:",
+    "",
+    mintHash,
+  ].join("\n");
+}
+
+const acceptanceSchema = z.object({
+  signature: z.string().regex(/^0x[0-9a-fA-F]+$/),
+});
+
+
+/**
  * The approved parameters, for the issuer's wallet to sign.
  *
  * Handed back whole rather than rebuilt in the browser. Rebuilding is what
@@ -879,6 +954,20 @@ app.get("/extractions/:id/mint-gate", async (c) => {
     confirmed,
     provenance: (extraction.provenance as ProvenanceVerdict | null) ?? undefined,
   });
+
+  /*
+   * A fact about this request rather than about the terms, so it is added here
+   * rather than inside `mintGate`, which has no idea a mint was asked for.
+   */
+  const pendingRequest = extraction.mintRequest as {
+    borrowerAccepted?: unknown;
+  } | null;
+  if (pendingRequest && !pendingRequest.borrowerAccepted) {
+    gate.blockers.push(
+      "The borrower has not accepted these terms yet. Nothing is minted until they do.",
+    );
+    gate.canMint = false;
+  }
 
   return c.json({ gate });
 });
