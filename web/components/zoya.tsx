@@ -29,6 +29,8 @@ interface Turn {
   role: "user" | "zoya";
   text: string;
   sources?: { tool: string }[];
+  /** The reply currently being streamed into. At most one, always the last. */
+  streaming?: boolean;
 }
 
 /**
@@ -141,22 +143,45 @@ export function Zoya() {
     setBusy(true);
     setReading(null);
 
-    /* Appends to the reply in flight, opening one if this is the first
-       fragment. Kept out of the read loop so a delta arriving before the
-       bubble exists cannot be dropped. */
-    let started = false;
+    /*
+     * Appends to the reply in flight, opening one if this is the first
+     * fragment.
+     *
+     * Whether a reply is open is read from the turns themselves rather than
+     * held in a variable the updater assigns to. It was the latter, and React
+     * invokes an updater more than once in development — the first invocation
+     * flipped the flag, so the second took the "append to the last turn"
+     * branch and merged Zoya's reply into the user's own message. An updater
+     * has to be a pure function of the state it is given.
+     */
+    let received = false;
     const append = (text: string, sources?: { tool: string }[]) =>
       setTurns((was) => {
-        if (!started) {
-          started = true;
-          return [...was, { role: "zoya", text, sources }];
-        }
         const last = was[was.length - 1];
-        return [
-          ...was.slice(0, -1),
-          { ...last, text: last.text + text, sources: sources ?? last.sources },
-        ];
+
+        if (last?.role === "zoya" && last.streaming) {
+          return [
+            ...was.slice(0, -1),
+            {
+              ...last,
+              text: last.text + text,
+              sources: sources ?? last.sources,
+            },
+          ];
+        }
+
+        return [...was, { role: "zoya", text, sources, streaming: true }];
       });
+
+    /** Seals the reply so nothing later can be appended to it. */
+    const close = () =>
+      setTurns((was) =>
+        was.map((turn, index) =>
+          index === was.length - 1 && turn.streaming
+            ? { ...turn, streaming: false }
+            : turn,
+        ),
+      );
 
     try {
       const response = await fetch(`${BASE_URL}/zoya/stream`, {
@@ -203,12 +228,14 @@ export function Zoya() {
           const data = JSON.parse(payload);
           if (event === "delta") {
             setReading(null);
+            received = true;
             append(data.text);
           } else if (event === "tool") {
             setReading(data.tool);
           } else if (event === "done") {
             append("", data.sources);
           } else if (event === "error") {
+            received = true;
             append(data.error ?? "Something went wrong.");
           }
         }
@@ -216,10 +243,11 @@ export function Zoya() {
 
       // A stream that ends without saying anything is a failure that looked
       // like a success; saying so beats an empty bubble.
-      if (!started) append("I could not answer that. Try again.");
+      if (!received) append("I could not answer that. Try again.");
     } catch (cause) {
       append((cause as Error).message);
     } finally {
+      close();
       setBusy(false);
       setReading(null);
     }
