@@ -5,16 +5,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
-  FileSignature,
-  PenLine,
-  ScanLine,
   ShieldCheck,
   Coins,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BASE_URL } from "@/lib/api";
-import { Reveal, Trace } from "@/components/reveal";
+import { Reveal } from "@/components/reveal";
+import { Journey } from "@/components/journey";
 
 /**
  * The front door.
@@ -203,50 +201,7 @@ export function Landing() {
           </div>
         </section>
 
-        <Section
-          eyebrow="The pipeline"
-          title="Five gates between a PDF and a token"
-          lede="Each one can stop the mint. None of them trusts the one before it."
-        >
-          <Trace delay={120} />
-          <ol className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
-            <Step
-              delay={0}
-              n="01"
-              icon={<FileSignature className="size-4" />}
-              title="Upload"
-              body="The document is hashed. That hash is what the note commits to on-chain, so the token always names the paper it came from."
-            />
-            <Step
-              delay={110}
-              n="02"
-              icon={<ScanLine className="size-4" />}
-              title="Extract"
-              body="Gemini reads principal, rate, maturity and the full schedule — and reports a confidence for each field rather than one number for the document."
-            />
-            <Step
-              delay={220}
-              n="03"
-              icon={<ShieldCheck className="size-4" />}
-              title="Validate"
-              body="Deterministic rules, not a model: does the schedule sum to the principal, does the interest follow the rate, do the dates run in order."
-            />
-            <Step
-              delay={330}
-              n="04"
-              icon={<PenLine className="size-4" />}
-              title="Review"
-              body="Anything the model was unsure of is put in front of a person. Nothing low-confidence reaches a chain unread."
-            />
-            <Step
-              delay={440}
-              n="05"
-              icon={<Coins className="size-4" />}
-              title="Mint"
-              body="An admin approves an exact hash of the parameters. The issuer signs; the contract refuses anything that does not match."
-            />
-          </ol>
-        </Section>
+        <Journey />
 
         <Section
           eyebrow="Three parties"
@@ -382,33 +337,6 @@ function Section({
       </Reveal>
       <div className="mt-8">{children}</div>
     </section>
-  );
-}
-
-function Step({
-  n,
-  icon,
-  title,
-  body,
-  delay = 0,
-}: {
-  n: string;
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  delay?: number;
-}) {
-  return (
-    <Reveal as="li" delay={delay} className="bg-card p-5">
-      <div className="flex items-center gap-2 text-verified">
-        {icon}
-        <span className="font-mono text-[11px] tracking-[0.08em]">{n}</span>
-      </div>
-      <h3 className="mt-3 font-semibold">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {body}
-      </p>
-    </Reveal>
   );
 }
 
