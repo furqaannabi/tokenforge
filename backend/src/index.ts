@@ -715,7 +715,7 @@ app.post("/zoya/messages", async (c) => {
    * own transcript could put words in her mouth and ask her to reason from
    * them, which would defeat the one property she is built around.
    */
-  const history = await loadHistory(body.conversationId);
+  const history = await loadHistory(body.conversationId, wallet);
   const turn = await ask({
     ...body,
     history,
@@ -743,6 +743,73 @@ app.post("/zoya/messages", async (c) => {
   return c.json(jsonSafe(turn));
 });
 
+/**
+ * The same turn, streamed.
+ *
+ * A tool loop takes seconds — several model calls with chain reads between
+ * them — and a panel that shows nothing until the end reads as broken. The
+ * work is identical; only the delivery differs.
+ */
+app.post("/zoya/stream", async (c) => {
+  const body = zoyaSchema.parse(await c.req.json());
+  const wallet = c.get("address");
+  const history = await loadHistory(body.conversationId, wallet);
+
+  return streamSSE(c, async (stream) => {
+    /*
+     * Writes are chained rather than fired off.
+     *
+     * `onDelta` is synchronous and cannot await, so unawaited writes would be
+     * free to land out of order — which in a stream of prose means scrambled
+     * words on screen.
+     */
+    let writes = Promise.resolve();
+    const send = (event: string, data: unknown) => {
+      writes = writes.then(() =>
+        stream.writeSSE({ event, data: JSON.stringify(data) }),
+      );
+    };
+
+    try {
+      const turn = await ask({
+        ...body,
+        history,
+        context: { ...body.context, address: wallet },
+        onDelta: (text) => send("delta", { text }),
+        onTool: (tool) => send("tool", { tool }),
+      });
+
+      await prisma.zoyaMessage.createMany({
+        data: [
+          {
+            conversationId: body.conversationId,
+            walletAddress: wallet,
+            role: "USER",
+            content: body.message,
+          },
+          {
+            conversationId: body.conversationId,
+            walletAddress: wallet,
+            role: "ZOYA",
+            content: turn.reply,
+            sources: asJson(turn.sources),
+          },
+        ],
+      });
+
+      send("done", { sources: turn.sources });
+    } catch (cause) {
+      /*
+       * The turn is not persisted when it fails. A half-answer in the history
+       * would be reasoned from on the next question as though she had said it.
+       */
+      send("error", { error: (cause as Error).message });
+    }
+
+    await writes;
+  });
+});
+
 /** A thread, for the panel to restore after a reload. */
 app.get("/zoya/messages", async (c) => {
   const conversationId = c.req.query("conversationId");
@@ -750,8 +817,14 @@ app.get("/zoya/messages", async (c) => {
     throw new HTTPException(400, { message: "conversationId is required." });
   }
 
+  /*
+   * Scoped to the signed-in wallet. A conversation id is a random uuid, but it
+   * lives in local storage and travels in request bodies — treating it as the
+   * only thing standing between a stranger and someone's transcript would make
+   * it a password that leaks.
+   */
   const messages = await prisma.zoyaMessage.findMany({
-    where: { conversationId },
+    where: { conversationId, walletAddress: c.get("address") },
     orderBy: { createdAt: "asc" },
     take: 200,
   });

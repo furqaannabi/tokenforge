@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Content, FunctionDeclaration } from "@google/genai";
+import type { Content, FunctionDeclaration, Part } from "@google/genai";
 import { prisma } from "./db";
 import { llm, MODEL } from "./llm";
 import { readNote, readOffer, readPosition, readSchedule } from "./chain";
@@ -109,6 +109,12 @@ const declarations: FunctionDeclaration[] = [
     ),
   },
   {
+    name: "getPortfolio",
+    description:
+      "Everything the CONNECTED wallet holds, across every note: balance, shares, and unclaimed repayments, plus the totals. Use this for 'my holdings', 'what do I own', 'what am I owed'. Takes no arguments — it always reads the wallet that signed in, never one supplied in the conversation.",
+    parametersJsonSchema: z.toJSONSchema(z.object({})),
+  },
+  {
     name: "getExtraction",
     description:
       "The terms read from the source document, with per-field confidence, the validator's issues, and which fields still need human review. Use this for terms, not for live balances.",
@@ -131,7 +137,17 @@ async function noteAddresses(extractionId: string) {
   };
 }
 
-async function runTool(name: string, args: Record<string, unknown>) {
+/**
+ * @param wallet The address that signed in, or undefined for a signed-out
+ *   visitor. Passed in rather than read from the model's arguments: "my
+ *   holdings" must mean the wallet that proved itself, and a sentence in a
+ *   document or a message cannot talk her into reading a different one.
+ */
+async function runTool(
+  name: string,
+  args: Record<string, unknown>,
+  wallet?: string,
+) {
   switch (name) {
     case "listNotes": {
       const rows = await prisma.extraction.findMany({
@@ -175,6 +191,60 @@ async function runTool(name: string, args: Record<string, unknown>) {
     case "getPosition": {
       const { note, vault } = await noteAddresses(args.extractionId as string);
       return readPosition(note, vault, args.holder as `0x${string}`);
+    }
+
+    case "getPortfolio": {
+      if (!wallet) {
+        return {
+          error:
+            "No wallet is connected, so there is no portfolio to read. Ask them to connect and sign in.",
+        };
+      }
+
+      const rows = await prisma.extraction.findMany({
+        where: { status: "MINTED" },
+        include: { note: true },
+        take: 50,
+      });
+
+      const positions = await Promise.all(
+        rows
+          .filter((row) => row.note)
+          .map(async (row) => {
+            const position = await readPosition(
+              row.note!.noteAddress as `0x${string}`,
+              row.note!.vaultAddress as `0x${string}`,
+              wallet as `0x${string}`,
+            );
+            return {
+              extractionId: row.id,
+              name: row.note!.name,
+              symbol: row.note!.symbol,
+              ...position,
+            };
+          }),
+      );
+
+      /*
+       * A wallet that sold out of a note may still be owed what accrued while
+       * it held it, so claimable keeps a row alive after the balance is gone.
+       * Everything else is dropped: listing every note in the system at zero
+       * would bury the ones they actually hold.
+       */
+      const held = positions.filter(
+        (row) => BigInt(row.balance) > 0n || BigInt(row.claimable) > 0n,
+      );
+
+      return {
+        wallet,
+        holdings: held,
+        totals: {
+          notes: held.length,
+          claimable: held
+            .reduce((sum, row) => sum + BigInt(row.claimable), 0n)
+            .toString(),
+        },
+      };
     }
 
     case "getExtraction": {
@@ -230,10 +300,19 @@ const MAX_STEPS = 10;
  */
 const HISTORY_TURNS = 12;
 
-/** Prior turns for a thread, oldest first, as the model expects them. */
-export async function loadHistory(conversationId: string): Promise<Content[]> {
+/**
+ * Prior turns for a thread, oldest first, as the model expects them.
+ *
+ * Scoped to the wallet as well as the thread. Loading a transcript on the
+ * strength of an id alone would let a guessed id feed somebody else's
+ * conversation into this one, and she would read it back.
+ */
+export async function loadHistory(
+  conversationId: string,
+  wallet: string,
+): Promise<Content[]> {
   const rows = await prisma.zoyaMessage.findMany({
-    where: { conversationId },
+    where: { conversationId, walletAddress: wallet },
     orderBy: { createdAt: "desc" },
     take: HISTORY_TURNS * 2,
   });
@@ -249,23 +328,54 @@ export async function ask(input: {
   history?: Content[];
   /** What the user is looking at, so "this note" resolves without an id. */
   context?: { extractionId?: string; address?: string };
+  /**
+   * Called with each fragment of prose as it arrives.
+   *
+   * Optional: without it this behaves exactly as before, which is what the
+   * non-streaming route still wants.
+   */
+  onDelta?: (text: string) => void;
+  /** Called when a tool starts, so the panel can say what she is reading. */
+  onTool?: (tool: string) => void;
 }): Promise<ZoyaTurn> {
   const contents: Content[] = [...(input.history ?? [])];
 
-  const situated = input.context?.extractionId
-    ? `${input.message}\n\n[The user is looking at extraction ${input.context.extractionId}.${
-        input.context.address
-          ? ` Their wallet is ${input.context.address}.`
-          : ""
-      }]`
-    : input.message;
+  /*
+   * The wallet belongs on every turn, not only on a note page — "what am I
+   * owed?" is asked from anywhere, and `getPortfolio` needs her to know a
+   * wallet is connected before she thinks to call it.
+   */
+  const notes: string[] = [];
+  if (input.context?.extractionId) {
+    notes.push(`The user is looking at extraction ${input.context.extractionId}.`);
+  }
+  notes.push(
+    input.context?.address
+      ? `Their connected wallet is ${input.context.address}; getPortfolio reads it.`
+      : "No wallet is connected, so their holdings cannot be read.",
+  );
+
+  const situated = `${input.message}\n\n[${notes.join(" ")}]`;
 
   contents.push({ role: "user", parts: [{ text: situated }] });
 
   const sources: ZoyaTurn["sources"] = [];
+  /*
+   * Everything she said, across steps. A model often speaks before reaching
+   * for a tool; keeping those fragments means the stored transcript matches
+   * what was streamed to the screen rather than only the last paragraph.
+   */
+  const said: string[] = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await llm().models.generateContent({
+    /*
+     * Streamed even when nobody is listening for deltas.
+     *
+     * One code path rather than two: a tool loop that behaved differently
+     * depending on whether the caller wanted fragments would be two loops to
+     * keep correct, and the streaming one is the harder of the two.
+     */
+    const stream = await llm().models.generateContentStream({
       model: MODEL,
       contents,
       config: {
@@ -274,32 +384,47 @@ export async function ask(input: {
       },
     });
 
-    const calls = response.functionCalls ?? [];
-    if (calls.length === 0) {
-      return { reply: response.text ?? "", sources };
+    /*
+     * Parts are collected in arrival order rather than rebuilt afterwards,
+     * for the same reason the whole model turn is echoed back below: a
+     * thinking model signs its function calls, and a history missing those
+     * signatures is rejected with a 400 that names neither cause nor fix.
+     */
+    const parts: Part[] = [];
+    let stepText = "";
+
+    for await (const chunk of stream) {
+      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+        parts.push(part);
+        // Reasoning is not an answer. It reaches the transcript as neither.
+        if (part.thought || !part.text) continue;
+        stepText += part.text;
+        input.onDelta?.(part.text);
+      }
     }
 
-    /*
-     * The model's own turn, echoed back verbatim rather than rebuilt from
-     * `functionCalls`. Thinking models attach a `thoughtSignature` to each
-     * function call part and reject a history where it has gone missing —
-     * reconstructing the parts drops it, and the request fails with a 400 that
-     * names neither the cause nor the fix.
-     */
-    const modelTurn = response.candidates?.[0]?.content;
-    contents.push(
-      modelTurn ?? {
-        role: "model",
-        parts: calls.map((call) => ({ functionCall: call })),
-      },
-    );
+    if (stepText) said.push(stepText);
+
+    const calls = parts
+      .map((part) => part.functionCall)
+      .filter((call): call is NonNullable<typeof call> => Boolean(call));
+
+    if (calls.length === 0) {
+      return { reply: said.join("\n\n"), sources };
+    }
+
+    contents.push({ role: "model", parts });
 
     const results = await Promise.all(
       calls.map(async (call) => {
         const args = (call.args ?? {}) as Record<string, unknown>;
         sources.push({ tool: call.name!, args });
+        input.onTool?.(call.name!);
         try {
-          return { name: call.name!, response: await runTool(call.name!, args) };
+          return {
+            name: call.name!,
+            response: await runTool(call.name!, args, input.context?.address),
+          };
         } catch (cause) {
           // Handed back rather than thrown: "that note has not been minted"
           // is an answer, and the model should say it rather than fail.
@@ -323,8 +448,10 @@ export async function ask(input: {
   }
 
   return {
-    reply:
+    reply: [
+      ...said,
       "I could not settle that question without going round in circles, so I stopped. Try asking about one note at a time.",
+    ].join("\n\n"),
     sources,
   };
 }

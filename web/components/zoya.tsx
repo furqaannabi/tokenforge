@@ -49,11 +49,28 @@ function conversationId(): string {
   return id;
 }
 
+/** What a tool is doing, in words rather than a function name. */
+function toolLabel(tool: string): string {
+  return (
+    {
+      listNotes: "Listing the notes…",
+      getNote: "Reading the note on-chain…",
+      getSchedule: "Reading the repayment schedule…",
+      getOffer: "Checking what is for sale…",
+      getPosition: "Reading the position…",
+      getPortfolio: "Reading your holdings…",
+      getExtraction: "Reading the extracted terms…",
+    }[tool] ?? "Reading…"
+  );
+}
+
 export function Zoya() {
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The tool running right now, so the wait names what she is reading. */
+  const [reading, setReading] = useState<string | null>(null);
   const [thread, setThread] = useState<string>();
 
   const { address } = useWallet();
@@ -121,35 +138,89 @@ export function Zoya() {
     setDraft("");
     setTurns((was) => [...was, { role: "user", text: message }]);
     setBusy(true);
+    setReading(null);
+
+    /* Appends to the reply in flight, opening one if this is the first
+       fragment. Kept out of the read loop so a delta arriving before the
+       bubble exists cannot be dropped. */
+    let started = false;
+    const append = (text: string, sources?: { tool: string }[]) =>
+      setTurns((was) => {
+        if (!started) {
+          started = true;
+          return [...was, { role: "zoya", text, sources }];
+        }
+        const last = was[was.length - 1];
+        return [
+          ...was.slice(0, -1),
+          { ...last, text: last.text + text, sources: sources ?? last.sources },
+        ];
+      });
 
     try {
-      const response = await fetch(`${BASE_URL}/zoya/messages`, {
+      const response = await fetch(`${BASE_URL}/zoya/stream`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           message,
           conversationId: thread,
-          context: { extractionId, address },
+          // The wallet is taken from the session server-side; sending it here
+          // would only be a claim, and it is ignored.
+          context: { extractionId },
         }),
       });
-      const data = await response.json();
 
-      setTurns((was) => [
-        ...was,
-        {
-          role: "zoya",
-          text: data.reply ?? data.error ?? "Something went wrong.",
-          sources: data.sources,
-        },
-      ]);
+      if (!response.ok || !response.body) {
+        throw new Error(
+          response.status === 401
+            ? "Connect your wallet and sign in to ask Zoya."
+            : "Zoya is not reachable right now.",
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // A frame ends at a blank line; the tail is a partial frame and waits
+        // for the next chunk rather than being parsed half-formed.
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          const event = /^event: (.*)$/m.exec(frame)?.[1];
+          const payload = /^data: (.*)$/m.exec(frame)?.[1];
+          if (!event || !payload) continue;
+
+          const data = JSON.parse(payload);
+          if (event === "delta") {
+            setReading(null);
+            append(data.text);
+          } else if (event === "tool") {
+            setReading(data.tool);
+          } else if (event === "done") {
+            append("", data.sources);
+          } else if (event === "error") {
+            append(data.error ?? "Something went wrong.");
+          }
+        }
+      }
+
+      // A stream that ends without saying anything is a failure that looked
+      // like a success; saying so beats an empty bubble.
+      if (!started) append("I could not answer that. Try again.");
     } catch (cause) {
-      setTurns((was) => [
-        ...was,
-        { role: "zoya", text: (cause as Error).message },
-      ]);
+      append((cause as Error).message);
     } finally {
       setBusy(false);
+      setReading(null);
     }
   };
 
@@ -220,6 +291,12 @@ export function Zoya() {
               She reads the chain and the extraction records. She cannot buy,
               sign, or move anything, and gives no investment advice.
             </p>
+            {address ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                She can see this wallet&rsquo;s holdings — try{" "}
+                <em>&ldquo;what do I hold?&rdquo;</em>
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -249,9 +326,13 @@ export function Zoya() {
           </div>
         ))}
 
-        {busy ? (
+        {busy && reading ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" /> Reading…
+            <Loader2 className="size-3.5 animate-spin" /> {toolLabel(reading)}
+          </p>
+        ) : busy ? (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" /> Thinking…
           </p>
         ) : null}
 
