@@ -3,23 +3,24 @@ import { Fragment } from "react";
 /**
  * The small slice of Markdown an assistant actually emits.
  *
- * Bold, inline code, bullets, numbered lists, and paragraphs. Nothing else,
- * and — the part that matters — nothing is ever handed to
+ * Headings, bold, italics, inline code, bullets, numbered lists and
+ * paragraphs. Nothing else, and — the part that matters — nothing is handed to
  * `dangerouslySetInnerHTML`. This text comes from a model that has just been
  * reading uploaded documents, so treating it as markup would let a sentence
  * inside a loan agreement put HTML on the page. Everything here becomes React
  * elements, so the worst a stray angle bracket can do is look like an angle
  * bracket.
  *
- * A parser rather than a library because the whole grammar is four rules; a
- * Markdown dependency would bring tables, links, images and raw HTML, all of
- * which are attack surface here and none of which she needs.
+ * A parser rather than a library because the whole grammar is a handful of
+ * rules; a Markdown dependency would bring tables, links, images and raw HTML
+ * passthrough, all of which are attack surface here and none of which she
+ * needs.
  */
 
-/** `**bold**` and `` `code` `` inside a single line. */
+/** `**bold**`, `*italic*` and `` `code` `` within a single line. */
 function inline(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const pattern = /(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;
+  const pattern = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g;
   let cursor = 0;
   let key = 0;
   let match: RegExpExecArray | null;
@@ -33,6 +34,8 @@ function inline(text: string): React.ReactNode[] {
         <strong key={key++} className="font-semibold text-foreground">
           {token.slice(2, -2)}
         </strong>
+      ) : token.startsWith("*") ? (
+        <em key={key++}>{token.slice(1, -1)}</em>
       ) : (
         <code
           key={key++}
@@ -49,6 +52,7 @@ function inline(text: string): React.ReactNode[] {
   return parts;
 }
 
+const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^\s*[-*•]\s+/;
 const NUMBERED = /^\s*\d+[.)]\s+/;
 
@@ -95,6 +99,26 @@ export function RichText({ text }: { text: string }) {
   };
 
   for (const line of text.split("\n")) {
+    /*
+     * Headings arrive as "### Holdings". They are rendered at body size and
+     * merely weighted: a chat bubble is not a document, and a model reaching
+     * for h3 should not get 24px type inside a 24rem panel.
+     */
+    const heading = HEADING.exec(line);
+    if (heading) {
+      flushList();
+      flushParagraph();
+      blocks.push(
+        <p
+          key={key++}
+          className="pt-1 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+        >
+          {inline(heading[2])}
+        </p>,
+      );
+      continue;
+    }
+
     const bullet = BULLET.test(line);
     const numbered = !bullet && NUMBERED.test(line);
 
