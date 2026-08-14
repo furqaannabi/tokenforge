@@ -11,19 +11,25 @@ import { ConfigurationError } from "./errors";
  */
 
 /**
- * An alias rather than a pinned version, deliberately.
+ * Gemini 3.7 Flash, everywhere.
  *
- * `gemini-2.5-pro` was an earlier default and returns 404: still listed by the
- * models endpoint, but "no longer available to new users". A pinned model fails
- * closed and takes extraction down with it. The cost is that behaviour can
- * shift without the code changing, which is why every extraction records the
- * model that produced it — set LLM_MODEL to pin one when reproducibility
- * matters more than staying alive.
+ * Pinned rather than aliased. The trade is worth naming: an alias survives a
+ * model being retired, and `gemini-2.5-pro` did exactly that to an earlier
+ * default — still listed by the models endpoint, but 404 to new callers, which
+ * takes extraction down with it. A pin fails that way; it also means behaviour
+ * cannot shift under a pipeline whose whole claim is that the same document
+ * yields the same terms. Every extraction records the model that produced it,
+ * and both slots stay overridable by environment.
  */
-export const MODEL = process.env.LLM_MODEL ?? "gemini-pro-latest";
+export const MODEL = process.env.LLM_MODEL ?? "gemini-3.7-flash";
 
-/** For work that is reading rather than reasoning, such as transcription. */
-export const MODEL_FAST = process.env.LLM_MODEL_FAST ?? "gemini-flash-latest";
+/**
+ * The same model for reading-shaped work.
+ *
+ * There were two slots because the reasoning one was a Pro and paying Pro
+ * prices to transcribe was waste. One model for both collapses that.
+ */
+export const MODEL_FAST = process.env.LLM_MODEL_FAST ?? "gemini-3.7-flash";
 
 let client: GoogleGenAI | undefined;
 
