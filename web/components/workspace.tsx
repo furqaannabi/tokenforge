@@ -70,30 +70,6 @@ export function Workspace() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
-      <div
-        role="tablist"
-        aria-label="Sections"
-        className="-mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-border px-4 sm:mx-0 sm:px-0"
-      >
-        {visible.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            type="button"
-            aria-selected={active === tab.id}
-            onClick={() => select(tab.id)}
-            className={cn(
-              "-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm transition-colors",
-              active === tab.id
-                ? "border-verified font-medium text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {active === "notes" ? <AllNotesView /> : null}
       {active === "mine" ? <MyNotesView /> : null}
       {active === "issue" ? <IssueView /> : null}

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { useIsRegistryAdmin } from "@/lib/registry";
@@ -28,6 +28,14 @@ export function TopNav() {
   const { isAdmin } = useIsRegistryAdmin(address);
   const pathname = usePathname();
   const router = useRouter();
+  const params = useSearchParams();
+  // "All notes" is the default view, so it carries no query of its own.
+  const active = params.get("view") ?? "notes";
+
+  const go = (id: string) => {
+    router.push(id === "notes" ? "/app" : `/app?view=${id}`);
+    setMenuOpen(false);
+  };
   const [menuOpen, setMenuOpen] = useState(false);
 
   // A menu that survives navigation stays open over the page it just opened.
@@ -83,8 +91,26 @@ export function TopNav() {
           />
         </Link>
 
-        {/* Sections live in the tab bar on a wide screen; on a phone that bar
-            scrolls sideways and its right-hand tabs are easy to miss. */}
+        <nav aria-label="Sections" className="hidden items-center gap-1 sm:flex">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              aria-current={active === section.id ? "page" : undefined}
+              onClick={() => go(section.id)}
+              className={cn(
+                "rounded-md px-2.5 py-1.5 text-sm transition-colors lg:px-3",
+                active === section.id
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* The same sections on a phone, where they will not fit in the bar. */}
         <button
           type="button"
           onClick={() => setMenuOpen((was) => !was)}
@@ -138,15 +164,14 @@ export function TopNav() {
             <button
               key={section.id}
               type="button"
-              onClick={() => {
-                /* The workspace reads its tab from the query string, so this
-                   is a navigation rather than a message to a sibling. */
-                router.push(
-                  section.id === "notes" ? "/app" : `/app?view=${section.id}`,
-                );
-                setMenuOpen(false);
-              }}
-              className="block w-full rounded-md px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => go(section.id)}
+              aria-current={active === section.id ? "page" : undefined}
+              className={cn(
+                "block w-full rounded-md px-3 py-2.5 text-left text-sm hover:bg-muted hover:text-foreground",
+                active === section.id
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground",
+              )}
             >
               {section.label}
             </button>

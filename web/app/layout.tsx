@@ -35,7 +35,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <Providers>
           <SessionGate />
-          <TopNav />
+          {/* Reads ?view= to mark the active section, so it needs the same
+              Suspense treatment the workspace does to stay statically
+              rendered. */}
+          <Suspense fallback={<div className="h-14 border-b border-border" />}>
+            <TopNav />
+          </Suspense>
           {/* min-w-0 so a wide child (the notes table) shrinks rather than
               stretching the document past the viewport — which pushed the
               header's own controls off-screen on a phone. */}
