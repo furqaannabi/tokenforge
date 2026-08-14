@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BASE_URL } from "@/lib/api";
+import { Reveal, Trace } from "@/components/reveal";
 
 /**
  * The front door.
@@ -140,17 +141,22 @@ export function Landing() {
       <main>
         <section className="mx-auto max-w-[1200px] px-4 pb-10 pt-16 sm:px-6 sm:pt-24">
           <div className="mx-auto max-w-3xl text-center">
+            <Reveal as="div" className="inline-block">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               <span className="size-1.5 rounded-full bg-verified" />
               Live on X Layer testnet
             </span>
+            </Reveal>
 
+            <Reveal delay={80}>
             <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
               A signed loan agreement,
               <br className="hidden sm:block" />{" "}
               <span className="text-verified">provably</span> on-chain.
             </h1>
+            </Reveal>
 
+            <Reveal delay={160}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
               Upload the PDF. A model reads the economic terms and scores its own
               confidence on every field, a validator checks the arithmetic, a
@@ -158,8 +164,9 @@ export function Landing() {
               parameters before a verified issuer can mint. What comes out is an
               ERC-20 note whose coupons pay its holders.
             </p>
+            </Reveal>
 
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Reveal delay={240} className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <Button asChild size="lg" className="h-11 px-6 text-base">
                 <Link href="/app">
                   Launch app <ArrowRight />
@@ -173,10 +180,11 @@ export function Landing() {
               >
                 <Link href="/app?view=notes">Browse the notes</Link>
               </Button>
-            </div>
+            </Reveal>
 
             {totals ? (
-              <dl className="mx-auto mb-4 mt-12 grid max-w-md grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+              <Reveal as="div" className="mx-auto mb-4 mt-12">
+              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
                 <Figure
                   value={totals.notes}
                   label={totals.notes === 1 ? "note minted" : "notes minted"}
@@ -190,6 +198,7 @@ export function Landing() {
                   }
                 />
               </dl>
+              </Reveal>
             ) : null}
           </div>
         </section>
@@ -199,32 +208,38 @@ export function Landing() {
           title="Five gates between a PDF and a token"
           lede="Each one can stop the mint. None of them trusts the one before it."
         >
-          <ol className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
+          <Trace delay={120} />
+          <ol className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
             <Step
+              delay={0}
               n="01"
               icon={<FileSignature className="size-4" />}
               title="Upload"
               body="The document is hashed. That hash is what the note commits to on-chain, so the token always names the paper it came from."
             />
             <Step
+              delay={110}
               n="02"
               icon={<ScanLine className="size-4" />}
               title="Extract"
               body="Gemini reads principal, rate, maturity and the full schedule — and reports a confidence for each field rather than one number for the document."
             />
             <Step
+              delay={220}
               n="03"
               icon={<ShieldCheck className="size-4" />}
               title="Validate"
               body="Deterministic rules, not a model: does the schedule sum to the principal, does the interest follow the rate, do the dates run in order."
             />
             <Step
+              delay={330}
               n="04"
               icon={<PenLine className="size-4" />}
               title="Review"
               body="Anything the model was unsure of is put in front of a person. Nothing low-confidence reaches a chain unread."
             />
             <Step
+              delay={440}
               n="05"
               icon={<Coins className="size-4" />}
               title="Mint"
@@ -240,14 +255,17 @@ export function Landing() {
         >
           <div className="grid gap-4 sm:grid-cols-3">
             <Party
+              delay={0}
               role="Issuer"
               body="Originated the loan and wants their capital back early. Mints the note and offers part of the supply for sale."
             />
             <Party
+              delay={100}
               role="Borrower"
               body="Owes the money. Named at issuance and must sign accept() themselves — until they do, the note is Pending and does nothing."
             />
             <Party
+              delay={200}
               role="Holders"
               body="Own the repayments. Buy from the offering, claim their share as each period settles, and can sell on."
             />
@@ -261,16 +279,19 @@ export function Landing() {
         >
           <div className="grid gap-4 sm:grid-cols-3">
             <Note
+              delay={0}
               icon={<Zap className="size-4 text-verified" />}
               title="Nothing to cancel"
               body="The authorization is the allowance. Lower it and collection stops on the next block — no counterparty, no notice period, nobody to ask."
             />
             <Note
+              delay={100}
               icon={<ShieldCheck className="size-4 text-verified" />}
               title="The keeper takes nothing"
               body="Its call names no recipient. It moves the scheduled amount from the borrower into that note's vault, once due, and no further than their own allowance."
             />
             <Note
+              delay={200}
               icon={<Coins className="size-4 text-verified" />}
               title="Balances amortize"
               body="A holder's balance falls as principal comes back — that is repayment arriving, not a loss. Shares, which measure ownership, never move."
@@ -288,7 +309,7 @@ export function Landing() {
                   "radial-gradient(40rem 20rem at 50% 0%, rgba(16,185,129,0.10), transparent 70%)",
               }}
             />
-            <div className="relative">
+            <Reveal className="relative">
               <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
                 Everything is on a public testnet
               </h2>
@@ -302,7 +323,7 @@ export function Landing() {
                   Launch app <ArrowRight />
                 </Link>
               </Button>
-            </div>
+            </Reveal>
           </div>
         </section>
       </main>
@@ -350,7 +371,7 @@ function Section({
 }) {
   return (
     <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
-      <div className="max-w-2xl">
+      <Reveal className="max-w-2xl">
         <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-verified">
           {eyebrow}
         </p>
@@ -358,7 +379,7 @@ function Section({
           {title}
         </h2>
         <p className="mt-3 text-pretty text-muted-foreground">{lede}</p>
-      </div>
+      </Reveal>
       <div className="mt-8">{children}</div>
     </section>
   );
@@ -369,14 +390,16 @@ function Step({
   icon,
   title,
   body,
+  delay = 0,
 }: {
   n: string;
   icon: React.ReactNode;
   title: string;
   body: string;
+  delay?: number;
 }) {
   return (
-    <li className="bg-card p-5">
+    <Reveal as="li" delay={delay} className="bg-card p-5">
       <div className="flex items-center gap-2 text-verified">
         {icon}
         <span className="font-mono text-[11px] tracking-[0.08em]">{n}</span>
@@ -385,18 +408,26 @@ function Step({
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         {body}
       </p>
-    </li>
+    </Reveal>
   );
 }
 
-function Party({ role, body }: { role: string; body: string }) {
+function Party({
+  role,
+  body,
+  delay = 0,
+}: {
+  role: string;
+  body: string;
+  delay?: number;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
+    <Reveal delay={delay} className="rounded-lg border border-border bg-card p-5">
       <h3 className="font-semibold">{role}</h3>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         {body}
       </p>
-    </div>
+    </Reveal>
   );
 }
 
@@ -404,13 +435,15 @@ function Note({
   icon,
   title,
   body,
+  delay = 0,
 }: {
   icon: React.ReactNode;
   title: string;
   body: string;
+  delay?: number;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
+    <Reveal delay={delay} className="rounded-lg border border-border bg-card p-5">
       <div className="flex items-center gap-2">
         {icon}
         <h3 className="font-semibold">{title}</h3>
@@ -418,6 +451,6 @@ function Note({
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         {body}
       </p>
-    </div>
+    </Reveal>
   );
 }

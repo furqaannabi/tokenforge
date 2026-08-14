@@ -131,3 +131,69 @@
   --apkt-tokens-core-backgroundAccentPrimary-base: var(--verified) !important;
   --apkt-colors-accent100: var(--verified) !important;
 }
+
+/*
+ * Reveal on scroll.
+ *
+ * Movement earns its place here by doing one job: showing that the five gates
+ * are a sequence, not five boxes that happen to sit in a row. So the steps
+ * arrive in order, and everything else simply settles into place.
+ *
+ * The resting state is the visible one. An element that starts hidden and
+ * depends on JavaScript to appear is an element nobody sees when the observer
+ * never fires — so `.reveal` only hides once `.js-reveal` has been set on the
+ * root by the component that will also un-hide it.
+ */
+.js-reveal .reveal {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.js-reveal .reveal-in {
+  animation: reveal-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The line that walks through the pipeline, drawn once as it comes into view. */
+.js-reveal .trace {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.js-reveal .trace-in {
+  animation: trace 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@keyframes trace {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/*
+ * Nobody is required to watch any of this. A vestibular disorder makes motion
+ * genuinely unpleasant, and the page reads identically without it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal .reveal,
+  .js-reveal .trace {
+    opacity: 1;
+    transform: none;
+  }
+  .js-reveal .reveal-in,
+  .js-reveal .trace-in {
+    animation: none;
+  }
+}
