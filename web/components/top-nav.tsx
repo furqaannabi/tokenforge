@@ -110,17 +110,6 @@ export function TopNav() {
           ))}
         </nav>
 
-        {/* The same sections on a phone, where they will not fit in the bar. */}
-        <button
-          type="button"
-          onClick={() => setMenuOpen((was) => !was)}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          className="ml-1 flex size-9 items-center justify-center rounded-md text-muted-foreground hover:text-foreground sm:hidden"
-        >
-          {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
-
         <div className="ml-auto flex min-w-0 shrink items-center justify-end gap-2 sm:gap-3">
           {wrongNetwork ? (
             <Stamp tone="review">
@@ -153,6 +142,18 @@ export function TopNav() {
             <InjectedConnect connecting={connecting} />
           )}
         </div>
+
+        {/* Rightmost, past the wallet controls: a thumb reaches that corner
+            far more easily than the one beside the logo. */}
+        <button
+          type="button"
+          onClick={() => setMenuOpen((was) => !was)}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          className="-mr-2 flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground sm:hidden"
+        >
+          {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
       </div>
 
       {menuOpen ? (
