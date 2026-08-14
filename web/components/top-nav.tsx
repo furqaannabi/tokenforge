@@ -63,7 +63,7 @@ export function TopNav() {
    * it.
    */
   return (
-    <header className="sticky top-0 z-40 w-screen max-w-full border-b border-border bg-card">
+    <header className="sticky top-0 z-40 w-full max-w-full border-b border-border bg-card">
       <div className="mx-auto flex h-14 min-w-0 max-w-[1200px] items-center gap-3 px-4 sm:px-6">
         {/* The mark alone, back to the landing page. The name is on the page
             it leads to, and repeating it in the bar costs width that the
