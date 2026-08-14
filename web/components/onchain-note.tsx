@@ -16,6 +16,7 @@ import {
   useSettlePeriod,
   useVaultProgress,
 } from "@/lib/repayment";
+import { Autopay } from "@/components/autopay";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@/lib/wallet";
 import { useCurrencyBalance } from "@/lib/sale";
@@ -316,6 +317,14 @@ export function OnChainNote({
         </Card>
       </div>
 
+      {/*
+        Full width and below the pair. Repaying by hand and repaying
+        automatically are the same obligation, so autopay sits under the Repay
+        card rather than beside it, where it would read as an alternative.
+      */}
+      {state?.borrower && state.borrower !== ZERO_ADDRESS ? (
+        <Autopay vault={vault} borrower={state.borrower} />
+      ) : null}
     </div>
   );
 }

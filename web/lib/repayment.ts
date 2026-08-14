@@ -220,6 +220,143 @@ export function useAllowance(owner?: `0x${string}`, spender?: `0x${string}`) {
 }
 
 /**
+ * The standing authorization, and whether it is enough.
+ *
+ * Automatic repayment is an ERC-20 allowance and nothing more. The vault pulls
+ * the instalment from the borrower once it is due; the borrower's control is
+ * the allowance itself, which they can revoke at any moment. There is no
+ * subscription to cancel and nobody to ask.
+ *
+ * `collectible` is the contract's own answer to "would a collection succeed
+ * right now", so the panel never has to reimplement that test and get it
+ * subtly wrong.
+ */
+export function useAutopay(vault?: `0x${string}`) {
+  const reads = useReadContracts({
+    contracts: vault
+      ? [
+          {
+            abi: repaymentVaultAbi,
+            address: vault,
+            chainId: CHAIN_ID,
+            functionName: "authorizedAmount",
+          },
+          {
+            abi: repaymentVaultAbi,
+            address: vault,
+            chainId: CHAIN_ID,
+            functionName: "collectible",
+          },
+          {
+            abi: repaymentVaultAbi,
+            address: vault,
+            chainId: CHAIN_ID,
+            functionName: "outstanding",
+          },
+          {
+            abi: repaymentVaultAbi,
+            address: vault,
+            chainId: CHAIN_ID,
+            functionName: "isOverdue",
+          },
+        ]
+      : [],
+    query: { enabled: Boolean(vault), refetchInterval: 15_000 },
+  });
+
+  const at = (index: number) => reads.data?.[index]?.result;
+
+  return {
+    /** What the borrower has authorised the vault to pull. */
+    authorized: (at(0) as bigint | undefined) ?? 0n,
+    /** The contract's own answer: would a collection succeed this second. */
+    collectible: Boolean(at(1)),
+    /** Everything still owed across unsettled periods. */
+    outstanding: (at(2) as bigint | undefined) ?? 0n,
+    /** Due date passed and still unpaid. */
+    overdue: Boolean(at(3)),
+    isPending: reads.isPending,
+    refetch: reads.refetch,
+  };
+}
+
+/**
+ * Grants or revokes the vault's standing permission to collect.
+ *
+ * Revoking is the same call with zero, which is the point worth making in the
+ * interface: the borrower is not asking anyone's permission to stop.
+ */
+export function useAuthorizeAutopay(vault?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const approve = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({
+    hash: approve.data,
+    chainId: CHAIN_ID,
+  });
+
+  return {
+    isSigning: approve.isPending,
+    isConfirming: receipt.isLoading,
+    error: approve.error,
+
+    authorize: async (amount: bigint) => {
+      if (!vault || !addresses.usdg) {
+        throw new Error("Contract addresses are not configured.");
+      }
+
+      const hash = await approve.writeContractAsync({
+        abi: erc20Abi,
+        address: addresses.usdg,
+        functionName: "approve",
+        args: [vault, amount],
+        chainId: CHAIN_ID,
+      });
+
+      // Mined before this resolves: an authorization the caller cannot yet see
+      // on-chain reads to them as one that did not happen.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
+  };
+}
+
+/**
+ * Triggers a due collection now, from any wallet.
+ *
+ * `collectFromBorrower` is deliberately unpermissioned — a contract cannot
+ * wake itself up. The keeper normally makes this call; the button exists
+ * because an automation nobody can run by hand is one nobody can verify.
+ */
+export function useCollectNow(vault?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const collect = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({
+    hash: collect.data,
+    chainId: CHAIN_ID,
+  });
+
+  return {
+    isSigning: collect.isPending,
+    isConfirming: receipt.isLoading,
+    error: collect.error,
+
+    collect: async () => {
+      if (!vault) throw new Error("Contract addresses are not configured.");
+
+      const hash = await collect.writeContractAsync({
+        abi: repaymentVaultAbi,
+        address: vault,
+        functionName: "collectFromBorrower",
+        chainId: CHAIN_ID,
+      });
+
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
+  };
+}
+
+/**
  * Settles the next period: approve, then pay.
  *
  * Two transactions, because ERC-20 has no way to pull without a prior

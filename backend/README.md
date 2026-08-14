@@ -100,6 +100,9 @@ intended to publish.
 | `GET /extractions/:id/mint-args` | The approved parameters, for the issuer's wallet to sign |
 | `GET /mint-requests` | The admin's queue of mints awaiting a decision |
 | `POST /zoya/messages` | The assistant. Returns her reply and the tools it rested on |
+| `POST /zoya/stream` | The same turn as server-sent events: `delta` per fragment, `tool` when one starts, `done` with the sources |
+| `GET /keeper` | Whether automatic collection is running and what it last did. Public |
+| `POST /keeper/sweep` | Run a collection sweep now. Signed in — it spends the keeper's gas |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |
 | `POST /extractions/:id/mint` | Record a mint that already happened on-chain |
 | `POST /issuers/applications` | Apply to the registry — corporate detail that has no business on-chain |
@@ -151,6 +154,24 @@ Document text reaches her only as data. An uploaded agreement is untrusted
 input — anyone admitted can upload one — and a PDF carrying instructions is a
 realistic attack on a lending product, not a theoretical one. Figures come from
 the chain and the validator, which no document can reach.
+
+## The keeper
+
+`startKeeper` sweeps every `KEEPER_INTERVAL_MS` (default five minutes): it reads
+`collectible()` on every minted note's vault in one multicall, and calls
+`collectFromBorrower` on the ones that answer true. Serially, each receipt
+awaited before the next send — concurrent sends from one account race on the
+nonce, and the loser is dropped silently, which would look like a payment that
+succeeded and never landed.
+
+The key only pays gas. `collectFromBorrower` takes no arguments and names no
+recipient, so this service cannot move money to an address of its choosing. It
+is the one write ABI the backend carries, and nothing else should be added.
+
+Without `KEEPER_PRIVATE_KEY` the keeper logs that it is off and does nothing;
+collection remains available to anyone from the note page. `GET /keeper` is
+public and reports the last sweep; `POST /keeper/sweep` runs one now and needs a
+session, because that one spends the keeper's gas.
 
 ## Known gaps
 

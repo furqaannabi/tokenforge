@@ -64,6 +64,37 @@ Paying, though, is open to anyone. A guarantor or a servicer may legitimately
 settle a period, and restricting it to one address would let a lost key strand
 a performing loan.
 
+### Automatic repayment
+
+The borrower grants the vault a standing allowance in the settlement currency.
+Once an instalment falls due, `collectFromBorrower` pulls exactly the scheduled
+amount and credits it across the holders. A keeper in the service sweeps every
+few minutes and makes the call for any vault that is due.
+
+Three properties are the whole design:
+
+- **There is nothing to cancel.** The authorization *is* an ERC-20 allowance.
+  The borrower lowers it and collection stops on the next block — no
+  counterparty, no notice period, no one to ask. Verified: with the instalment
+  due and the allowance revoked, the keeper collects nothing and the balance is
+  untouched.
+- **The keeper cannot take anything.** `collectFromBorrower` has no arguments
+  and no recipient. It moves the scheduled amount, from the borrower named by
+  the note, into that note's vault, only once due, only as far as the borrower's
+  own allowance permits. Whoever holds the keeper key can pay other people's
+  debts on time; that is the entire privilege, which is why a hot key is
+  acceptable and why the call is unpermissioned.
+- **Automation is never the only route.** Because the call is open, the note
+  page offers a "Collect now" button to anyone. An automation that only its
+  operator can run is one nobody else can verify.
+
+An allowance is permission, not money set aside — the balance still has to be
+there on the day, and the panel says so.
+
+Set `KEEPER_PRIVATE_KEY` to switch the sweep on; without it nothing collects
+automatically and repayment still works by hand. `GET /keeper` reports whether
+it is running and what it last did.
+
 ## The trust stack
 
 No single check is trusted on its own. Five layers each do a different job:
@@ -210,13 +241,18 @@ Stated plainly, because a demo can hide these:
   buy are all wired to the contracts and signed by the connected wallet, and
   every one has been exercised on testnet — but by a scripted signer. That gap
   remains the largest untested surface.
-- **Zoya does not stream.** The reply arrives in one piece after the tool loop
-  finishes, so there is a pause with a spinner. She has also never had to answer
-  from real data — with no notes minted, every question so far has been
-  answerable with "there are none", which is the easy case for a grounding rule.
-- **Automated repayment has no interface yet.** `collectFromBorrower` and the
-  standing authorization it needs are on-chain and covered by tests; nothing in
-  the app shows the authorization or triggers a collection, and no keeper runs.
+- **Zoya has answered from real data only recently.** She streams now, and
+  `getPortfolio` reads the connected wallet's positions across every note. But
+  for most of the build there was nothing minted, so every question was
+  answerable with "there are none" — the easy case for a grounding rule. One
+  note is not much more evidence.
+- **Automatic repayment has never run on a public network.** The keeper, the
+  standing authorization and the collection are complete and were exercised end
+  to end against a fork of X Layer testnet — time moved past the due date, the
+  instalment moved, the schedule advanced, and revoking the allowance stopped
+  the next one. On testnet itself the only note's next instalment is not due
+  until April 2027, so nothing has yet been collected on a chain anyone else
+  can see.
 - **The borrower's acceptance has never run against a real second wallet.** The
   `Pending` gate is covered by contract tests and by confirming that notes
   predating the role do not trip it.

@@ -1,9 +1,17 @@
 /**
- * Read-only fragments of the deployed contracts.
+ * Fragments of the deployed contracts.
  *
- * View functions only: this service reads the chain and never writes to it, so
- * carrying the write ABIs would only invite something to try. Regenerate from
- * the Foundry artifacts when a contract changes.
+ * Views, and one write.
+ *
+ * This was view-only on the principle that a service carrying write ABIs
+ * invites something to try. The keeper broke that rule for exactly one
+ * function, `collectFromBorrower`, and the exception is narrow on purpose: it
+ * takes no arguments and names no recipient, so the only thing this service
+ * can do on-chain is pay a borrower's own instalment, on time, from their own
+ * standing allowance. Nothing here can move money to an address of its
+ * choosing, and nothing should be added that can.
+ *
+ * Regenerate from the Foundry artifacts when a contract changes.
  */
 
 export const rwaNoteAbi = [
@@ -428,6 +436,19 @@ export const repaymentVaultAbi = [
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "collectFromBorrower",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",

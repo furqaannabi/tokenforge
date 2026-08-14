@@ -15,6 +15,7 @@ import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
 import { readParty } from "./chain";
 import { ask, loadHistory } from "./zoya";
+import { keeperStatus, startKeeper, sweep } from "./keeper";
 import { auth, requireAuth } from "./auth";
 import { isAddress, verifyMessage } from "viem";
 import {
@@ -810,6 +811,27 @@ app.post("/zoya/stream", async (c) => {
   });
 });
 
+/**
+ * Whether automatic collection is running, and what it last did.
+ *
+ * Public: an investor deciding whether repayment is armed should not have to
+ * take the platform's word for it, and every collection is a transaction they
+ * can check.
+ */
+app.get("/keeper", (c) => c.json(keeperStatus()));
+
+/**
+ * Runs a sweep now.
+ *
+ * Signed in only — not because the sweep can do harm (the collection itself is
+ * unpermissioned, and anyone may call it straight from the note page) but
+ * because this one spends the keeper's gas, and an open endpoint that spends
+ * gas is a way to drain it.
+ */
+app.post("/keeper/sweep", requireAuth, async (c) =>
+  c.json({ attempts: await sweep() }),
+);
+
 /** A thread, for the panel to restore after a reload. */
 app.get("/zoya/messages", async (c) => {
   const conversationId = c.req.query("conversationId");
@@ -1249,6 +1271,10 @@ app.onError((err, c) => {
   console.error(err);
   return c.json({ error: "Internal error." }, 500);
 });
+
+// Started here rather than at import time so a test importing the app does
+// not silently begin sending transactions.
+startKeeper();
 
 export default {
   port: Number(process.env.PORT ?? 8787),
