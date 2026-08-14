@@ -9,7 +9,7 @@ import {
   repaymentVaultAbi,
   saleDeskAbi,
 } from "./contracts";
-import { useExtractions } from "./queries";
+import { useMintedExtractions } from "./queries";
 import type { ApiExtractionSummary } from "./api";
 
 /**
@@ -54,7 +54,7 @@ export interface Holding {
 
 /** Every minted note, whether or not the viewer holds any of it. */
 export function useMintedNotes() {
-  const extractions = useExtractions();
+  const extractions = useMintedExtractions();
 
   const minted = useMemo(
     () =>

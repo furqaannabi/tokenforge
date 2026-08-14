@@ -231,6 +231,15 @@ export function useExtractions(status?: ExtractionStatus) {
   });
 }
 
+/** Every minted note, for anyone — no session required. */
+export function useMintedExtractions() {
+  return useQuery({
+    queryKey: ["notes", "minted"],
+    queryFn: () => api.listMintedNotes(),
+    retry: false,
+  });
+}
+
 export function useExtraction(
   id: string | undefined,
 ): UseQueryResult<ApiExtraction> {

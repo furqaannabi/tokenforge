@@ -150,7 +150,7 @@ export function MyNotesView() {
                 ? "Reading positions…"
                 : "This wallet holds no notes."}
             <p className="mt-3">
-              <Link href="/" className="text-verified hover:underline">
+              <Link href="/app" className="text-verified hover:underline">
                 Browse issued notes
               </Link>
             </p>

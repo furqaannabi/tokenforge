@@ -77,7 +77,7 @@ export function NoteScreen({ noteId }: { noteId: string }) {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">
       <Link
-        href="/"
+        href="/app"
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" /> All notes

@@ -431,6 +431,41 @@ app.post("/documents/:id/extract/stream", async (c) => {
  * them and which are finished, so the status and the terms come along rather
  * than requiring a fetch per row.
  */
+/**
+ * Minted notes, public.
+ *
+ * The rest of `/extractions` is an issuer's working papers — documents under
+ * review, low-confidence fields, provenance verdicts — and needs a session. A
+ * minted note is the opposite: it is already a public instrument on a public
+ * chain, and requiring a wallet to look at one would be theatre, since anyone
+ * can read the same facts from the contracts directly.
+ *
+ * Declared before the guard's path so browsing never asks for a signature.
+ */
+app.get("/notes", async (c) => {
+  const extractions = await prisma.extraction.findMany({
+    where: { status: "MINTED" },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      document: { select: { id: true, filename: true, contentHash: true } },
+      note: true,
+    },
+  });
+
+  return c.json({ extractions: jsonSafe(extractions) });
+});
+
+/** Counts for the landing page. Nothing here is not already on-chain. */
+app.get("/stats", async (c) => {
+  const [notes, documents] = await Promise.all([
+    prisma.extraction.count({ where: { status: "MINTED" } }),
+    prisma.document.count(),
+  ]);
+
+  return c.json({ notes, documents });
+});
+
 app.get("/extractions", async (c) => {
   const status = c.req.query("status");
 

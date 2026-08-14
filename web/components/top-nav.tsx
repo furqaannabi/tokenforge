@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import "@reown/appkit/react";
 import { useConnect, useConnectors } from "wagmi";
 import { BadgeCheck, ShieldOff, TriangleAlert, Wallet } from "lucide-react";
@@ -20,11 +21,16 @@ import { Button } from "@/components/ui/button";
  */
 export function TopNav() {
   const { issuer, connected, connecting, wrongNetwork } = useWallet();
+  const pathname = usePathname();
+
+  // The landing page has its own header, and a wallet button above the fold
+  // there would ask for a connection before saying what the product is.
+  if (pathname === "/") return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
+        <Link href="/app" className="flex shrink-0 items-center gap-2.5">
           <Image
             src="/logo.png"
             alt="TokenForge"

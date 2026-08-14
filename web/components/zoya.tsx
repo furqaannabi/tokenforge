@@ -85,6 +85,7 @@ export function Zoya() {
    * which scrolls and has nothing to click.
    */
   const onReview = pathname.startsWith("/review/");
+  const onLanding = pathname === "/";
 
   // A note page is /note/[id], where the id is the extraction. Passing it lets
   // "what does this pay?" resolve without anyone quoting an id at her.
@@ -223,6 +224,8 @@ export function Zoya() {
       setReading(null);
     }
   };
+
+  if (onLanding) return null;
 
   if (!open) {
     return (

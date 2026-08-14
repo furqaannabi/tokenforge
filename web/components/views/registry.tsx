@@ -155,7 +155,7 @@ function AdminLink() {
           This wallet is the registry admin.
         </span>
         <Link
-          href="/?view=admin"
+          href="/app?view=admin"
           className="inline-flex items-center gap-1.5 font-medium hover:text-verified"
         >
           Open the queue <ArrowRight className="size-3.5" />

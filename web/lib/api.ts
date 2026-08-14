@@ -456,6 +456,21 @@ export const api = {
       `/extractions${status ? `?status=${status}` : ""}`,
     ).then((r) => r.extractions),
 
+  /**
+   * Minted notes, readable without a session.
+   *
+   * `/extractions` is an issuer's working papers and needs one. A minted note
+   * is a public instrument on a public chain, so browsing must not demand a
+   * signature — anyone can read the same facts from the contracts.
+   */
+  listMintedNotes: () =>
+    request<{ extractions: ApiExtractionSummary[] }>("/notes").then(
+      (r) => r.extractions,
+    ),
+
+  /** Counts for the landing page. */
+  stats: () => request<{ notes: number; documents: number }>("/stats"),
+
   getExtraction: (extractionId: string) =>
     request<{ extraction: ApiExtraction }>(`/extractions/${extractionId}`).then(
       (r) => r.extraction,
