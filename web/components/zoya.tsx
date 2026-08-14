@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWallet } from "@/lib/wallet";
 import { BASE_URL } from "@/lib/api";
+import { RichText } from "@/components/rich-text";
 import { cn } from "@/lib/utils";
 
 /**
@@ -341,13 +342,19 @@ export function Zoya() {
           >
             <div
               className={cn(
-                "inline-block max-w-[90%] rounded-lg px-3 py-2 text-left whitespace-pre-wrap",
+                "inline-block max-w-[90%] rounded-lg px-3 py-2 text-left",
                 turn.role === "user"
-                  ? "bg-muted"
+                  ? "whitespace-pre-wrap bg-muted"
                   : "border border-border bg-background",
               )}
             >
-              {turn.text}
+              {/* Only her side is formatted. A user who types an asterisk
+                  means an asterisk. */}
+              {turn.role === "zoya" ? (
+                <RichText text={turn.text} />
+              ) : (
+                turn.text
+              )}
             </div>
             {turn.sources?.length ? (
               <p className="mt-1 font-mono text-[10px] text-muted-foreground">
