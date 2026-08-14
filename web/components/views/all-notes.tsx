@@ -88,16 +88,29 @@ export function AllNotesView() {
                     {row.periodsPaid}/{row.periodCount || "—"}
                   </TableCell>
                   <TableCell className="text-right">
+                    {/*
+                      * "349 @ 1,200" read as one number at a time and said
+                      * neither what 349 was nor what 1,200 bought. The
+                      * quantity leads because that is what the column asks,
+                      * and the price sits under it carrying its own unit.
+                      */}
                     {row.forSale > 0n ? (
                       <Link
                         href={`/note/${row.extraction.id}`}
-                        className="tnum text-verified hover:underline"
+                        className="block hover:underline"
                       >
-                        {tokens(row.forSale)} @{" "}
-                        {money(Number(formatUnits(row.pricePerToken, 6)))}
+                        <span className="tnum text-verified">
+                          {tokens(row.forSale)} tokens
+                        </span>
+                        <span className="tnum block text-xs text-muted-foreground">
+                          {money(Number(formatUnits(row.pricePerToken, 6)))}{" "}
+                          each
+                        </span>
                       </Link>
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">
+                        Not offered
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
