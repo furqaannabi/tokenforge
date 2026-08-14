@@ -67,7 +67,11 @@ function jsonSafe<T>(value: T): T {
   ) as T;
 }
 
-const app = new Hono();
+/**
+ * `address` is set by `requireAuth` from the session, and read by routes that
+ * would otherwise have to trust a field in the request body.
+ */
+const app = new Hono<{ Variables: { address: string } }>();
 
 app.use("*", logger());
 /*
@@ -697,7 +701,14 @@ app.post("/extractions/:id/provenance", async (c) => {
  */
 app.post("/zoya/messages", async (c) => {
   const body = zoyaSchema.parse(await c.req.json());
-  const wallet = body.context?.address?.toLowerCase() ?? null;
+  /*
+   * The proved address, not the one in the body.
+   *
+   * A caller can put any address in a request. This one signed a challenge for
+   * it, which is the whole reason the middleware exists — and it decides both
+   * whose transcript this joins and whose positions she will look up.
+   */
+  const wallet = c.get("address");
 
   /*
    * History comes from here, not from the request. A browser that supplied its
@@ -705,7 +716,11 @@ app.post("/zoya/messages", async (c) => {
    * them, which would defeat the one property she is built around.
    */
   const history = await loadHistory(body.conversationId);
-  const turn = await ask({ ...body, history });
+  const turn = await ask({
+    ...body,
+    history,
+    context: { ...body.context, address: wallet },
+  });
 
   await prisma.zoyaMessage.createMany({
     data: [

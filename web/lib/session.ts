@@ -61,18 +61,36 @@ export function useWalletSession() {
   const signedIn = session.data?.address;
 
   useEffect(() => {
-    // Wallet gone, but the service still holds a session: end it.
-    if (!connected && signedIn) {
+    if (session.isPending) return;
+
+    const wanted = address?.toLowerCase();
+
+    /*
+     * End the old session before anything else, on either exit.
+     *
+     * Disconnecting is obvious. Switching wallets is the one that catches
+     * people out: replacing the cookie leaves the previous session live on the
+     * server, so a copy of that cookie would still read the first wallet's
+     * positions and its Zoya transcript long after the browser moved on. The
+     * session belongs to the wallet that proved it, and stops when that wallet
+     * does.
+     */
+    const gone = !connected && signedIn;
+    const switched = connected && signedIn && wanted && signedIn !== wanted;
+
+    if (gone || switched) {
       attempted.current = null;
-      void json("/auth/logout", { method: "POST" }).then(() =>
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-      );
+      void json("/auth/logout", { method: "POST" })
+        .catch(() => {})
+        // Everything, not just the session: cached reads belong to the wallet
+        // that fetched them, and showing them to the next one is the leak this
+        // is meant to close.
+        .then(() => queryClient.invalidateQueries());
       return;
     }
 
-    if (!connected || !address || session.isPending) return;
+    if (!connected || !wanted) return;
 
-    const wanted = address.toLowerCase();
     // Already proved, or already asked once for this address.
     if (signedIn === wanted || attempted.current === wanted) return;
     attempted.current = wanted;
