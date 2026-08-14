@@ -207,6 +207,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
+      // The session cookie is httpOnly, so it only travels when asked for.
+      // Omitting this makes every guarded route answer 401.
+      credentials: "include",
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
@@ -394,7 +397,7 @@ export const api = {
   ): Promise<ApiExtraction> => {
     const response = await fetch(
       `${BASE_URL}/documents/${documentId}/extract/stream`,
-      { method: "POST" },
+      { method: "POST", credentials: "include" },
     ).catch(() => {
       throw new ApiError(0, `Cannot reach the extraction service at ${BASE_URL}.`);
     });

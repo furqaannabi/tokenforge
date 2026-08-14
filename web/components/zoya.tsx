@@ -92,6 +92,7 @@ export function Zoya() {
       try {
         const response = await fetch(
           `${BASE_URL}/zoya/messages?conversationId=${thread}`,
+          { credentials: "include" },
         );
         const data = await response.json();
         setTurns(
@@ -124,6 +125,7 @@ export function Zoya() {
     try {
       const response = await fetch(`${BASE_URL}/zoya/messages`, {
         method: "POST",
+        credentials: "include",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           message,

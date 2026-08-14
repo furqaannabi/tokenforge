@@ -220,3 +220,50 @@ model ZoyaMessage {
   @@index([conversationId, createdAt])
   @@index([walletAddress, createdAt])
 }
+
+/// A one-shot challenge, issued before a wallet proves who it is.
+///
+/// Random, short-lived and single-use. Without the nonce a signature is a
+/// bearer token: anyone who saw one could replay it forever. Consumed on the
+/// way through rather than deleted, so a replay is refused rather than merely
+/// missing.
+model AuthNonce {
+  id String @id @default(cuid())
+
+  /// Lower-cased. The address that asked for the challenge.
+  address String
+  /// The random value the wallet signs, hex.
+  nonce   String @unique
+
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([address, createdAt])
+  @@index([expiresAt])
+}
+
+/// A logged-in wallet.
+///
+/// The cookie carries a JWT naming this row rather than the claims themselves,
+/// so a session can be ended server-side. A self-contained token cannot be
+/// revoked before it expires, which is the wrong trade for something that
+/// authorises actions over money.
+model Session {
+  id String @id @default(cuid())
+
+  /// Lower-cased.
+  address String
+
+  /// Set when the session is deliberately ended. Kept for the audit trail
+  /// rather than deleted.
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  userAgent String?
+
+  @@index([address, createdAt])
+  @@index([expiresAt])
+}

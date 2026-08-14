@@ -15,6 +15,7 @@ import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
 import { readParty } from "./chain";
 import { ask, loadHistory } from "./zoya";
+import { auth, requireAuth } from "./auth";
 import { isAddress, verifyMessage } from "viem";
 import {
   documentKey,
@@ -69,12 +70,40 @@ function jsonSafe<T>(value: T): T {
 const app = new Hono();
 
 app.use("*", logger());
+/*
+ * `credentials` is what lets the session cookie travel, and it forbids a
+ * wildcard origin — a browser refuses `*` the moment credentials are involved.
+ * So the allowed origins are listed rather than open, which is the right shape
+ * anyway once requests carry an identity.
+ */
 app.use(
   "*",
   cors({
     origin: (process.env.CORS_ORIGINS ?? "http://localhost:3000").split(","),
+    credentials: true,
   }),
 );
+
+app.route("/auth", auth);
+
+/*
+ * Everything that changes something, or reads someone's own data, needs a
+ * proved wallet behind it. Reads that are public by design — the notes on
+ * offer, a document's terms — stay open: the point of putting this on a chain
+ * is that they are inspectable.
+ *
+ * Zoya is included. She answers questions about positions and blocked mints,
+ * which is not information to hand to anyone who finds the endpoint, and the
+ * transcript is kept per wallet.
+ */
+for (const guarded of [
+  "/documents/*",
+  "/extractions/*",
+  "/mint-requests",
+  "/zoya/*",
+]) {
+  app.use(guarded, requireAuth);
+}
 
 app.get("/health", (c) => c.json({ ok: true, service: "tokenforge-extraction" }));
 

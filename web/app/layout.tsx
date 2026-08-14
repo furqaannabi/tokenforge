@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Suspense } from "react";
 import { TopNav } from "@/components/top-nav";
+import { SessionGate } from "@/components/session-gate";
 import { Zoya } from "@/components/zoya";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         <Providers>
+          <SessionGate />
           <TopNav />
           <main className="flex-1">{children}</main>
           {/* Reads the route to know which note is on screen, so it needs the
