@@ -74,6 +74,14 @@ export function useMintedNotes() {
  * the moment a period settles: the supply is what is still outstanding, and
  * that is the number an investor is deciding about.
  */
+/**
+ * Reads queued per note below.
+ *
+ * Named, because the results come back as one flat array and the only thing
+ * separating one note's fields from the next is this number.
+ */
+const READS_PER_NOTE = 7;
+
 export function useNotesMarket() {
   const { minted, isPending, isError } = useMintedNotes();
 
@@ -140,8 +148,15 @@ export function useNotesMarket() {
   const rows = useMemo(
     () =>
       minted.map((extraction, index) => {
+        /*
+         * The stride must match the number of reads queued per note above.
+         * It said six against seven calls, so every note after the first read
+         * its neighbour's fields — and `forSale` and `price` were a slot
+         * short even on the first, printing the period count as a quantity
+         * for sale and a token supply as the price.
+         */
         const at = (offset: number) =>
-          reads.data?.[index * 6 + offset]?.result;
+          reads.data?.[index * READS_PER_NOTE + offset]?.result;
         return {
           extraction,
           note: extraction.note!,
@@ -151,8 +166,8 @@ export function useNotesMarket() {
           periodsPaid: Number((at(3) as bigint | undefined) ?? 0n),
           periodCount: Number((at(4) as bigint | undefined) ?? 0n),
           /** Tokens on offer right now, or 0n when nothing is for sale. */
-          forSale: (at(4) as bigint | undefined) ?? 0n,
-          pricePerToken: (at(5) as bigint | undefined) ?? 0n,
+          forSale: (at(5) as bigint | undefined) ?? 0n,
+          pricePerToken: (at(6) as bigint | undefined) ?? 0n,
         };
       }),
     [minted, reads.data],
