@@ -30,19 +30,22 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 sm:px-6">
-        <Link href="/app" className="flex shrink-0 items-center gap-2.5">
+        {/* The mark alone, back to the landing page. The name is on the page
+            it leads to, and repeating it in the bar costs width that the
+            wallet controls need on a phone. */}
+        <Link
+          href="/"
+          aria-label="TokenForge home"
+          className="flex shrink-0 items-center rounded-md"
+        >
           <Image
             src="/logo.png"
-            alt="TokenForge"
+            alt=""
             width={28}
             height={28}
             className="shrink-0 rounded-md"
             priority
           />
-          <span className="text-base font-bold tracking-tight">TokenForge</span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground lg:inline">
-            Institutional RWA
-          </span>
         </Link>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
