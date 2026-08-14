@@ -52,18 +52,32 @@ export function useSession() {
  * without reading them, which is the habit every wallet phishing attack needs.
  */
 export function useWalletSession() {
-  const { address, connected } = useWallet();
+  const { address, connected, connecting } = useWallet();
   const { signMessageAsync } = useSignMessage();
   const session = useSession();
   const queryClient = useQueryClient();
   const attempted = useRef<string | null>(null);
+  /*
+   * Whether a wallet has actually been connected during this mount.
+   *
+   * On a page load wagmi reports "not connected" until it finishes
+   * reconnecting, which is indistinguishable from a disconnect if you only
+   * look at the flag. Treating that as the wallet leaving revoked the session
+   * on every single refresh, and the reconnect that followed a moment later
+   * had nothing to present — so the user was asked to sign again on every
+   * load. A session is only ended by a wallet that was here and then went.
+   */
+  const wasConnected = useRef(false);
 
   const signedIn = session.data?.address;
 
   useEffect(() => {
-    if (session.isPending) return;
+    // `connecting` covers reconnecting too: until it settles, neither the
+    // presence nor the absence of a wallet means anything.
+    if (session.isPending || connecting) return;
 
     const wanted = address?.toLowerCase();
+    if (connected) wasConnected.current = true;
 
     /*
      * End the old session before anything else, on either exit.
@@ -75,11 +89,12 @@ export function useWalletSession() {
      * session belongs to the wallet that proved it, and stops when that wallet
      * does.
      */
-    const gone = !connected && signedIn;
+    const gone = wasConnected.current && !connected && signedIn;
     const switched = connected && signedIn && wanted && signedIn !== wanted;
 
     if (gone || switched) {
       attempted.current = null;
+      wasConnected.current = false;
       void json("/auth/logout", { method: "POST" })
         .catch(() => {})
         // Everything, not just the session: cached reads belong to the wallet
@@ -112,7 +127,7 @@ export function useWalletSession() {
         // The reads that need a session will say so themselves.
       }
     })();
-  }, [connected, address, signedIn, session.isPending, signMessageAsync, queryClient]);
+  }, [connected, connecting, address, signedIn, session.isPending, signMessageAsync, queryClient]);
 
   return {
     address: signedIn ?? null,
