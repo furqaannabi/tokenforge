@@ -52,9 +52,19 @@ export function TopNav() {
   // there would ask for a connection before saying what the product is.
   if (pathname === "/") return null;
 
+  /*
+   * The bar is pinned to the viewport, not to the document.
+   *
+   * A sticky header is only as wide as its containing block, so anything
+   * below that overflows horizontally stretches this too — and `ml-auto`
+   * then parks the wallet control at the right edge of the *document*,
+   * which on a phone is somewhere off the side of the screen. Clamping to
+   * the viewport means a wide table can never take the connect button with
+   * it.
+   */
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-card">
-      <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 sm:px-6">
+    <header className="sticky top-0 z-40 w-screen max-w-full border-b border-border bg-card">
+      <div className="mx-auto flex h-14 min-w-0 max-w-[1200px] items-center gap-3 px-4 sm:px-6">
         {/* The mark alone, back to the landing page. The name is on the page
             it leads to, and repeating it in the bar costs width that the
             wallet controls need on a phone. */}
@@ -85,7 +95,7 @@ export function TopNav() {
           {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="ml-auto flex min-w-0 shrink items-center justify-end gap-2 sm:gap-3">
           {wrongNetwork ? (
             <Stamp tone="review">
               <TriangleAlert />
