@@ -16,6 +16,7 @@ import {
   useSettlePeriod,
   useVaultProgress,
 } from "@/lib/repayment";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@/lib/wallet";
 import { useCurrencyBalance } from "@/lib/sale";
 import { CURRENCY_DECIMALS } from "@tokenforge/core";
@@ -43,7 +44,7 @@ export function OnChainNote({
   const { address } = useWallet();
   const decimals = CURRENCY_DECIMALS[currency];
 
-  const { state, refetch: refetchNote } = useNoteState(note);
+  const { state } = useNoteState(note);
   const position = useHolderPosition(note, vault, address);
   const progress = useVaultProgress(vault);
   const due = useNextPeriodDue(vault, progress.nextPeriod);
@@ -52,6 +53,7 @@ export function OnChainNote({
   const settle = useSettlePeriod(vault);
   const claim = useClaim(vault);
   const faucet = useMintTestCurrency();
+  const queryClient = useQueryClient();
   const walletBalance = useCurrencyBalance(address);
   const held = (walletBalance.data as bigint | undefined) ?? 0n;
   const [error, setError] = useState<string | null>(null);
@@ -92,13 +94,15 @@ export function OnChainNote({
    */
   const short = amountDue > 0n && held < amountDue;
 
-  const refresh = () => {
-    void refetchNote();
-    void position.refetch();
-    void progress.refetch();
-    void allowance.refetch();
-    void walletBalance.refetch();
-  };
+  /*
+   * Everything, not the handful this component happens to hold.
+   *
+   * Settling moves the note's supply, every holder's balance and claimable,
+   * the vault's progress, and two currency balances — across components that
+   * do not know about each other. Naming the reads to refresh is how one gets
+   * forgotten and the screen quietly disagrees with the chain.
+   */
+  const refresh = () => void queryClient.invalidateQueries();
 
   const money = (value: bigint) =>
     `${Number(formatUnits(value, decimals)).toLocaleString("en-US", {

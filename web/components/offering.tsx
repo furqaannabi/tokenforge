@@ -22,6 +22,7 @@ import {
   useWithdrawPool,
 } from "@/lib/sale";
 import { useHolderPosition, useNoteState } from "@/lib/repayment";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@/lib/wallet";
 import { CURRENCY_DECIMALS } from "@tokenforge/core";
 import { ReceiptsDialog } from "@/components/receipts-dialog";
@@ -321,6 +322,7 @@ function InvestorOffering({
   onChange: () => void;
 }) {
   const buy = useBuyFromOffer(note);
+  const queryClient = useQueryClient();
   const { address } = useWallet();
   const balanceRead = useCurrencyBalance(address);
   const balance = (balanceRead.data as bigint | undefined) ?? 0n;
@@ -397,6 +399,16 @@ function InvestorOffering({
       // between the quote on screen and the transaction landing.
       await buy.run(amount, total + total / 100n);
       setSpendInput("");
+
+      /*
+       * Everything the purchase moved, not just the offer.
+       *
+       * A buy changes the pool, the buyer's currency balance, and their
+       * position in the note — three separate reads across two components.
+       * Refetching only the offer left the panel above still showing a holding
+       * of zero, which reads as a purchase that did not happen.
+       */
+      await queryClient.invalidateQueries();
       onChange();
     } catch (cause) {
       setError((cause as Error).message);

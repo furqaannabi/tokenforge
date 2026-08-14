@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAcceptNote, useNoteState } from "@/lib/repayment";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@/lib/wallet";
 import { truncateHex } from "@/lib/format";
 
@@ -35,8 +36,9 @@ export function AcceptNote({
   onAccepted?: () => void;
 }) {
   const { address } = useWallet();
-  const { state, refetch } = useNoteState(note);
+  const { state } = useNoteState(note);
   const accept = useAcceptNote(note);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
   // 3 is Pending. Anything else has already been affirmed, or predates the role.
@@ -50,7 +52,9 @@ export function AcceptNote({
     setError(null);
     try {
       await accept.accept();
-      void refetch();
+      // Acceptance flips the note Active, which changes what the public list
+      // shows and what the offering panel allows — not just this card.
+      await queryClient.invalidateQueries();
       onAccepted?.();
     } catch (cause) {
       setError((cause as Error).message);

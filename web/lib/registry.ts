@@ -1,6 +1,11 @@
 "use client";
 
-import { useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import {
+  usePublicClient,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import {
   CHAIN_ID,
   addresses,
@@ -80,27 +85,34 @@ export function useIsRegisteredBorrower(address?: `0x${string}`) {
 
 /** Admits a counterparty to borrow. A separate right from issuing. */
 export function useAdmitBorrower() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, isPending, error } = useWriteContract();
   return {
     error,
     isPending,
-    admit: (
+    admit: async (
       borrower: `0x${string}`,
       name: string,
       jurisdiction: string,
-    ) =>
-      writeContractAsync({
+    ) => {
+      const hash = await writeContractAsync({
         abi: issuerRegistryAbi,
         address: issuerRegistryAddress(),
         functionName: "admitBorrower",
         args: [borrower, name, jurisdiction],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
 /** The admin clears one exact mint. Signed by their own wallet, as admission is. */
 export function useApproveMint() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -110,14 +122,19 @@ export function useApproveMint() {
     isSigning: isPending,
     isConfirming: receipt.isLoading,
     isConfirmed: receipt.isSuccess,
-    approve: (issuer: `0x${string}`, mintHash: `0x${string}`) =>
-      writeContractAsync({
+    approve: async (issuer: `0x${string}`, mintHash: `0x${string}`) => {
+      const hash = await writeContractAsync({
         abi: issuerRegistryAbi,
         address: issuerRegistryAddress(),
         functionName: "approveMint",
         args: [issuer, mintHash],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
@@ -166,6 +183,7 @@ export function useIssuerInfo(address?: `0x${string}`) {
  * the strength of a transaction that could still revert.
  */
 export function useAdmitIssuer() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -176,18 +194,24 @@ export function useAdmitIssuer() {
     isConfirming: receipt.isLoading,
     isConfirmed: receipt.isSuccess,
     receipt: receipt.data,
-    admit: (issuer: `0x${string}`, name: string, jurisdiction: string) =>
-      writeContractAsync({
+    admit: async (issuer: `0x${string}`, name: string, jurisdiction: string) => {
+      const hash = await writeContractAsync({
         abi: issuerRegistryAbi,
         address: addresses.issuerRegistry!,
         functionName: "admitIssuer",
         args: [issuer, name, jurisdiction],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
 export function useRevokeIssuer() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -197,13 +221,18 @@ export function useRevokeIssuer() {
     isSigning: isPending,
     isConfirming: receipt.isLoading,
     isConfirmed: receipt.isSuccess,
-    revoke: (issuer: `0x${string}`) =>
-      writeContractAsync({
+    revoke: async (issuer: `0x${string}`) => {
+      const hash = await writeContractAsync({
         abi: issuerRegistryAbi,
         address: addresses.issuerRegistry!,
         functionName: "revokeIssuer",
         args: [issuer],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }

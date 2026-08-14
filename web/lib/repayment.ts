@@ -267,18 +267,24 @@ export function useSettlePeriod(vault?: `0x${string}`) {
         await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
       }
 
-      return settle.writeContractAsync({
+      const settleHash = await settle.writeContractAsync({
         abi: repaymentVaultAbi,
         address: vault,
         functionName: "settleNextPeriod",
         chainId: CHAIN_ID,
       });
+
+      // Mined before this resolves, or the caller refreshes balances that have
+      // not moved yet.
+      await publicClient?.waitForTransactionReceipt({ hash: settleHash });
+      return settleHash;
     },
   };
 }
 
 /** Takes a holder's share of everything paid in so far. */
 export function useClaim(vault?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -288,13 +294,18 @@ export function useClaim(vault?: `0x${string}`) {
     isSigning: isPending,
     isConfirming: receipt.isLoading,
     isConfirmed: receipt.isSuccess,
-    claim: () =>
-      writeContractAsync({
+    claim: async () => {
+      const hash = await writeContractAsync({
         abi: repaymentVaultAbi,
         address: vault!,
         functionName: "claim",
         chainId: CHAIN_ID,
-      }),
+      });
+      // Same reason as everywhere else: a claim that resolves on broadcast
+      // leaves the screen showing the money as still unclaimed.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
@@ -307,6 +318,7 @@ export function useClaim(vault?: `0x${string}`) {
  * debt that party acknowledged.
  */
 export function useAcceptNote(note?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -316,13 +328,18 @@ export function useAcceptNote(note?: `0x${string}`) {
     isSigning: isPending,
     isConfirming: receipt.isLoading,
     isConfirmed: receipt.isSuccess,
-    accept: () =>
-      writeContractAsync({
+    accept: async () => {
+      const hash = await writeContractAsync({
         abi: rwaNoteAbi,
         address: note!,
         functionName: "accept",
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
@@ -333,6 +350,7 @@ export function useAcceptNote(note?: `0x${string}`) {
  * exists so a demo can fund a repayment without a faucet round trip.
  */
 export function useMintTestCurrency() {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -340,14 +358,19 @@ export function useMintTestCurrency() {
     hash,
     isPending: isPending || receipt.isLoading,
     isConfirmed: receipt.isSuccess,
-    mint: (to: `0x${string}`, amount: bigint) =>
-      writeContractAsync({
+    mint: async (to: `0x${string}`, amount: bigint) => {
+      const hash = await writeContractAsync({
         abi: erc20Abi,
         address: addresses.usdg!,
         functionName: "mint",
         args: [to, amount],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 

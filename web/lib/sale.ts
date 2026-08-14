@@ -209,13 +209,21 @@ export function useFundOffer(note?: `0x${string}`) {
         });
       }
 
-      return fund.writeContractAsync({
+      const hash = await fund.writeContractAsync({
         abi: saleDeskAbi,
         address: addresses.saleDesk,
         functionName: alreadyOpen ? "fundPool" : "openOffer",
         args: [note, amount],
         chainId: CHAIN_ID,
       });
+
+      /*
+       * Mined before this resolves. Returning on broadcast means the caller
+       * refetches balances that have not moved yet, and the screen shows the
+       * position as it was a second before the purchase.
+       */
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
     },
   };
 }
@@ -270,19 +278,28 @@ export function useOpenOfferFor() {
           }),
       });
 
-      return open.writeContractAsync({
+      const hash = await open.writeContractAsync({
         abi: saleDeskAbi,
         address: addresses.saleDesk,
         functionName: "openOffer",
         args: [note, amount],
         chainId: CHAIN_ID,
       });
+
+      /*
+       * Mined before this resolves. Returning on broadcast means the caller
+       * refetches balances that have not moved yet, and the screen shows the
+       * position as it was a second before the purchase.
+       */
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
     },
   };
 }
 
 /** Takes unsold tokens back. Emptying the pool pauses a sale; it does not end it. */
 export function useWithdrawPool(note?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -291,19 +308,25 @@ export function useWithdrawPool(note?: `0x${string}`) {
     error,
     isPending: isPending || receipt.isLoading,
     isDone: receipt.isSuccess,
-    withdraw: (amount: bigint) =>
-      writeContractAsync({
+    withdraw: async (amount: bigint) => {
+      const hash = await writeContractAsync({
         abi: saleDeskAbi,
         address: addresses.saleDesk!,
         functionName: "withdrawPool",
         args: [note!, amount],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
 /** Ends the offering and returns whatever is unsold. */
 export function useCloseOffer(note?: `0x${string}`) {
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
@@ -312,14 +335,19 @@ export function useCloseOffer(note?: `0x${string}`) {
     error,
     isPending: isPending || receipt.isLoading,
     isDone: receipt.isSuccess,
-    close: () =>
-      writeContractAsync({
+    close: async () => {
+      const hash = await writeContractAsync({
         abi: saleDeskAbi,
         address: addresses.saleDesk!,
         functionName: "closeOffer",
         args: [note!],
         chainId: CHAIN_ID,
-      }),
+      });
+      // Mined before this resolves. Returning on broadcast leaves every
+      // caller refreshing state the chain has not changed yet.
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
+    },
   };
 }
 
@@ -374,13 +402,21 @@ export function useBuyFromOffer(note?: `0x${string}`) {
           }),
       });
 
-      return buy.writeContractAsync({
+      const hash = await buy.writeContractAsync({
         abi: saleDeskAbi,
         address: addresses.saleDesk,
         functionName: "buy",
         args: [note, amount, maxCost],
         chainId: CHAIN_ID,
       });
+
+      /*
+       * Mined before this resolves. Returning on broadcast means the caller
+       * refetches balances that have not moved yet, and the screen shows the
+       * position as it was a second before the purchase.
+       */
+      await publicClient?.waitForTransactionReceipt({ hash });
+      return hash;
     },
   };
 }
