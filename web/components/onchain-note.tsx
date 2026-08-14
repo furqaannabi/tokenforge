@@ -17,6 +17,7 @@ import {
   useVaultProgress,
 } from "@/lib/repayment";
 import { useWallet } from "@/lib/wallet";
+import { useCurrencyBalance } from "@/lib/sale";
 import { CURRENCY_DECIMALS } from "@tokenforge/core";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -51,6 +52,8 @@ export function OnChainNote({
   const settle = useSettlePeriod(vault);
   const claim = useClaim(vault);
   const faucet = useMintTestCurrency();
+  const walletBalance = useCurrencyBalance(address);
+  const held = (walletBalance.data as bigint | undefined) ?? 0n;
   const [error, setError] = useState<string | null>(null);
 
   /*
@@ -81,11 +84,20 @@ export function OnChainNote({
   const amountDue = period ? period.principal + period.interest : 0n;
   const finished = progress.nextPeriod >= progress.periodCount;
 
+  /*
+   * Whether the payer can actually cover this instalment. A Repay button that
+   * reverts against a balance the screen never showed is a poor way to learn
+   * you are short — and on testnet the faucet beside it is the fix, which is
+   * only obvious once the shortfall is visible.
+   */
+  const short = amountDue > 0n && held < amountDue;
+
   const refresh = () => {
     void refetchNote();
     void position.refetch();
     void progress.refetch();
     void allowance.refetch();
+    void walletBalance.refetch();
   };
 
   const money = (value: bigint) =>
@@ -170,6 +182,16 @@ export function OnChainNote({
             ) : (
               <>
                 <Row label={`Period ${progress.nextPeriod + 1} due`} value={money(amountDue)} />
+                {isBorrower ? (
+                  <Row
+                    label="Your balance"
+                    value={
+                      <span className={short ? "text-review" : undefined}>
+                        {money(held)}
+                      </span>
+                    }
+                  />
+                ) : null}
                 {period?.dueDate ? (
                   <Row
                     label="Due date"
@@ -197,10 +219,17 @@ export function OnChainNote({
 
                 {isBorrower ? (
                   <>
+                    {short ? (
+                      <p className="text-xs text-review">
+                        {money(amountDue - held)} short. Mint test {currency}
+                        below, then repay.
+                      </p>
+                    ) : null}
+
                     <Button
                       className="w-full"
                       onClick={onSettle}
-                      disabled={settle.isApproving || settle.isSettling}
+                      disabled={short || settle.isApproving || settle.isSettling}
                     >
                       {settle.isApproving ? (
                         <>
