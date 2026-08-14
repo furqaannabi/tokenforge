@@ -1057,49 +1057,6 @@ const acceptanceSchema = z.object({
  * Checked against the borrower named in the request rather than whoever posted
  * it. A signature from the wrong wallet is not acceptance.
  */
-app.post("/extractions/:id/borrower-acceptance", async (c) => {
-  const id = c.req.param("id");
-  const body = acceptanceSchema.parse(await c.req.json());
-
-  const extraction = await prisma.extraction.findUnique({ where: { id } });
-  if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
-
-  const request = extraction.mintRequest as
-    | { borrower: string; mintHash: string }
-    | null;
-  if (!request) {
-    throw new HTTPException(409, {
-      message: "No mint has been requested, so there are no terms to accept.",
-    });
-  }
-
-  const valid = await verifyMessage({
-    address: request.borrower as `0x${string}`,
-    message: acceptanceMessage(request.mintHash),
-    signature: body.signature as `0x${string}`,
-  });
-  if (!valid) {
-    throw new HTTPException(401, {
-      message:
-        "That signature is not from the wallet named as borrower on this note.",
-    });
-  }
-
-  const updated = await prisma.extraction.update({
-    where: { id },
-    data: {
-      mintRequest: asJson({
-        ...(extraction.mintRequest as object),
-        borrowerAccepted: {
-          signature: body.signature,
-          at: new Date().toISOString(),
-        },
-      }),
-    },
-  });
-
-  return c.json({ extraction: jsonSafe(updated) });
-});
 
 app.get("/extractions/:id/mint-args", async (c) => {
   const extraction = await prisma.extraction.findUnique({

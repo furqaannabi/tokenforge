@@ -36,7 +36,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Providers>
           <SessionGate />
           <TopNav />
-          <main className="flex-1">{children}</main>
+          {/* min-w-0 so a wide child (the notes table) shrinks rather than
+              stretching the document past the viewport — which pushed the
+              header's own controls off-screen on a phone. */}
+          <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
           {/* Reads the route to know which note is on screen, so it needs the
               same Suspense treatment the workspace does. */}
           <Suspense fallback={null}>

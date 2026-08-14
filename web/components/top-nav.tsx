@@ -2,7 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
+import { useIsRegistryAdmin } from "@/lib/registry";
+import { cn } from "@/lib/utils";
 import "@reown/appkit/react";
 import { useConnect, useConnectors } from "wagmi";
 import { BadgeCheck, ShieldOff, TriangleAlert, Wallet } from "lucide-react";
@@ -20,8 +24,29 @@ import { Button } from "@/components/ui/button";
  * hamburger built to manage it.
  */
 export function TopNav() {
-  const { issuer, connected, connecting, wrongNetwork } = useWallet();
+  const { issuer, connected, connecting, wrongNetwork, address } = useWallet();
+  const { isAdmin } = useIsRegistryAdmin(address);
   const pathname = usePathname();
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // A menu that survives navigation stays open over the page it just opened.
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  /*
+   * The same sections the workspace shows, under the same conditions.
+   *
+   * Duplicated deliberately rather than lifted into shared state: the tab bar
+   * is the source of truth for what is available, and a menu that offered a
+   * section the workspace would not render is worse than one that repeats it.
+   */
+  const sections = [
+    { id: "notes", label: "All notes", when: true },
+    { id: "mine", label: "My notes", when: connected },
+    { id: "issue", label: "New note", when: Boolean(issuer?.verified) },
+    { id: "registry", label: "Registry", when: true },
+    { id: "admin", label: "Admin", when: isAdmin },
+  ].filter((section) => section.when);
 
   // The landing page has its own header, and a wallet button above the fold
   // there would ask for a connection before saying what the product is.
@@ -47,6 +72,18 @@ export function TopNav() {
             priority
           />
         </Link>
+
+        {/* Sections live in the tab bar on a wide screen; on a phone that bar
+            scrolls sideways and its right-hand tabs are easy to miss. */}
+        <button
+          type="button"
+          onClick={() => setMenuOpen((was) => !was)}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          className="ml-1 flex size-9 items-center justify-center rounded-md text-muted-foreground hover:text-foreground sm:hidden"
+        >
+          {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           {wrongNetwork ? (
@@ -81,6 +118,31 @@ export function TopNav() {
           )}
         </div>
       </div>
+
+      {menuOpen ? (
+        <nav
+          aria-label="Sections"
+          className="border-t border-border bg-card px-2 pb-2 sm:hidden"
+        >
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => {
+                /* The workspace reads its tab from the query string, so this
+                   is a navigation rather than a message to a sibling. */
+                router.push(
+                  section.id === "notes" ? "/app" : `/app?view=${section.id}`,
+                );
+                setMenuOpen(false);
+              }}
+              className="block w-full rounded-md px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </header>
   );
 }

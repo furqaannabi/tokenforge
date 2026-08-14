@@ -1,12 +1,14 @@
 "use client";
 
+import { ChevronRight, CornerDownLeft } from "lucide-react";
 import { Reveal } from "@/components/reveal";
 import { cn } from "@/lib/utils";
 
 /**
  * The whole life of a loan, as a flow rather than a list.
  *
- * This was fifteen stacked rows with a paragraph each, which was accurate and
+ * This was a column of stacked rows with a paragraph each, which was accurate
+ * and
  * far too tall — a reader had to scroll through the entire mechanism to reach
  * the end of it. Grouped into phases, one line per step, it fits in about a
  * screen and still says the same thing.
@@ -68,11 +70,24 @@ const PHASES: Phase[] = [
   },
   {
     name: "Issuance",
-    caption: "Approved parameters, then two signatures.",
+    caption: "Nobody mints until the borrower has agreed.",
     steps: [
-      { actor: "Admin", title: "An admin approves the exact parameters", proof: "approveMint(hash)" },
-      { actor: "Issuer", title: "The issuer mints the note", proof: "status: Pending" },
-      { actor: "Borrower", title: "The borrower accepts", proof: "accept()" },
+      {
+        actor: "Issuer",
+        title: "The issuer submits the intended terms",
+        proof: "mintHash",
+      },
+      {
+        actor: "Borrower",
+        title: "The borrower signs those exact terms",
+        proof: "signature over the hash",
+      },
+      {
+        actor: "Admin",
+        title: "An admin approves and registers the borrower",
+        proof: "approveMint(hash)",
+      },
+      { actor: "Issuer", title: "The issuer mints the note", proof: "note + vault" },
     ],
   },
   {
@@ -100,8 +115,6 @@ const PHASES: Phase[] = [
 ];
 
 export function Journey() {
-  let counter = 0;
-
   return (
     <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
       <Reveal className="max-w-2xl">
@@ -112,28 +125,28 @@ export function Journey() {
           From a signed agreement to the final instalment
         </h2>
         <p className="mt-3 text-pretty text-muted-foreground">
-          Fifteen steps, six phases, and the party responsible for each.
+          Six phases, and the party responsible for every step.
         </p>
       </Reveal>
 
       <div className="mt-10 grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-        {PHASES.map((phase, index) => {
-          const first = counter + 1;
-          counter += phase.steps.length;
-
-          return (
+        {PHASES.map((phase, index) => (
             <PhaseCard
               key={phase.name}
               phase={phase}
-              first={first}
+              order={index + 1}
               delay={index * 90}
-              /* No arrow off the last card, nor off the ones that end a row:
-                 the grid is three wide at lg, so every third card points into
-                 the margin rather than at anything. */
-              connect={index < PHASES.length - 1 && index % 3 !== 2}
+              /* Three across at lg: every third card ends a row, so it gets a
+                 wrap marker instead of an arrow into the margin. */
+              connect={
+                index === PHASES.length - 1
+                  ? "none"
+                  : index % 3 === 2
+                    ? "wrap"
+                    : "across"
+              }
             />
-          );
-        })}
+        ))}
       </div>
     </section>
   );
@@ -141,14 +154,15 @@ export function Journey() {
 
 function PhaseCard({
   phase,
-  first,
+  order,
   delay,
   connect,
 }: {
   phase: Phase;
-  first: number;
+  /** Which phase this is, 1-based. The primary signal of order. */
+  order: number;
   delay: number;
-  connect: boolean;
+  connect: "across" | "wrap" | "none";
 }) {
   return (
     <Reveal delay={delay} className="relative">
@@ -157,23 +171,46 @@ function PhaseCard({
         because at one and two columns the cards no longer sit in the order the
         line would claim.
       */}
-      {connect ? (
+      {connect === "across" ? (
         <span
           aria-hidden
-          className="absolute -right-6 top-12 hidden h-px w-6 origin-left bg-gradient-to-r from-verified/60 to-transparent lg:block lg:[.reveal-in_&]:animate-[trace_0.6s_cubic-bezier(0.22,1,0.36,1)_forwards]"
-        />
+          className="absolute -right-6 top-9 hidden items-center lg:flex"
+        >
+          <span className="h-px w-4 bg-verified/50" />
+          <ChevronRight className="-ml-1 size-3.5 text-verified/70" />
+        </span>
+      ) : null}
+
+      {/*
+        The wrap. Without it the eye reaches the right edge of the first row
+        and has no reason to believe the next phase is at the far left of the
+        second — the one place the line genuinely could not help.
+      */}
+      {connect === "wrap" ? (
+        <span
+          aria-hidden
+          className="absolute -bottom-6 left-6 hidden items-center gap-1 lg:flex"
+        >
+          <CornerDownLeft className="size-3.5 text-verified/70" />
+          <span className="font-mono text-[10px] text-muted-foreground">
+            continues below
+          </span>
+        </span>
       ) : null}
 
       <div className="h-full rounded-xl border border-border bg-card p-5">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2.5">
+          {/*
+            The phase number carries the order on its own. A connecting line
+            can only suggest sequence, and it suggests the wrong one the moment
+            the grid wraps to a second row — which is exactly where a reader
+            was losing the thread.
+          */}
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-verified/30 bg-verified/10 font-mono text-xs font-semibold text-verified">
+            {order}
+          </span>
           <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-verified">
             {phase.name}
-          </span>
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-            {String(first).padStart(2, "0")}
-            {phase.steps.length > 1
-              ? `–${String(first + phase.steps.length - 1).padStart(2, "0")}`
-              : ""}
           </span>
         </div>
 
