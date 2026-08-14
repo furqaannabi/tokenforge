@@ -1,148 +1,128 @@
-import { Fragment } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 /**
- * The small slice of Markdown an assistant actually emits.
+ * Zoya's replies, rendered.
  *
- * Headings, bold, italics, inline code, bullets, numbered lists and
- * paragraphs. Nothing else, and — the part that matters — nothing is handed to
- * `dangerouslySetInnerHTML`. This text comes from a model that has just been
- * reading uploaded documents, so treating it as markup would let a sentence
- * inside a loan agreement put HTML on the page. Everything here becomes React
- * elements, so the worst a stray angle bracket can do is look like an angle
- * bracket.
+ * `react-markdown` rather than the hand-rolled parser this replaces: she
+ * reaches for headings, nested lists, tables and strikethrough without being
+ * asked, and each one was a bug waiting to show its markup to a user. Two
+ * rounds of "she emits something the parser does not know" was enough.
  *
- * A parser rather than a library because the whole grammar is a handful of
- * rules; a Markdown dependency would bring tables, links, images and raw HTML
- * passthrough, all of which are attack surface here and none of which she
- * needs.
+ * It keeps the property that mattered about the hand-rolled version — the
+ * output is a React tree, not injected HTML. Raw HTML in the source is
+ * discarded unless `rehype-raw` is added, and it is deliberately not added:
+ * this text comes from a model that has just been reading an uploaded loan
+ * agreement, so a sentence inside a PDF must never be able to put markup on
+ * the page.
+ *
+ * Styling comes through `components` rather than a typography plugin, because
+ * a chat bubble is not a document — a model reaching for `h1` should not get
+ * 32px type inside a 24rem panel.
  */
 
-/** `**bold**`, `*italic*` and `` `code` `` within a single line. */
-function inline(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  const pattern = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g;
-  let cursor = 0;
-  let key = 0;
-  let match: RegExpExecArray | null;
+export function RichText({ text }: { text: string }) {
+  return (
+    <div className="space-y-2">
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          /*
+           * Every heading level renders the same: small, weighted, muted.
+           * Which level she picked says nothing about importance here, and six
+           * distinct sizes inside a chat bubble would only look broken.
+           */
+          h1: Heading,
+          h2: Heading,
+          h3: Heading,
+          h4: Heading,
+          h5: Heading,
+          h6: Heading,
 
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > cursor) parts.push(text.slice(cursor, match.index));
+          ul: ({ children }) => (
+            <ul className="ml-4 list-outside list-disc space-y-1">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="ml-4 list-outside list-decimal space-y-1">
+              {children}
+            </ol>
+          ),
 
-    const token = match[0];
-    parts.push(
-      token.startsWith("**") ? (
-        <strong key={key++} className="font-semibold text-foreground">
-          {token.slice(2, -2)}
-        </strong>
-      ) : token.startsWith("*") ? (
-        <em key={key++}>{token.slice(1, -1)}</em>
-      ) : (
-        <code
-          key={key++}
-          className="rounded bg-muted px-1 py-px font-mono text-[0.85em]"
-        >
-          {token.slice(1, -1)}
-        </code>
-      ),
-    );
-    cursor = match.index + token.length;
-  }
+          strong: ({ children }) => (
+            <strong className="font-semibold text-foreground">
+              {children}
+            </strong>
+          ),
 
-  if (cursor < text.length) parts.push(text.slice(cursor));
-  return parts;
+          code: ({ children }) => (
+            <code className="rounded bg-muted px-1 py-px font-mono text-[0.85em]">
+              {children}
+            </code>
+          ),
+          pre: ({ children }) => (
+            <pre className="overflow-x-auto rounded border border-border bg-muted p-2 text-[0.85em]">
+              {children}
+            </pre>
+          ),
+
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">
+              {children}
+            </blockquote>
+          ),
+          hr: () => <hr className="border-border" />,
+
+          /*
+           * Tables scroll inside their own box. She can return a repayment
+           * schedule, which is wider than the panel at any font size worth
+           * reading, and a table that widens the bubble would break the layout
+           * rather than its own container.
+           */
+          table: ({ children }) => (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                {children}
+              </table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th className="border-b border-border py-1 pr-3 font-medium">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="border-b border-border py-1 pr-3 align-top">
+              {children}
+            </td>
+          ),
+
+          /*
+           * She is told not to send people off-site, but a model can still
+           * produce a link. A new tab and `noreferrer` mean a stray one cannot
+           * navigate the app away from itself or leak where it came from.
+           */
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-verified underline underline-offset-2"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {text}
+      </Markdown>
+    </div>
+  );
 }
 
-const HEADING = /^(#{1,6})\s+(.*)$/;
-const BULLET = /^\s*[-*•]\s+/;
-const NUMBERED = /^\s*\d+[.)]\s+/;
-
-export function RichText({ text }: { text: string }) {
-  const blocks: React.ReactNode[] = [];
-  let items: string[] = [];
-  let ordered = false;
-  let paragraph: string[] = [];
-  let key = 0;
-
-  const flushParagraph = () => {
-    if (paragraph.length === 0) return;
-    blocks.push(
-      <p key={key++} className="whitespace-pre-wrap">
-        {paragraph.map((line, index) => (
-          <Fragment key={index}>
-            {index > 0 ? <br /> : null}
-            {inline(line)}
-          </Fragment>
-        ))}
-      </p>,
-    );
-    paragraph = [];
-  };
-
-  const flushList = () => {
-    if (items.length === 0) return;
-    const List = ordered ? "ol" : "ul";
-    blocks.push(
-      <List
-        key={key++}
-        className={
-          ordered
-            ? "ml-4 list-outside list-decimal space-y-1"
-            : "ml-4 list-outside list-disc space-y-1"
-        }
-      >
-        {items.map((item, index) => (
-          <li key={index}>{inline(item)}</li>
-        ))}
-      </List>,
-    );
-    items = [];
-  };
-
-  for (const line of text.split("\n")) {
-    /*
-     * Headings arrive as "### Holdings". They are rendered at body size and
-     * merely weighted: a chat bubble is not a document, and a model reaching
-     * for h3 should not get 24px type inside a 24rem panel.
-     */
-    const heading = HEADING.exec(line);
-    if (heading) {
-      flushList();
-      flushParagraph();
-      blocks.push(
-        <p
-          key={key++}
-          className="pt-1 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
-        >
-          {inline(heading[2])}
-        </p>,
-      );
-      continue;
-    }
-
-    const bullet = BULLET.test(line);
-    const numbered = !bullet && NUMBERED.test(line);
-
-    if (bullet || numbered) {
-      flushParagraph();
-      // A switch of list type starts a new list rather than mixing markers.
-      if (items.length > 0 && ordered !== numbered) flushList();
-      ordered = numbered;
-      items.push(line.replace(bullet ? BULLET : NUMBERED, ""));
-      continue;
-    }
-
-    if (line.trim() === "") {
-      flushList();
-      flushParagraph();
-      continue;
-    }
-
-    flushList();
-    paragraph.push(line);
-  }
-
-  flushList();
-  flushParagraph();
-
-  return <div className="space-y-2">{blocks}</div>;
+function Heading({ children }: { children?: React.ReactNode }) {
+  return (
+    <p className="pt-1 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+      {children}
+    </p>
+  );
 }
