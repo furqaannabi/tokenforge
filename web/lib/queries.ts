@@ -81,7 +81,11 @@ export function useMyApplication(address?: string) {
 export function useCheckProvenance(extractionId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { issuerName: string; issuerJurisdiction?: string }) =>
+    mutationFn: (input: {
+      issuerName: string;
+      issuerJurisdiction?: string;
+      borrowerAddress?: string;
+    }) =>
       api.checkProvenance(extractionId!, input),
     onSuccess: () => {
       queryClient.invalidateQueries({

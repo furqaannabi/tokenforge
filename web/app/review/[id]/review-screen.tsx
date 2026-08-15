@@ -388,6 +388,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                 issuerName={issuer?.name}
                 issuerJurisdiction={issuer?.jurisdiction}
                 result={remote.data?.provenance ?? null}
+                borrowerAddress={borrower}
               />
               <BorrowerWallet value={borrower} onChange={setBorrower} />
               <SettlementCurrency value={currency} onChange={setCurrency} />
@@ -444,14 +445,27 @@ function ProvenanceCheck({
   extractionId,
   issuerName,
   issuerJurisdiction,
+  borrowerAddress,
   result,
 }: {
   extractionId: string;
   issuerName?: string;
   issuerJurisdiction?: string;
+  /** The wallet that will repay, once the issuer has named one. */
+  borrowerAddress?: string;
   result: ApiProvenance | null;
 }) {
   const check = useCheckProvenance(extractionId);
+
+  /*
+   * One of the three verdicts is about the borrower — does the wallet named to
+   * repay belong to the company the document says owes the money. There is
+   * nothing to compare until a wallet has been given, so running without one
+   * spends a model call to return two answers out of three.
+   */
+  const hasBorrower = isAddress(borrowerAddress?.trim() ?? "", {
+    strict: false,
+  });
 
   return (
     <div className="bg-card px-4 py-3 sm:px-5">
@@ -463,14 +477,25 @@ function ProvenanceCheck({
             whether the borrower wallet matches it, and whether the same
             agreement has been tokenized before under another file.
           </p>
+          {!hasBorrower ? (
+            <p className="mt-1 text-xs text-review">
+              Enter the borrower wallet below to re-run — the borrower verdict
+              has nothing to compare against without one.
+            </p>
+          ) : null}
         </div>
         <Button
           size="sm"
           variant="outline"
-          disabled={!issuerName || check.isPending}
+          disabled={!issuerName || !hasBorrower || check.isPending}
           onClick={() =>
             issuerName &&
-            check.mutate({ issuerName, issuerJurisdiction })
+            hasBorrower &&
+            check.mutate({
+              issuerName,
+              issuerJurisdiction,
+              borrowerAddress: borrowerAddress!.trim(),
+            })
           }
         >
           {check.isPending ? (

@@ -295,7 +295,12 @@ export const api = {
 
   checkProvenance: (
     extractionId: string,
-    body: { issuerName: string; issuerJurisdiction?: string },
+    body: {
+      issuerName: string;
+      issuerJurisdiction?: string;
+      /** Without it the borrower verdict cannot be produced at all. */
+      borrowerAddress?: string;
+    },
   ) =>
     request<{ provenance: ApiProvenance }>(
       `/extractions/${extractionId}/provenance`,
