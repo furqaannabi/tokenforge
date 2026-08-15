@@ -133,6 +133,8 @@ export function MyNotesView() {
 
       <TermsToAccept address={address} />
 
+      <YourRequests address={address} />
+
       {toAccept.length > 0 ? (
         <Card className="mb-6 border-review/40">
           <CardHeader>
@@ -400,4 +402,75 @@ function amount(value: bigint, decimals: number): string {
   return Number(formatUnits(value, decimals)).toLocaleString("en-US", {
     maximumFractionDigits: 4,
   });
+}
+
+
+/**
+ * Notes this wallet has asked to mint, and what each is waiting on.
+ *
+ * Submitting for approval used to end in silence: the request was recorded,
+ * nothing else happened until an admin acted, and no screen said so. An issuer
+ * had no way to tell a queued request from one that had failed to send.
+ *
+ * Only the unfinished ones appear. A minted note is already in the portfolio
+ * above, and repeating it here would say the same thing twice.
+ */
+function YourRequests({ address }: { address?: `0x${string}` }) {
+  const requests = useMintRequests();
+
+  const mine = (requests.data ?? []).filter(
+    (extraction) =>
+      extraction.mintRequest &&
+      extraction.status !== "MINTED" &&
+      address &&
+      extraction.mintRequest.issuer.toLowerCase() === address.toLowerCase(),
+  );
+
+  if (mine.length === 0) return null;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>Waiting on approval</CardTitle>
+        <CardDescription>
+          Notes you have submitted. Nothing reaches the chain until an admin
+          clears the exact parameters you sent.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {mine.map((extraction) => {
+          const request = extraction.mintRequest!;
+          const accepted = Boolean(request.borrowerAccepted);
+
+          return (
+            <Link
+              key={extraction.id}
+              href={`/review/${extraction.id}`}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5 hover:border-verified"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {request.args.name}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {extraction.document?.filename}
+                </p>
+              </div>
+
+              {/*
+                Only what this list can actually know. Approval lives on-chain,
+                and reading it per row would be a contract call each; the
+                review screen behind the link reads it and shows the mint
+                button. Saying "approved" here without checking would be a
+                guess about whether someone can act.
+              */}
+              <Stamp tone="review">
+                {accepted ? "Awaiting an admin" : "Awaiting the borrower"}
+              </Stamp>
+            </Link>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
 }

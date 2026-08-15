@@ -176,6 +176,14 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         currency,
         supplyTokens: SUPPLY_TOKENS,
       });
+
+      /*
+       * Nothing more happens here until an admin acts, and the review screen
+       * gives no sign of that — leaving the issuer staring at a submitted form
+       * with no idea whether to wait or do something. The portfolio lists what
+       * is waiting, so that is where submitting leads.
+       */
+      router.push("/app?view=mine");
     } catch (cause) {
       setMintError((cause as Error).message);
     }
@@ -222,7 +230,10 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
         }
       }
 
-      router.push(`/note/${noteId}`);
+      // The portfolio, not the note: a freshly minted note is still Pending
+      // until the borrower accepts, and the list is where the next thing to do
+      // is visible.
+      router.push("/app?view=mine");
     } catch (cause) {
       setMintError((cause as Error).message);
     }
