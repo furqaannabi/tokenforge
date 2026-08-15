@@ -342,12 +342,36 @@ export function validateSettlementCurrency(currency: string): string | null {
  * service is handed an explicit set of confirmed keys with a review request.
  * Treating either as sufficient is what lets one implementation serve both.
  */
+/**
+ * The fields a reviewer can actually act on, and the only ones that block.
+ *
+ * Every one of these either enters the mint hash or decides the schedule the
+ * contract will enforce, and every one has a control in the review screen.
+ *
+ * The extraction carries more than this — covenants, late-payment terms — and
+ * those keep their confidence and are worth reading. They must not gate a
+ * mint, because there is nowhere to confirm them: a low score on a field with
+ * no editor left the submit button disabled with no way to clear it, which is
+ * indistinguishable from the app being broken.
+ */
+export const REVIEWABLE_FIELDS: readonly TermField[] = [
+  "principal",
+  "interestRatePct",
+  "dayCount",
+  "agreementDate",
+  "maturityDate",
+  "paymentFrequency",
+  "borrower",
+  "lender",
+] as const;
+
 export function fieldsNeedingReview(
   terms: ExtractedTerms,
   confirmed: ReadonlySet<string> = new Set(),
 ): TermField[] {
-  return (Object.keys(terms) as TermField[]).filter((key) => {
+  return REVIEWABLE_FIELDS.filter((key) => {
     const extracted = terms[key];
+    if (!extracted) return false;
     if (extracted.confidence >= LOW_CONFIDENCE_THRESHOLD) return false;
     return !extracted.editedByHuman && !confirmed.has(key);
   });

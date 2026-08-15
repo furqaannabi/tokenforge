@@ -376,20 +376,20 @@ app.post("/documents/:id/extract", async (c) => {
   });
 
   /*
-   * The provenance check runs on its own, not on a button.
+   * Provenance is not run here.
    *
-   * It answers questions a reviewer would not think to ask — whose agreement
-   * is this, and have we seen it before — and a check nobody presses is a
-   * check that does not happen. Deliberately not awaited: it costs a model
-   * call, and an extraction that succeeded should not appear to fail because
-   * a secondary check was slow. The verdict lands on the record and the review
-   * screen picks it up.
+   * It used to fire automatically on every extraction, which spent a model
+   * call to answer two of its three questions — the borrower verdict has
+   * nothing to compare against until a wallet has been named — and put a
+   * verdict on the record before anyone had asked for one. A duplicate
+   * finding arriving unbidden, against a draft the reviewer was in the middle
+   * of correcting, reads as the document being rejected rather than as a
+   * check that ran too early.
+   *
+   * It still runs by itself once the mint request names a borrower, which is
+   * the first moment all three questions can be answered, and the review
+   * screen has a button for running it sooner.
    */
-  void runProvenance(extraction.id).catch((cause) => {
-    // Not fatal to the extraction, but not silent either: a check that fails
-    // without saying so is indistinguishable from one that passed.
-    console.error("provenance failed for", extraction.id, cause);
-  });
 
   return c.json({ extraction }, 201);
 });
