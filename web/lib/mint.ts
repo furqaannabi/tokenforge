@@ -89,7 +89,16 @@ export function useMintNote() {
           abi: noteFactoryAbi,
           address: addresses.noteFactory,
           functionName: "mintNote",
-          args: [args],
+          /*
+           * The borrower's signature travels with the mint.
+           *
+           * The factory recovers it against these exact parameters and opens
+           * the note Active, so the borrower never sends a second transaction
+           * to accept what they already signed. Absent one — an older request
+           * taken before this existed — the note opens Pending and waits for
+           * `accept`, exactly as before.
+           */
+          args: [args, (request.borrowerAccepted?.signature ?? "0x") as `0x${string}`],
           chainId: CHAIN_ID,
         });
 
@@ -144,7 +153,8 @@ export function useMintNote() {
           abi: noteFactoryAbi,
           address: addresses.noteFactory,
           functionName: "mintNote",
-          args: [args],
+          // No approval request here, so no signature: opens Pending.
+          args: [args, "0x"],
           chainId: CHAIN_ID,
         });
 
