@@ -79,6 +79,7 @@ export function Zoya() {
   const { address } = useWallet();
   const pathname = usePathname();
   const endRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   /*
    * The review screen is dense along its bottom-right: settlement currency,
@@ -134,6 +135,37 @@ export function Zoya() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
+
+  /*
+   * Close on a click outside, or on Escape.
+   *
+   * The panel floats over whatever the reader was doing, so the way out has to
+   * be the one they will try first — which is clicking back at the page, not
+   * hunting for the × in the corner.
+   *
+   * On pointerdown rather than click: a click that begins inside the panel and
+   * ends outside it (selecting an answer to copy, and releasing over the page)
+   * would otherwise close the panel mid-selection.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !panelRef.current?.contains(target)) setOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   const send = async () => {
     const message = draft.trim();
@@ -281,6 +313,9 @@ export function Zoya() {
 
   return (
     <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Ask Zoya"
       className={cn(
         "fixed z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-card shadow-2xl",
         onReview
