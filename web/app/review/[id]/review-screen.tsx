@@ -383,6 +383,13 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
               Only the action bar is chrome; the rest is form.
             */}
             <div className="mt-6 space-y-px overflow-hidden rounded-lg border border-border">
+              {/*
+                The wallet comes first, because the check below cannot answer
+                its borrower question without one. Asking for provenance above
+                the field that feeds it left the reviewer reading "enter the
+                borrower wallet below" next to a button they could not press.
+              */}
+              <BorrowerWallet value={borrower} onChange={setBorrower} />
               <ProvenanceCheck
                 extractionId={noteId}
                 issuerName={issuer?.name}
@@ -390,7 +397,6 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                 result={remote.data?.provenance ?? null}
                 borrowerAddress={borrower}
               />
-              <BorrowerWallet value={borrower} onChange={setBorrower} />
               <SettlementCurrency value={currency} onChange={setCurrency} />
               <OfferingAtIssue
                 currency={currency}
@@ -479,8 +485,8 @@ function ProvenanceCheck({
           </p>
           {!hasBorrower ? (
             <p className="mt-1 text-xs text-review">
-              Enter the borrower wallet below to re-run — the borrower verdict
-              has nothing to compare against without one.
+              Enter the borrower wallet above to run this — the borrower
+              verdict has nothing to compare against without one.
             </p>
           ) : null}
         </div>
