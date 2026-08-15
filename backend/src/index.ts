@@ -534,8 +534,51 @@ app.get("/extractions/:id", async (c) => {
     include: { document: true, note: true },
   });
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
-  return c.json({ extraction: jsonSafe(extraction) });
+
+  return c.json({ extraction: jsonSafe(await withLiveProvenance(extraction)) });
 });
+
+/**
+ * Drops a duplicate verdict that cites an extraction which no longer exists.
+ *
+ * The verdict is stored when it is made, so it can outlive what it points at —
+ * and then it blocks a mint by naming a row nobody can go and look at. There
+ * is no way to clear that from the interface either: reviewing corrects your
+ * own extraction, not a comparison against something deleted.
+ *
+ * Only the reference is treated as stale. A duplicate that still names a live
+ * extraction stands, because that is the case the check exists for.
+ */
+async function withLiveProvenance<T extends { provenance: unknown }>(
+  extraction: T,
+): Promise<T> {
+  const provenance = extraction.provenance as {
+    duplicate?: { isDuplicate?: boolean; ofExtractionId?: string | null };
+  } | null;
+
+  const cited = provenance?.duplicate?.ofExtractionId;
+  if (!provenance?.duplicate?.isDuplicate || !cited) return extraction;
+
+  const stillThere = await prisma.extraction.findUnique({
+    where: { id: cited },
+    select: { id: true },
+  });
+  if (stillThere) return extraction;
+
+  return {
+    ...extraction,
+    provenance: {
+      ...provenance,
+      duplicate: {
+        ...provenance.duplicate,
+        isDuplicate: false,
+        ofExtractionId: null,
+        reason:
+          "The extraction this was matched against no longer exists, so the match cannot be checked. Re-run the provenance check to compare against what is on file now.",
+      },
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Review
@@ -696,6 +739,16 @@ async function runProvenance(extractionId: string, borrowerAddress?: string) {
     where: {
       id: { not: extractionId },
       documentId: { not: extraction.documentId },
+      /*
+       * A rejected extraction is not a prior claim on an agreement.
+       *
+       * INVALID means the arithmetic did not hold, so that document never
+       * became a note and cannot without being re-run. Counting it made a
+       * corrected re-upload a duplicate of the draft it was correcting — and
+       * that verdict could not be cleared from the interface at all, since
+       * reviewing fixes your own extraction, not somebody else's.
+       */
+      status: { not: "INVALID" },
     },
     include: { document: true },
     orderBy: { createdAt: "desc" },
