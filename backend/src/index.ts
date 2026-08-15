@@ -311,11 +311,44 @@ app.get("/documents", async (c) => {
  * contradict each other and no amount of human confirmation will help;
  * NEEDS_REVIEW means they hang together but someone must vouch for a field.
  */
+/**
+ * The extraction this document already has, if any.
+ *
+ * Re-extracting the same document produced a second row every time, which is
+ * how the review queue filled with copies of one agreement — and worse, how a
+ * document could end up with two different sets of terms and no rule about
+ * which one an approval referred to.
+ *
+ * The minted one wins when there is a choice, because a note points at an
+ * extraction and deleting or bypassing that row would orphan it. Otherwise the
+ * most recent, which is the one a person was last working on.
+ */
+async function existingExtraction(documentId: string) {
+  const rows = await prisma.extraction.findMany({
+    where: { documentId },
+    include: { note: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.find((row) => row.note) ?? rows[0] ?? null;
+}
+
+/** `?force=1` re-runs a document that already has an extraction. */
+function forced(c: { req: { query: (k: string) => string | undefined } }) {
+  const value = c.req.query("force");
+  return value === "1" || value === "true";
+}
+
 app.post("/documents/:id/extract", async (c) => {
   const document = await prisma.document.findUnique({
     where: { id: c.req.param("id") },
   });
   if (!document) throw new HTTPException(404, { message: "Unknown document." });
+
+  // Hand back what exists rather than spending another model call on it.
+  if (!forced(c)) {
+    const already = await existingExtraction(document.id);
+    if (already) return c.json({ extraction: jsonSafe(already), reused: true });
+  }
 
   const result = await extractTerms(document.text);
   const validation = validateTerms(result.terms);
@@ -383,6 +416,19 @@ app.post("/documents/:id/extract/stream", async (c) => {
       stream.writeSSE({ event, data: JSON.stringify(data) });
 
     try {
+      /*
+       * Already extracted: finish immediately with the row that exists. The
+       * client routes on the id in `done`, so this lands the user on the
+       * review they already have instead of opening a second one.
+       */
+      if (!forced(c)) {
+        const already = await existingExtraction(document.id);
+        if (already) {
+          await send("done", { extraction: jsonSafe(already), reused: true });
+          return;
+        }
+      }
+
       const result = await extractTerms(document.text, (event) => {
         void send(event.type, event);
       });
