@@ -16,7 +16,7 @@ import { checkProvenance } from "./provenance";
 import { publicClient, readParty } from "./chain";
 import { issuerRegistryAbi } from "./abi";
 import { ask, loadHistory } from "./zoya";
-import { keeperStatus, startKeeper, sweep } from "./keeper";
+import { collectionTotals, keeperStatus, startKeeper, sweep } from "./keeper";
 import { auth, requireAuth } from "./auth";
 import { isAddress, verifyMessage } from "viem";
 import {
@@ -1018,7 +1018,9 @@ app.post("/zoya/stream", async (c) => {
  * take the platform's word for it, and every collection is a transaction they
  * can check.
  */
-app.get("/keeper", (c) => c.json(keeperStatus()));
+app.get("/keeper", async (c) =>
+  c.json({ ...keeperStatus(), totals: await collectionTotals() }),
+);
 
 /**
  * Runs a sweep now.

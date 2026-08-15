@@ -68,6 +68,46 @@ export function keeperStatus(): KeeperStatus {
   return status;
 }
 
+/**
+ * Writes an attempt down, so the keeper's account of itself outlives a restart.
+ *
+ * Never allowed to break a sweep: the payment has already happened on-chain by
+ * this point, and failing to record it must not stop the vault behind it being
+ * collected from.
+ */
+async function record(attempt: CollectionAttempt): Promise<void> {
+  try {
+    await prisma.collection.create({
+      data: {
+        noteAddress: attempt.note,
+        vaultAddress: attempt.vault,
+        extractionId: attempt.extractionId,
+        outcome: attempt.outcome,
+        txHash: attempt.hash,
+        error: attempt.error,
+      },
+    });
+  } catch (cause) {
+    console.error("[keeper] could not record attempt", cause);
+  }
+}
+
+/** How many instalments this keeper has collected, and for which notes. */
+export async function collectionTotals() {
+  const rows = await prisma.collection.groupBy({
+    by: ["vaultAddress"],
+    where: { outcome: "collected" },
+    _count: { _all: true },
+  });
+
+  return {
+    collected: rows.reduce((sum, row) => sum + row._count._all, 0),
+    byVault: Object.fromEntries(
+      rows.map((row) => [row.vaultAddress, row._count._all]),
+    ),
+  };
+}
+
 function keeperAccount() {
   const key = process.env.KEEPER_PRIVATE_KEY;
   if (!key) return undefined;
@@ -151,16 +191,20 @@ export async function sweep(): Promise<CollectionAttempt[]> {
         });
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-        attempts.push({
+        const attempt = {
           note: entry.note,
           vault: entry.vault,
           extractionId: entry.extractionId,
-          outcome: receipt.status === "success" ? "collected" : "failed",
+          outcome: (receipt.status === "success" ? "collected" : "failed") as
+            | "collected"
+            | "failed",
           hash,
           error:
             receipt.status === "success" ? undefined : "Transaction reverted.",
           at: new Date().toISOString(),
-        });
+        };
+        attempts.push(attempt);
+        await record(attempt);
       } catch (cause) {
         /*
          * One vault failing must not end the sweep. The common cause is
@@ -168,14 +212,16 @@ export async function sweep(): Promise<CollectionAttempt[]> {
          * the balance between the read and the send — and the other notes due
          * today are owed their collection regardless.
          */
-        attempts.push({
+        const attempt = {
           note: entry.note,
           vault: entry.vault,
           extractionId: entry.extractionId,
-          outcome: "failed",
+          outcome: "failed" as const,
           error: (cause as Error).message.split("\n")[0],
           at: new Date().toISOString(),
-        });
+        };
+        attempts.push(attempt);
+        await record(attempt);
       }
     }
 

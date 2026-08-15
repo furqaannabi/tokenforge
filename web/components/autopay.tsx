@@ -137,7 +137,16 @@ export function Autopay({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
+          <div>
+            <dt className="text-xs text-muted-foreground">Instalments paid</dt>
+            <dd className="tnum">
+              {progress.nextPeriod} of {progress.periodCount}
+              <span className="block text-xs text-muted-foreground">
+                {progress.periodCount - progress.nextPeriod} left
+              </span>
+            </dd>
+          </div>
           <div>
             <dt className="text-xs text-muted-foreground">Next instalment</dt>
             <dd className="tnum">

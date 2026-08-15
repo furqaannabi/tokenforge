@@ -267,3 +267,29 @@ model Session {
   @@index([address, createdAt])
   @@index([expiresAt])
 }
+
+/**
+ * A collection the keeper made, or tried to.
+ *
+ * The keeper kept this in memory, so its own account of what it had done
+ * vanished on every restart — which made a vault that had been collected from
+ * twice look like one the keeper had never touched. The payments themselves
+ * were always safe on-chain; what was missing was any way to say so without
+ * reading the vault.
+ *
+ * Failures are kept too. "Tried and the allowance was revoked" is a different
+ * story from "never came", and only one of them is the borrower's doing.
+ */
+model Collection {
+  id           String   @id @default(cuid())
+  noteAddress  String
+  vaultAddress String
+  extractionId String?
+  /// "collected" or "failed".
+  outcome      String
+  txHash       String?  @unique
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([vaultAddress])
+}
