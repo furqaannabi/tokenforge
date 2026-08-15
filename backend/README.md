@@ -99,6 +99,10 @@ intended to publish.
 | `POST /extractions/:id/mint-request` | The issuer submits what they intend to mint. The service derives the parameters from the reviewed terms and hashes them |
 | `GET /extractions/:id/mint-args` | The approved parameters, for the issuer's wallet to sign |
 | `GET /mint-requests` | The admin's queue of mints awaiting a decision |
+| `POST /auth/nonce` | A challenge to sign. Single use, ten minutes |
+| `POST /auth/verify` | The signature. Sets an httpOnly session cookie naming a revocable row |
+| `GET /auth/me` | Who the cookie says you are |
+| `POST /auth/logout` | Revokes the session and clears the cookie |
 | `POST /zoya/messages` | The assistant. Returns her reply and the tools it rested on |
 | `POST /zoya/stream` | The same turn as server-sent events: `delta` per fragment, `tool` when one starts, `done` with the sources |
 | `GET /keeper` | Whether automatic collection is running and what it last did. Public |
@@ -155,6 +159,37 @@ input — anyone admitted can upload one — and a PDF carrying instructions is 
 realistic attack on a lending product, not a theoretical one. Figures come from
 the chain and the validator, which no document can reach.
 
+## Sessions
+
+A wallet cannot present a password, so it signs. `/auth/nonce` issues a random
+challenge, `/auth/verify` checks the signature recovers to the address that
+asked, and the cookie that follows carries a JWT naming a `Session` row rather
+than the claims themselves — so a session can be ended server-side, which a
+self-contained token cannot.
+
+Three details that took a deployment to get right:
+
+**The challenge is consumed before it is verified, not after.** viem throws on
+a signature it cannot parse rather than returning false, so burning it
+afterwards left a live nonce whenever the input was malformed rather than
+merely wrong.
+
+**Contract wallets are verified on-chain.** A smart account's signature is a
+call to `isValidSignature` and never recovers to an address, so ECDSA alone
+rejects users whose wallets are perfectly valid.
+
+**The cookie's scoping comes from the request, not from `NODE_ENV`.** A
+cross-site cookie needs `SameSite=None`, which needs `Secure`, which needs
+https — all three follow `x-forwarded-proto` or the request's origin. Keying
+them on an environment variable meant a deployment that forgot to set it
+served the development policy and the browser silently dropped the cookie.
+
+Reads are scoped as well as authenticated: an extraction is visible to the
+wallet that uploaded it, the borrower named in its mint request, the registry
+admin, and — once minted — anyone at all, since a minted note is a public
+instrument. Refusals answer 404, because whether a given extraction exists is
+itself worth not disclosing.
+
 ## The keeper
 
 `startKeeper` sweeps every `KEEPER_INTERVAL_MS` (default one minute): it reads
@@ -168,10 +203,11 @@ The key only pays gas. `collectFromBorrower` takes no arguments and names no
 recipient, so this service cannot move money to an address of its choosing. It
 is the one write ABI the backend carries, and nothing else should be added.
 
-Its sweep log is held in memory, so `GET /keeper` forgets what it collected
-across a restart. The collections themselves are on-chain and permanent — the
-vault's `PeriodSettled` events are the real record — but the status endpoint
-cannot currently tell "collected and forgotten" from "never ran".
+Every attempt is written to `Collection`, successes and failures both, so the
+keeper's account of itself survives a restart — it used to live in memory, and
+a vault collected from twice looked untouched after a redeploy. `GET /keeper`
+reports the totals. Recording never blocks a sweep: by the time there is
+anything to write the payment has already settled on-chain.
 
 Without `KEEPER_PRIVATE_KEY` the keeper logs that it is off and does nothing;
 collection remains available to anyone from the note page. `GET /keeper` is

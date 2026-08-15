@@ -114,6 +114,7 @@ No single check is trusted on its own. Five layers each do a different job:
 | Issuer approval | The authorized representative signs off on the final terms on-chain |
 | Document provenance | A model checks the agreement names this issuer as lender, and that the same loan has not already been tokenized under a different file |
 | Admin approval | The registry admin clears one exact set of mint parameters. Editing anything afterwards produces a different hash and the factory refuses it |
+| Wallet sessions | Reads and writes are scoped to the wallet that signed a challenge, not merely to one that is connected. A minted note stays public; anything in review does not |
 | Borrower acceptance | The borrower signs the mint hash from their own wallet, and `NoteFactory` recovers that signature on-chain before the note opens. Without it the note mints `Pending` and nothing trades or settles |
 | Onchain enforcement | Terms are immutable, the document hash is recorded, the repayment schedule is enforced by contract |
 
