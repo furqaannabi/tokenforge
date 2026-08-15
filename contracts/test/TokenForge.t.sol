@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IssuerRegistry} from "../src/IssuerRegistry.sol";
 import {NoteFactory} from "../src/NoteFactory.sol";
 import {RWANote} from "../src/RWANote.sol";
@@ -126,7 +127,7 @@ abstract contract TokenForgeFixture is Test {
 
         _approveMint(params);
         vm.prank(issuer);
-        (note, vault) = factory.mintNote(params);
+        (note, vault) = factory.mintNote(params, "");
     }
 
     /// @dev Issuer funds and settles the next period.
@@ -312,7 +313,7 @@ contract AcceptanceTest is TokenForgeFixture {
         vm.expectRevert(
             abi.encodeWithSelector(NoteFactory.BorrowerNotRegistered.selector, outsider)
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 }
 
@@ -466,7 +467,7 @@ contract MintApprovalTest is TokenForgeFixture {
                 NoteFactory.MintNotApproved.selector, issuer, expected
             )
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_ApprovalLetsExactlyThoseParametersThrough() public {
@@ -474,7 +475,7 @@ contract MintApprovalTest is TokenForgeFixture {
         _approveMint(params);
 
         vm.prank(issuer);
-        (RWANote note,) = factory.mintNote(params);
+        (RWANote note,) = factory.mintNote(params, "");
         assertEq(note.documentHash(), DOCUMENT_HASH);
     }
 
@@ -498,7 +499,7 @@ contract MintApprovalTest is TokenForgeFixture {
                 NoteFactory.MintNotApproved.selector, issuer, tampered
             )
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_PrincipalCannotBeChangedAfterApproval() public {
@@ -508,7 +509,7 @@ contract MintApprovalTest is TokenForgeFixture {
         params.terms.principal = PRINCIPAL + 1;
         vm.prank(issuer);
         vm.expectRevert();
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_BorrowerCannotBeChangedAfterApproval() public {
@@ -518,7 +519,7 @@ contract MintApprovalTest is TokenForgeFixture {
         params.borrower = outsider;
         vm.prank(issuer);
         vm.expectRevert();
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_ScheduleCannotBeChangedAfterApproval() public {
@@ -532,7 +533,7 @@ contract MintApprovalTest is TokenForgeFixture {
 
         vm.prank(issuer);
         vm.expectRevert();
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     /// An approval belongs to one issuer; another cannot ride on it.
@@ -547,7 +548,7 @@ contract MintApprovalTest is TokenForgeFixture {
         params.issuer = rival;
         vm.prank(rival);
         vm.expectRevert();
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_OnlyAdminApproves() public {
@@ -649,7 +650,7 @@ contract NoteFactoryTest is TokenForgeFixture {
         vm.expectRevert(
             abi.encodeWithSelector(NoteFactory.IssuerNotRegistered.selector, outsider)
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_RevokedIssuerCannotMint() public {
@@ -664,7 +665,7 @@ contract NoteFactoryTest is TokenForgeFixture {
         vm.expectRevert(
             abi.encodeWithSelector(NoteFactory.IssuerNotRegistered.selector, issuer)
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_StrangerCannotMintOnBehalfOfRegisteredIssuer() public {
@@ -678,7 +679,7 @@ contract NoteFactoryTest is TokenForgeFixture {
                 NoteFactory.NotAuthorizedRepresentative.selector, issuer, outsider
             )
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_AuthorizedRepresentativeCanMint() public {
@@ -691,7 +692,7 @@ contract NoteFactoryTest is TokenForgeFixture {
         _approveMint(params);
 
         vm.prank(representative);
-        (RWANote note,) = factory.mintNote(params);
+        (RWANote note,) = factory.mintNote(params, "");
 
         assertEq(note.issuer(), issuer);
         assertEq(note.balanceOf(issuer), SUPPLY, "supply goes to the issuer, not the signer");
@@ -732,7 +733,7 @@ contract NoteFactoryTest is TokenForgeFixture {
                 address(note)
             )
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_ZeroDocumentHashRejected() public {
@@ -743,7 +744,7 @@ contract NoteFactoryTest is TokenForgeFixture {
 
         vm.prank(issuer);
         vm.expectRevert(NoteFactory.ZeroDocumentHash.selector);
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     /**
@@ -776,7 +777,7 @@ contract NoteFactoryTest is TokenForgeFixture {
                 RepaymentVault.ScheduleHashMismatch.selector, approved, tampered
             )
         );
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_DeploymentIsRecorded() public {
@@ -1264,7 +1265,7 @@ contract ValidationTest is TokenForgeFixture {
 
         vm.prank(issuer);
         vm.expectRevert(NoteFactory.ZeroSupply.selector);
-        factory.mintNote(params);
+        factory.mintNote(params, "");
     }
 
     function test_VaultRejectsEmptySchedule() public {
@@ -1431,7 +1432,7 @@ contract AmortizingScheduleTest is TokenForgeFixture {
         _approveMint(params);
         _approveMint(params);
         vm.prank(issuer);
-        (note, vault) = factory.mintNote(params);
+        (note, vault) = factory.mintNote(params, "");
 
         vm.prank(borrower);
         note.accept();
@@ -1498,5 +1499,95 @@ contract AmortizingScheduleTest is TokenForgeFixture {
             (LOAN + INTEREST_PER_PERIOD * INSTALMENTS) / 2,
             "each holder receives half of principal plus interest"
         );
+    }
+}
+
+/**
+ * One signature instead of two.
+ *
+ * The borrower used to agree twice: an off-chain signature so an admin would
+ * approve, then a transaction to `accept` the note once it existed. These
+ * check that a signature carried into the mint does the whole job, that the
+ * chain is the thing verifying it, and that a wrong signature cannot smuggle a
+ * note past the gate.
+ */
+contract BorrowerSignatureTest is TokenForgeFixture {
+    uint256 internal signerKey = 0xB0110;
+
+    function _signedParams()
+        internal
+        returns (NoteFactory.MintParams memory params, bytes memory signature)
+    {
+        params = _mintParams();
+        params.issuer = issuer;
+        params.borrower = vm.addr(signerKey);
+
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            bytes(factory.acceptanceMessage(factory.mintHash(params)))
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
+        signature = abi.encodePacked(r, s, v);
+    }
+
+    function test_signed_mint_opens_active() public {
+        (NoteFactory.MintParams memory params, bytes memory signature) =
+            _signedParams();
+
+        vm.prank(admin);
+        registry.admitBorrower(params.borrower, "Signed Borrower", "IN");
+        _approveMint(params);
+
+        vm.prank(issuer);
+        (RWANote note,) = factory.mintNote(params, signature);
+
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Active));
+    }
+
+    function test_unsigned_mint_still_opens_pending() public {
+        NoteFactory.MintParams memory params = _mintParams();
+        params.issuer = issuer;
+        params.borrower = borrower;
+        _approveMint(params);
+
+        vm.prank(issuer);
+        (RWANote note,) = factory.mintNote(params, "");
+
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Pending));
+    }
+
+    /// A signature from anyone but the named borrower must not count.
+    function test_someone_elses_signature_does_not_accept() public {
+        (NoteFactory.MintParams memory params,) = _signedParams();
+
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            bytes(factory.acceptanceMessage(factory.mintHash(params)))
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xBAD, digest);
+
+        vm.prank(admin);
+        registry.admitBorrower(params.borrower, "Signed Borrower", "IN");
+        _approveMint(params);
+
+        vm.prank(issuer);
+        (RWANote note,) = factory.mintNote(params, abi.encodePacked(r, s, v));
+
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Pending));
+    }
+
+    /// The signature is bound to these terms, not to this borrower generally.
+    function test_signature_does_not_carry_to_other_terms() public {
+        (NoteFactory.MintParams memory params, bytes memory signature) =
+            _signedParams();
+
+        params.supply += 1; // a different note entirely
+
+        vm.prank(admin);
+        registry.admitBorrower(params.borrower, "Signed Borrower", "IN");
+        _approveMint(params);
+
+        vm.prank(issuer);
+        (RWANote note,) = factory.mintNote(params, signature);
+
+        assertEq(uint8(note.status()), uint8(RWANote.Status.Pending));
     }
 }

@@ -75,7 +75,7 @@ contract ExampleTest is Test {
         registry.approveMint(issuer, factory.mintHash(params));
 
         vm.prank(issuer);
-        (note, vault) = factory.mintNote(params);
+        (note, vault) = factory.mintNote(params, "");
 
         vm.prank(borrower);
         note.accept();

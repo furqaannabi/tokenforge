@@ -46,11 +46,15 @@ contract DemoNote is Script {
                     principal: 1_000e6,
                     rateBps: 1000,
                     maturity: schedule[4].dueDate,
-                    documentHash: keccak256(abi.encodePacked("demo", block.timestamp)),
+                    documentHash: keccak256(abi.encodePacked("demo", block.timestamp, "")),
                     scheduleHash: ScheduleLib.hash(schedule)
                 }),
                 schedule: schedule
-            })
+            }),
+            // No borrower signature here: the demo note opens Pending and the
+            // borrower clears it with `accept`, which is the path this script
+            // has always exercised.
+            ""
         );
         vm.stopBroadcast();
 

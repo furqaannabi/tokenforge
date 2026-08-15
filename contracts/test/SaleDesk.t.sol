@@ -105,7 +105,7 @@ abstract contract SaleFixture is Test {
         registry.approveMint(issuer, approval);
 
         vm.prank(issuer);
-        (note_, vault_) = factory.mintNote(params);
+        (note_, vault_) = factory.mintNote(params, "");
 
         vm.prank(borrower);
         note_.accept();

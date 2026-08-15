@@ -27,7 +27,13 @@ import { prisma } from "./db";
  * repayment record, and buy nothing: the call is already incapable of harm.
  */
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+/*
+ * A minute. Instalments fall due to the second, and a borrower watching a
+ * payment they have authorised does not want to wonder for five of them
+ * whether the thing is running. A sweep is one batched read when nothing is
+ * due, which is cheap enough to do sixty times an hour.
+ */
+const DEFAULT_INTERVAL_MS = 60 * 1000;
 
 export interface CollectionAttempt {
   note: string;

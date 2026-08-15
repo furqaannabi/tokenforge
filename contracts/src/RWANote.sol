@@ -123,15 +123,25 @@ contract RWANote is ERC20 {
         address borrower_,
         address holder_,
         uint256 supply_,
-        Terms memory terms_
+        Terms memory terms_,
+        /// @dev True when the factory verified the borrower's signature.
+        bool accepted_
     ) ERC20(name_, symbol_) {
         if (issuer_ == address(0) || holder_ == address(0)) revert ZeroAddress();
         if (borrower_ == address(0)) revert ZeroAddress();
 
         issuer = issuer_;
         borrower = borrower_;
-        // Nothing may trade or be repaid until the borrower affirms the terms.
-        status = Status.Pending;
+        /*
+         * Live immediately when the borrower's signature came with the mint.
+         *
+         * The factory recovers that signature against this borrower and these
+         * exact parameters before deploying, so the affirmation the `Pending`
+         * state waits for has already happened — and it happened without
+         * costing the borrower a transaction. Absent one, nothing may trade or
+         * be repaid until they call `accept`.
+         */
+        status = accepted_ ? Status.Active : Status.Pending;
         deployer = msg.sender;
         principal = terms_.principal;
         rateBps = terms_.rateBps;

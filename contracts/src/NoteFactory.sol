@@ -2,6 +2,9 @@
 pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IssuerRegistry} from "./IssuerRegistry.sol";
 import {RWANote} from "./RWANote.sol";
 import {RepaymentVault} from "./RepaymentVault.sol";
@@ -113,7 +116,52 @@ contract NoteFactory {
             );
     }
 
-    function mintNote(MintParams calldata params)
+    /**
+     * @notice The words the borrower signs, rebuilt on-chain.
+     *
+     * @dev Byte-identical to the message the service asks a wallet to sign, so
+     *      the signature can be checked here rather than taken on trust from a
+     *      database row.
+     *
+     *      Readable prose rather than a bare hash, deliberately. A wallet shows
+     *      this verbatim, and a prompt full of hex is one people approve
+     *      without reading — which is exactly the habit that makes signature
+     *      phishing work. The mint hash is included, so a signature cannot be
+     *      lifted onto different terms.
+     */
+    function acceptanceMessage(bytes32 hash) public pure returns (string memory) {
+        return
+            string.concat(
+                unicode"TokenForge — borrower acceptance\n",
+                "\n",
+                "I confirm that the company I represent is the borrower on this agreement,\n",
+                "and I accept the terms recorded under the following mint:\n",
+                "\n",
+                Strings.toHexString(uint256(hash), 32)
+            );
+    }
+
+    /// @notice Whether `signature` is this borrower agreeing to these params.
+    function acceptedBy(MintParams calldata params, bytes calldata signature)
+        public
+        view
+        returns (bool)
+    {
+        if (signature.length == 0) return false;
+
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            bytes(acceptanceMessage(mintHash(params)))
+        );
+
+        (address signer, ECDSA.RecoverError error, ) = ECDSA.tryRecover(
+            digest,
+            signature
+        );
+
+        return error == ECDSA.RecoverError.NoError && signer == params.borrower;
+    }
+
+    function mintNote(MintParams calldata params, bytes calldata borrowerSignature)
         external
         returns (RWANote note, RepaymentVault vault)
     {
@@ -152,6 +200,13 @@ contract NoteFactory {
             revert DocumentAlreadyTokenized(params.terms.documentHash, existing);
         }
 
+        /*
+         * Computed before the call, not inside it. Passing it as an argument
+         * put the stack a slot too deep for the legacy pipeline — the same
+         * trap `mintHash` works around by hashing in two rounds.
+         */
+        bool accepted = acceptedBy(params, borrowerSignature);
+
         note = new RWANote(
             params.name,
             params.symbol,
@@ -161,7 +216,21 @@ contract NoteFactory {
             // borrower owes the loan; they do not own a share of it.
             params.issuer,
             params.supply,
-            params.terms
+            params.terms,
+            /*
+             * One signature, not two.
+             *
+             * The borrower used to sign the terms off-chain to unblock the
+             * admin, and then send a transaction to `accept` the note after it
+             * existed — agreeing twice to the same thing, the second time
+             * paying gas for it. Verifying that same signature here collapses
+             * the two: the chain checks the agreement rather than trusting
+             * that a database row recorded it.
+             *
+             * Without a signature the note still opens Pending and waits for
+             * `accept`, which keeps the older flow working.
+             */
+            accepted
         );
 
         // The vault's constructor rejects a schedule that does not reproduce
