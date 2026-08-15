@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { formatUnits } from "viem";
+import { CURRENCY_DECIMALS } from "@tokenforge/core";
 import { Stamp } from "@/components/primitives";
 import { NOTE_STATUS, statusTone, useNotesMarket } from "@/lib/portfolio";
 import { money, percent, monthYear } from "@/lib/format";
@@ -74,9 +75,14 @@ export function AllNotesView() {
                     </span>
                   </TableCell>
                   <TableCell className="tnum text-right">
+                    {/* Currency decimals, not the token's eighteen. */}
                     {row.outstanding === null
                       ? "—"
-                      : money(Number(formatUnits(row.outstanding, 18)))}
+                      : money(
+                          Number(
+                            formatUnits(row.outstanding, CURRENCY_DECIMALS.USDG),
+                          ),
+                        )}
                   </TableCell>
                   <TableCell className="tnum text-right">
                     {percent(row.extraction.terms.interestRatePct.value)}

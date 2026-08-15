@@ -80,7 +80,7 @@ export function useMintedNotes() {
  * Named, because the results come back as one flat array and the only thing
  * separating one note's fields from the next is this number.
  */
-const READS_PER_NOTE = 7;
+const READS_PER_NOTE = 8;
 
 export function useNotesMarket() {
   const { minted, isPending, isError } = useMintedNotes();
@@ -90,11 +90,24 @@ export function useNotesMarket() {
       minted.flatMap((extraction) => {
         const note = extraction.note!;
         return [
+          /*
+           * Outstanding principal comes from the two figures that define it,
+           * in the settlement currency's decimals. `totalSupply` was standing
+           * in for it and is a different quantity entirely — a token count in
+           * 18 decimals — so a note with $1,050,000 still owed rendered as
+           * "$875", which is its supply of tokens.
+           */
           {
             abi: rwaNoteAbi,
             address: note.noteAddress,
             chainId: CHAIN_ID,
-            functionName: "totalSupply",
+            functionName: "principal",
+          },
+          {
+            abi: rwaNoteAbi,
+            address: note.noteAddress,
+            chainId: CHAIN_ID,
+            functionName: "principalRepaid",
           },
           {
             abi: rwaNoteAbi,
@@ -157,17 +170,22 @@ export function useNotesMarket() {
          */
         const at = (offset: number) =>
           reads.data?.[index * READS_PER_NOTE + offset]?.result;
+
+        const principal = (at(0) as bigint | undefined) ?? null;
+        const repaid = (at(1) as bigint | undefined) ?? 0n;
+
         return {
           extraction,
           note: extraction.note!,
-          outstanding: (at(0) as bigint | undefined) ?? null,
-          status: Number((at(1) as number | undefined) ?? 0),
-          borrower: (at(2) as `0x${string}` | undefined) ?? "0x",
-          periodsPaid: Number((at(3) as bigint | undefined) ?? 0n),
-          periodCount: Number((at(4) as bigint | undefined) ?? 0n),
+          /** Still owed, in the settlement currency. */
+          outstanding: principal === null ? null : principal - repaid,
+          status: Number((at(2) as number | undefined) ?? 0),
+          borrower: (at(3) as `0x${string}` | undefined) ?? "0x",
+          periodsPaid: Number((at(4) as bigint | undefined) ?? 0n),
+          periodCount: Number((at(5) as bigint | undefined) ?? 0n),
           /** Tokens on offer right now, or 0n when nothing is for sale. */
-          forSale: (at(5) as bigint | undefined) ?? 0n,
-          pricePerToken: (at(6) as bigint | undefined) ?? 0n,
+          forSale: (at(6) as bigint | undefined) ?? 0n,
+          pricePerToken: (at(7) as bigint | undefined) ?? 0n,
         };
       }),
     [minted, reads.data],
