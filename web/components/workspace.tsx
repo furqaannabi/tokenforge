@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
 import { useIsRegistryAdmin } from "@/lib/registry";
 import { cn } from "@/lib/utils";
@@ -34,15 +34,13 @@ interface Tab {
 }
 
 export function Workspace() {
-  const router = useRouter();
   const params = useSearchParams();
-  const { address, connected, issuer } = useWallet();
+  const { address, connected } = useWallet();
   const { isAdmin } = useIsRegistryAdmin(address);
 
   const tabs: Tab[] = [
     { id: "notes", label: "All notes" },
     { id: "mine", label: "My notes", when: connected },
-    { id: "issue", label: "New note", when: Boolean(issuer?.verified) },
     { id: "registry", label: "Registry" },
     { id: "admin", label: "Admin", when: isAdmin },
   ];
@@ -54,19 +52,16 @@ export function Workspace() {
    * rendering nothing. Disconnecting a wallet while on "My notes" would
    * otherwise leave the page blank.
    */
+  /*
+   * "issue" is no longer offered as a section — it lives inside "mine" — but
+   * it stays routable so older links and the onboarding flow still land
+   * somewhere.
+   */
   const requested = params.get("view") as TabId | null;
   const active =
     requested && visible.some((tab) => tab.id === requested)
       ? requested
       : "notes";
-
-  const select = (id: TabId) => {
-    const next = new URLSearchParams(params.toString());
-    if (id === "notes") next.delete("view");
-    else next.set("view", id);
-    const query = next.toString();
-    router.replace(query ? `/?${query}` : "/", { scroll: false });
-  };
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8">

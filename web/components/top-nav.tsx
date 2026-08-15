@@ -51,7 +51,6 @@ export function TopNav() {
   const sections = [
     { id: "notes", label: "All notes", when: true },
     { id: "mine", label: "My notes", when: connected },
-    { id: "issue", label: "New note", when: Boolean(issuer?.verified) },
     { id: "registry", label: "Registry", when: true },
     { id: "admin", label: "Admin", when: isAdmin },
   ].filter((section) => section.when);

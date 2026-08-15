@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatUnits } from "viem";
-import { CircleAlert, Coins, Loader2, Wallet } from "lucide-react";
+import { ArrowLeft, CircleAlert, Coins, Loader2, Plus, Wallet } from "lucide-react";
 import { FieldLabel, Stamp, StatTile } from "@/components/primitives";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useHoldings, useNotesMarket, type Holding } from "@/lib/portfolio";
+import { IssueView } from "@/components/views/issue";
 import { useSignMessage } from "wagmi";
 import { acceptanceMessage, useMintRequests } from "@/lib/queries";
 import { api } from "@/lib/api";
@@ -31,7 +32,16 @@ import { CURRENCY_DECIMALS } from "@tokenforge/core";
  * the notes and the claim is signed by the holder.
  */
 export function MyNotesView() {
-  const { address, connected } = useWallet();
+  const { address, connected, issuer } = useWallet();
+  /*
+   * Issuing lives here rather than in a tab of its own.
+   *
+   * "New note" was a separate section that only verified issuers could see,
+   * which split one person's work across two places: the notes they have
+   * issued in one, the way to issue another in the other. It is the same
+   * screen's job, so it is the same screen.
+   */
+  const [issuing, setIssuing] = useState(false);
   const { holdings, isPending, isError, refetch } = useHoldings(address);
   const market = useNotesMarket();
 
@@ -65,16 +75,41 @@ export function MyNotesView() {
   const totalValue = holdings.reduce((sum, h) => sum + h.balance, 0n);
   const totalClaimable = holdings.reduce((sum, h) => sum + h.claimable, 0n);
 
+  if (issuing) {
+    return (
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2"
+          onClick={() => setIssuing(false)}
+        >
+          <ArrowLeft /> Back to portfolio
+        </Button>
+        <IssueView />
+      </div>
+    );
+  }
+
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Portfolio
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          Your positions, read from the chain. Balances fall as principal is
-          repaid — the repaid amount is waiting in the vault below.
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Portfolio
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Your positions, read from the chain. Balances fall as principal is
+            repaid — the repaid amount is waiting in the vault below.
+          </p>
+        </div>
+
+        {/* Only a verified issuer can mint, so only they are offered it. */}
+        {issuer?.verified ? (
+          <Button onClick={() => setIssuing(true)}>
+            <Plus /> New note
+          </Button>
+        ) : null}
       </header>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
