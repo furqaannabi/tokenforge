@@ -1,11 +1,11 @@
 AMORTISING TERM LOAN AGREEMENT
 
 
-THIS AGREEMENT is dated as of December 15, 2025, between PELICAN COLD CHAIN LOGISTICS LLC, a company incorporated in India (the "Borrower"), and CROSSMIND, a company incorporated in India (the "Lender").
+THIS AGREEMENT is dated as of December 15, 2025, between NORTHBRIDGE CREDIT PARTNERS, a Delaware limited partnership (the "Borrower"), and CROSSMIND, a company incorporated in India (the "Lender").
 
 RECITALS
 
-The Borrower operates refrigerated distribution facilities in Gujarat and Maharashtra and requires term funding to replace compressor plant at two sites. The Lender has agreed to advance the facility described below on the terms set out in this Agreement.
+The Borrower originates and holds secured receivables, and requires term funding to support its origination programme over the next four quarters. The Lender has agreed to advance the facility described below on the terms set out in this Agreement.
 
 1. THE FACILITY
 
@@ -36,7 +36,7 @@ The Borrower operates refrigerated distribution facilities in Gujarat and Mahara
 
 3. SECURITY
 
-3.1 Security. The facility is secured by a first-ranking charge over the compressor plant financed by it, together with the Borrower's receivables from its three largest customers by revenue.
+3.1 Security. The facility is secured by a first-ranking charge over the Borrower's receivables from its three largest obligors by outstanding balance.
 
 4. EVENTS OF DEFAULT
 
@@ -49,7 +49,7 @@ The Borrower operates refrigerated distribution facilities in Gujarat and Mahara
 5.1 This Agreement is governed by the laws of the Republic of India, and the parties submit to the exclusive jurisdiction of the courts of Mumbai.
 
 
-SIGNED for and on behalf of PELICAN COLD CHAIN LOGISTICS LLC
+SIGNED for and on behalf of NORTHBRIDGE CREDIT PARTNERS
 
 
 _______________________________
