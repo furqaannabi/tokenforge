@@ -1,0 +1,67 @@
+AMORTISING TERM LOAN AGREEMENT
+
+
+THIS AGREEMENT is dated as of December 15, 2025, between PELICAN COLD CHAIN LOGISTICS LLC (the "Borrower") and NORTHBRIDGE CREDIT PARTNERS (the "Lender").
+
+RECITALS
+
+The Borrower operates refrigerated distribution facilities in Gujarat and Maharashtra and requires term funding to replace compressor plant at two sites. The Lender has agreed to advance the facility described below on the terms set out in this Agreement.
+
+1. THE FACILITY
+
+1.1 Facility. The Lender advances the principal sum of $600,000.00 (six hundred thousand United States dollars) to the Borrower on the date of this Agreement.
+
+1.2 Interest. Interest accrues at 12.00% of the principal amount over the term of the facility, computed on a 30/360 basis, and is payable in equal instalments alongside principal.
+
+1.3 Amortisation. Principal under this Agreement is repaid in six equal quarterly instalments of $100,000.00 each. No balloon payment falls due at maturity.
+
+1.4 Interest Instalments. Interest of $72,000.00 in aggregate is payable in six equal instalments of $12,000.00 each, one alongside each principal instalment.
+
+1.5 Maturity. The final instalment falls due on June 15, 2027, by which date the facility shall have been repaid in full.
+
+2. PAYMENT SCHEDULE
+
+2.1 Payment Dates and Amounts. Each instalment comprises $100,000.00 of principal and $12,000.00 of interest, being $112,000.00 in total, payable on:
+
+15 Mar 2026
+15 Jun 2026
+15 Sep 2026
+15 Dec 2026
+15 Mar 2027
+15 Jun 2027
+
+2.2 Aggregate. The Borrower shall repay $672,000.00 in total, being $600,000.00 of principal and $72,000.00 of interest.
+
+2.3 Method of Payment. The Borrower shall pay each instalment in immediately available funds. The Borrower may pre-authorise the Lender or its servicer to collect any instalment on or after its due date by standing authorisation, which the Borrower may withdraw at any time.
+
+3. SECURITY
+
+3.1 Security. The facility is secured by a first-ranking charge over the compressor plant financed by it, together with the Borrower's receivables from its three largest customers by revenue.
+
+4. EVENTS OF DEFAULT
+
+4.1 Non-payment. Failure to pay any instalment within ten (10) business days of its due date constitutes an Event of Default, whereupon the outstanding balance becomes immediately due.
+
+4.2 Cross-default. Any default by the Borrower under other indebtedness exceeding $50,000.00 constitutes an Event of Default under this Agreement.
+
+5. GOVERNING LAW
+
+5.1 This Agreement is governed by the laws of the Republic of India, and the parties submit to the exclusive jurisdiction of the courts of Mumbai.
+
+
+SIGNED for and on behalf of PELICAN COLD CHAIN LOGISTICS LLC
+
+
+_______________________________
+Name: Anjali Rao
+Title: Chief Financial Officer
+Date: December 15, 2025
+
+
+SIGNED for and on behalf of NORTHBRIDGE CREDIT PARTNERS
+
+
+_______________________________
+Name: Devin Mathew
+Title: Managing Director, Origination
+Date: December 15, 2025
