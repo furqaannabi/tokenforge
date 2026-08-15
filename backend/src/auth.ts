@@ -7,6 +7,7 @@ import { getRandomValues } from "node:crypto";
 import { isAddress, verifyMessage } from "viem";
 import { z } from "zod";
 import { prisma } from "./db";
+import { publicClient } from "./chain";
 import { ConfigurationError } from "./errors";
 
 /**
@@ -133,24 +134,59 @@ auth.post("/verify", async (c) => {
     });
   }
 
-  const valid = await verifyMessage({
-    address: address as `0x${string}`,
-    message: challenge({
-      address,
-      nonce: record.nonce,
-      domain: domainOf(c.req.header("origin")),
-    }),
-    signature: signature as `0x${string}`,
-  });
-
   /*
-   * Consumed either way. A failed attempt burns the challenge so a signature
-   * cannot be ground against one that stays valid.
+   * Burned before it is used, not after.
+   *
+   * This update sat below the verification with a comment claiming the
+   * challenge was consumed either way. It was not: `verifyMessage` throws on a
+   * malformed signature rather than returning false, so a caller sending
+   * rubbish left the nonce untouched and could keep trying against the same
+   * live challenge. Consuming first makes the guarantee true for every outcome,
+   * including the ones I did not anticipate.
    */
   await prisma.authNonce.update({
     where: { id: record.id },
     data: { consumedAt: new Date() },
   });
+
+  const message = challenge({
+    address,
+    nonce: record.nonce,
+    domain: domainOf(c.req.header("origin")),
+  });
+
+  /*
+   * A signature that cannot be parsed is a failed sign-in, not a broken
+   * server. viem throws on one — a wrong length, an impossible recovery byte,
+   * or a smart-account signature that is not ECDSA at all — and letting that
+   * escape returned 500 and a stack trace to anyone who posted nonsense.
+   *
+   * Contract wallets are tried on-chain second. An account whose signature is
+   * a call to `isValidSignature` never recovers to an address, and AppKit's
+   * smart accounts produce exactly that.
+   */
+  let valid = false;
+  try {
+    valid = await verifyMessage({
+      address: address as `0x${string}`,
+      message,
+      signature: signature as `0x${string}`,
+    });
+  } catch {
+    valid = false;
+  }
+
+  if (!valid) {
+    try {
+      valid = await publicClient.verifyMessage({
+        address: address as `0x${string}`,
+        message,
+        signature: signature as `0x${string}`,
+      });
+    } catch {
+      valid = false;
+    }
+  }
 
   if (!valid) {
     throw new HTTPException(401, {
