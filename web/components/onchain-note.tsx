@@ -141,7 +141,7 @@ export function OnChainNote({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
           label="Outstanding"
           value={state ? money(state.principal - state.principalRepaid) : "—"}
@@ -162,7 +162,29 @@ export function OnChainNote({
           label="Claimable"
           value={money(position.claimable)}
           tone={position.claimable > 0n ? "verified" : undefined}
-          sub={`Period ${Math.min(progress.nextPeriod + 1, progress.periodCount)} of ${progress.periodCount}`}
+          sub={
+            finished
+              ? "Every period settled"
+              : `Next is period ${Math.min(progress.nextPeriod + 1, progress.periodCount)}`
+          }
+        />
+        {/*
+          What the loan has actually paid. The row showed outstanding, supply,
+          a holding and a claim — every one a balance, none of them saying how
+          many instalments had been met, which is the first thing anyone asks
+          of a loan.
+        */}
+        <StatTile
+          label="Payments made"
+          value={`${progress.nextPeriod} of ${progress.periodCount}`}
+          tone={progress.isOverdue ? "impaired" : undefined}
+          sub={
+            progress.isOverdue
+              ? "An instalment is past due"
+              : finished
+                ? "Repaid in full"
+                : `${progress.periodCount - progress.nextPeriod} remaining`
+          }
         />
       </div>
 

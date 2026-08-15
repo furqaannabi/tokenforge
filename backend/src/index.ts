@@ -17,7 +17,7 @@ import { publicClient, readParty } from "./chain";
 import { issuerRegistryAbi } from "./abi";
 import { ask, loadHistory } from "./zoya";
 import { collectionTotals, keeperStatus, startKeeper, sweep } from "./keeper";
-import { auth, requireAuth } from "./auth";
+import { currentSession, auth, requireAuth } from "./auth";
 import { isAddress, verifyMessage } from "viem";
 import {
   documentKey,
@@ -102,9 +102,24 @@ app.route("/auth", auth);
  * which is not information to hand to anyone who finds the endpoint, and the
  * transcript is kept per wallet.
  */
+/*
+ * One minted note is readable without a session.
+ *
+ * A minted note is a public instrument — the landing page invites anyone to
+ * browse them, and every fact about one can be read straight from the
+ * contracts. Guarding the whole path meant that invitation led to "sign in
+ * with your wallet", which is both unwelcoming and untrue: nothing there is
+ * private. The handler still decides, and refuses anything not yet minted.
+ */
+app.use("/extractions/*", async (c, next) => {
+  const isSingleGet =
+    c.req.method === "GET" && /^\/extractions\/[^/]+$/.test(c.req.path);
+  if (isSingleGet) return next();
+  return requireAuth(c, next);
+});
+
 for (const guarded of [
   "/documents/*",
-  "/extractions/*",
   "/mint-requests",
   "/zoya/*",
 ]) {
@@ -595,7 +610,8 @@ app.get("/extractions/:id", async (c) => {
   });
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
 
-  if (!(await maySeeExtraction(c.get("address"), extraction))) {
+  const session = await currentSession(c);
+  if (!(await maySeeExtraction(session?.address ?? "", extraction))) {
     // 404 rather than 403: whether a given extraction exists is itself
     // something a stranger should not be able to probe for.
     throw new HTTPException(404, { message: "Unknown extraction." });
