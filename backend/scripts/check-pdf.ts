@@ -1,7 +1,7 @@
 /**
  * Parses PDFs and reports what the pipeline would see.
  *
- *   bun scripts/check-pdf.ts ../samples/*.pdf
+ *   bun scripts/check-pdf.ts ../agreements/*.pdf
  *
  * Useful before feeding a new document to the model: a scan is refused here
  * rather than after a minute of extraction, and a split word shows up as a

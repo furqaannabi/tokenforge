@@ -227,7 +227,7 @@ forge test                        # 122 tests
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
 
-For the full pipeline, [samples/](samples/) has four PDFs to upload — the happy path, the contradictory note that should be refused, an amortizing loan, and an invoice.
+For the full pipeline, [agreements/](agreements/) has twelve real filed loan agreements to upload. None of them validates — each is blocked for a reason worth reading — so reaching a mint needs a self-contained document; see that directory's README.
 
 ## Scope and honesty statement
 
@@ -266,6 +266,14 @@ Stated plainly, because a demo can hide these:
   predating the role do not trip it.
 - **Nothing has been bought.** `raised` is zero on every offering, so the buy
   path — approve, quote, transfer — has only ever run in Foundry.
+- **Real agreements do not get through.** Twelve filed loan agreements pulled
+  from SEC EDGAR were run end to end: every one was blocked. Five had a maturity
+  already past, five never tabulate a schedule at all — the economics sit in an
+  annex or a referenced note — and three produced a schedule that did not sum to
+  the stated principal, which is the extractor's fault rather than the
+  document's. Nothing in the twelve produced a confident wrong answer, so the
+  refusal machinery holds; what is not true is "upload any loan agreement and
+  tokenize it". See [agreements/](agreements/).
 - **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
 
 ## Status
