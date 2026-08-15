@@ -53,12 +53,19 @@ A loan has three sides, and collapsing any two of them tells a lie:
 | | |
 |---|---|
 | **Issuer** | Originated the loan and is selling it to get their capital back early. Mints the note, holds the whole supply, places part of it for sale |
-| **Borrower** | Owes the money. Named at issuance, must be in the registry, and must sign `accept()` before the note does anything. Repays into the vault |
+| **Borrower** | Owes the money. Named at issuance, must be in the registry, and signs the exact mint parameters before anything is minted. Repays into the vault |
 | **Holders** | Own the repayments. Buy from the offering, claim their share, and can sell on |
 
 Until the borrower accepts, a minted note is only the issuer's assertion *about*
 someone else — so it stays `Pending` and cannot be transferred, offered, or
 repaid. Only that wallet's own key can clear it.
+
+They sign once. The signature covers the exact mint parameters, gates the
+admin's approval, and is then carried into the mint itself, where the factory
+recovers it and opens the note `Active`. The borrower pays no gas and never
+agrees twice; the chain verifies the agreement rather than trusting that a
+database row recorded it. A mint sent without a signature still opens `Pending`
+and waits for `accept()`.
 
 Paying, though, is open to anyone. A guarantor or a servicer may legitimately
 settle a period, and restricting it to one address would let a lost key strand
@@ -107,7 +114,7 @@ No single check is trusted on its own. Five layers each do a different job:
 | Issuer approval | The authorized representative signs off on the final terms on-chain |
 | Document provenance | A model checks the agreement names this issuer as lender, and that the same loan has not already been tokenized under a different file |
 | Admin approval | The registry admin clears one exact set of mint parameters. Editing anything afterwards produces a different hash and the factory refuses it |
-| Borrower acceptance | The named borrower signs `accept()` from their own wallet. Nothing trades or settles until they do |
+| Borrower acceptance | The borrower signs the mint hash from their own wallet, and `NoteFactory` recovers that signature on-chain before the note opens. Without it the note mints `Pending` and nothing trades or settles |
 | Onchain enforcement | Terms are immutable, the document hash is recorded, the repayment schedule is enforced by contract |
 
 **Issuer verification is an eligibility layer, not a safety guarantee.** A reputable company can still originate a bad loan. Verification controls *who may issue*; it says nothing about whether a particular loan will be repaid. Credit risk remains entirely with the investor.
@@ -172,7 +179,7 @@ contracts       Foundry · deployed and verified on X Layer testnet
 | Contract | Address | |
 |---|---|---|
 | `IssuerRegistry` | [`0x0422508c0aFB8fEa40365E7781e0248699824375`](https://www.oklink.com/xlayer-test/address/0x0422508c0afb8fea40365e7781e0248699824375) | Verified |
-| `NoteFactory` | [`0xDAce270A9991E838bC858884156022fd5ae43aDa`](https://www.oklink.com/xlayer-test/address/0xdace270a9991e838bc858884156022fd5ae43ada) | Verified |
+| `NoteFactory` | [`0x0D168958e7Be8873d4A997a0aB6F0Dac5b6966C8`](https://www.oklink.com/xlayer-test/address/0x0d168958e7be8873d4a997a0ab6f0dac5b6966c8) | Verified |
 | `SaleDesk` | [`0x33C3Da08E7e214c9F02Dae4C92D0CD55747f8181`](https://www.oklink.com/xlayer-test/address/0x33c3da08e7e214c9f02dae4c92d0cd55747f8181) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
@@ -235,24 +242,24 @@ This is a hackathon prototype. It uses sample documents and mock loans on X Laye
 
 Stated plainly, because a demo can hide these:
 
-- **Most of it has never been signed from a browser.** Placing an offering has:
-  `fundPool` for 400 tokens landed at block 37982017 from the issuer wallet, a
-  transaction no script in this repository sent. Mint, accept, repay, claim, and
-  buy are all wired to the contracts and signed by the connected wallet, and
-  every one has been exercised on testnet — but by a scripted signer. That gap
-  remains the largest untested surface.
+- **Some of it has never been signed from a browser.** Placing an offering has,
+  and so has a full issuance: a second note was minted through the app and its
+  borrower armed automatic repayment, after which the keeper collected two
+  overdue instalments on X Layer testnet without anyone pressing anything —
+  `totalDeposited` on that vault reads 23,300 USDG against a schedule of 11,800
+  and 11,500, and `nextPeriod` has advanced to 2 of 6. Claim and buy remain
+  wired and tested but driven only by a scripted signer, which is now the
+  largest untested surface.
 - **Zoya has answered from real data only recently.** She streams now, and
   `getPortfolio` reads the connected wallet's positions across every note. But
   for most of the build there was nothing minted, so every question was
   answerable with "there are none" — the easy case for a grounding rule. One
   note is not much more evidence.
-- **Automatic repayment has never run on a public network.** The keeper, the
-  standing authorization and the collection are complete and were exercised end
-  to end against a fork of X Layer testnet — time moved past the due date, the
-  instalment moved, the schedule advanced, and revoking the allowance stopped
-  the next one. On testnet itself the only note's next instalment is not due
-  until April 2027, so nothing has yet been collected on a chain anyone else
-  can see.
+- **The single-signature mint has not run through a browser.** The factory that
+  verifies the borrower's signature is deployed and its message was checked
+  against the service's byte for byte on-chain, and four contract tests cover
+  the signed, unsigned, wrong-signer and altered-terms cases. No wallet has yet
+  driven it end to end.
 - **The borrower's acceptance has never run against a real second wallet.** The
   `Pending` gate is covered by contract tests and by confirming that notes
   predating the role do not trip it.

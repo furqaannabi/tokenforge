@@ -53,7 +53,9 @@ early; the borrower owes the money; holders own the repayments. With one address
 doing two jobs, the originator appeared to owe a debt to the people they had
 just sold it to.
 
-A note mints `Pending`. Until the named borrower calls `accept()` from their own
+A note carrying the borrower's signature mints `Active`: `NoteFactory` rebuilds
+the message the borrower signed, recovers it, and checks it against the address
+named to repay. Without one it mints `Pending`. Until the named borrower calls `accept()` from their own
 key, nothing transfers, nothing can be offered, and the vault refuses payment —
 because until then the terms are the issuer's assertion about somebody else.
 

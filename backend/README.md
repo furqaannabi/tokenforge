@@ -157,7 +157,7 @@ the chain and the validator, which no document can reach.
 
 ## The keeper
 
-`startKeeper` sweeps every `KEEPER_INTERVAL_MS` (default five minutes): it reads
+`startKeeper` sweeps every `KEEPER_INTERVAL_MS` (default one minute): it reads
 `collectible()` on every minted note's vault in one multicall, and calls
 `collectFromBorrower` on the ones that answer true. Serially, each receipt
 awaited before the next send — concurrent sends from one account race on the
@@ -167,6 +167,11 @@ succeeded and never landed.
 The key only pays gas. `collectFromBorrower` takes no arguments and names no
 recipient, so this service cannot move money to an address of its choosing. It
 is the one write ABI the backend carries, and nothing else should be added.
+
+Its sweep log is held in memory, so `GET /keeper` forgets what it collected
+across a restart. The collections themselves are on-chain and permanent — the
+vault's `PeriodSettled` events are the real record — but the status endpoint
+cannot currently tell "collected and forgotten" from "never ran".
 
 Without `KEEPER_PRIVATE_KEY` the keeper logs that it is off and does nothing;
 collection remains available to anyone from the note page. `GET /keeper` is
