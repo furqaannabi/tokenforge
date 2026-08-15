@@ -43,13 +43,35 @@ function secret(): string {
   return value;
 }
 
-/** Cookies only travel over https off localhost, and only same-site by default. */
-function cookieOptions() {
-  const production = process.env.NODE_ENV === "production";
+/**
+ * How the session cookie must be scoped, decided per request.
+ *
+ * This used to key off NODE_ENV, which is a fact about how the process was
+ * started rather than about where the browser is. A deployment that forgets
+ * the variable — pm2 does not set it — served `SameSite=Lax` to a frontend on
+ * another domain, and the browser simply never sent the cookie back. The
+ * symptom is a login that appears to succeed and then does not exist.
+ *
+ * The request knows better. A cross-site cookie needs `SameSite=None`, and
+ * every browser refuses that without `Secure`, which needs https — so the two
+ * travel together and both follow the scheme the request actually arrived on.
+ * Behind a proxy that is `x-forwarded-proto`, since the hop to this process is
+ * plain http.
+ */
+function cookieOptions(c: { req: { header: (name: string) => string | undefined } }) {
+  const forwarded = c.req.header("x-forwarded-proto")?.split(",")[0]?.trim();
+  const origin = c.req.header("origin") ?? "";
+  const secure = forwarded === "https" || origin.startsWith("https://");
+
   return {
     httpOnly: true,
-    secure: production,
-    sameSite: production ? ("None" as const) : ("Lax" as const),
+    secure,
+    /*
+     * Lax over plain http, which is localhost and nothing else. Sending
+     * `None` there would be rejected for lacking `Secure` and the cookie
+     * would be dropped entirely.
+     */
+    sameSite: secure ? ("None" as const) : ("Lax" as const),
     path: "/",
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   };
@@ -211,7 +233,7 @@ auth.post("/verify", async (c) => {
     secret(),
   );
 
-  setCookie(c, COOKIE, token, cookieOptions());
+  setCookie(c, COOKIE, token, cookieOptions(c));
   return c.json({ address, expiresAt: session.expiresAt });
 });
 
@@ -230,7 +252,14 @@ auth.post("/logout", async (c) => {
       data: { revokedAt: new Date() },
     });
   }
-  deleteCookie(c, COOKIE, { path: "/" });
+  /*
+   * Cleared with the attributes it was set with. A browser matches a deletion
+   * against name, path and — for a cross-site cookie — its Secure and SameSite
+   * scoping; clear it as a plain Lax cookie and the None/Secure one stays put,
+   * so the session row is revoked while the browser keeps presenting it.
+   */
+  const { maxAge: _discard, ...scope } = cookieOptions(c);
+  deleteCookie(c, COOKIE, scope);
   return c.json({ ok: true });
 });
 
