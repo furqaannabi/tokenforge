@@ -13,7 +13,8 @@ import { NoTextLayerError, extractPdfText } from "./pdf";
 import { transcribePdf } from "./ocr";
 import { issuers } from "./issuers";
 import { checkProvenance } from "./provenance";
-import { readParty } from "./chain";
+import { publicClient, readParty } from "./chain";
+import { issuerRegistryAbi } from "./abi";
 import { ask, loadHistory } from "./zoya";
 import { keeperStatus, startKeeper, sweep } from "./keeper";
 import { auth, requireAuth } from "./auth";
@@ -528,12 +529,77 @@ app.get("/extractions", async (c) => {
   return c.json({ extractions: jsonSafe(extractions) });
 });
 
+/**
+ * Whether a signed-in wallet may read one extraction.
+ *
+ * Being signed in is not the same as being entitled. Every guarded route
+ * checked the first and none checked the second, so any wallet that had proved
+ * itself could read any extraction — somebody else's loan agreement, their
+ * counterparties, their terms, their pending mint.
+ *
+ * Four ways in, and no others:
+ *  - the wallet that uploaded the document
+ *  - the borrower named in the mint request, who has to sign those terms
+ *  - the registry admin, who has to approve them
+ *  - anyone at all, once it is minted, because a note is then a public
+ *    instrument whose facts are already readable from the contracts
+ */
+async function maySeeExtraction(
+  viewer: string,
+  extraction: {
+    status: string;
+    mintRequest: unknown;
+    document?: { uploadedBy: string | null } | null;
+  },
+): Promise<boolean> {
+  if (extraction.status === "MINTED") return true;
+
+  const wallet = viewer.toLowerCase();
+  if (extraction.document?.uploadedBy?.toLowerCase() === wallet) return true;
+
+  const request = extraction.mintRequest as { borrower?: string } | null;
+  if (request?.borrower?.toLowerCase() === wallet) return true;
+
+  return isRegistryAdmin(wallet);
+}
+
+/** The registry's admin, cached — it is one immutable-ish address, not a feed. */
+let adminCache: { address: string; at: number } | undefined;
+async function isRegistryAdmin(wallet: string): Promise<boolean> {
+  const registry = process.env.ISSUER_REGISTRY_ADDRESS as
+    | `0x${string}`
+    | undefined;
+  if (!registry) return false;
+
+  if (!adminCache || Date.now() - adminCache.at > 60_000) {
+    try {
+      const admin = (await publicClient.readContract({
+        abi: issuerRegistryAbi,
+        address: registry,
+        functionName: "admin",
+      })) as string;
+      adminCache = { address: admin.toLowerCase(), at: Date.now() };
+    } catch {
+      // Unreachable chain must not grant access it cannot prove.
+      return false;
+    }
+  }
+
+  return adminCache.address === wallet;
+}
+
 app.get("/extractions/:id", async (c) => {
   const extraction = await prisma.extraction.findUnique({
     where: { id: c.req.param("id") },
     include: { document: true, note: true },
   });
   if (!extraction) throw new HTTPException(404, { message: "Unknown extraction." });
+
+  if (!(await maySeeExtraction(c.get("address"), extraction))) {
+    // 404 rather than 403: whether a given extraction exists is itself
+    // something a stranger should not be able to probe for.
+    throw new HTTPException(404, { message: "Unknown extraction." });
+  }
 
   return c.json({ extraction: jsonSafe(await withLiveProvenance(extraction)) });
 });
