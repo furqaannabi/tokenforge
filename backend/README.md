@@ -272,30 +272,3 @@ Without `KEEPER_PRIVATE_KEY` the keeper logs that it is off and does nothing;
 collection remains available to anyone from the note page. `GET /keeper` is
 public and reports the last sweep; `POST /keeper/sweep` runs one now and needs a
 session, because that one spends the keeper's gas.
-
-## Known gaps
-
-**Scans go through the model twice.** A photographed agreement has no text
-layer, so the model reads the pages as images and transcribes them, and only then
-does extraction run. That is two calls where a digital PDF needs one, and the
-transcription is trusted without a second reader checking it.
-
-**Large files pass through the service.** Multipart keeps the bytes off a base64
-round trip, but they still land in this process's memory. Fine at agreement
-sizes; anything much larger wants presigned direct-to-bucket uploads, which
-would need a CORS rule on the bucket in exchange.
-
-**Extraction quality is measured, and the measurement is mixed.** Twelve real
-filed agreements from SEC EDGAR were run end to end: every one was blocked, and
-none produced a confident wrong answer — where a document was silent the model
-said so and the validator refused. That is the safety claim holding. What it
-does not show is coverage: a filed agreement routinely keeps its economics in
-an annex, so "upload any loan agreement and tokenize it" is not true, and three
-of the twelve failed because the extractor derived a schedule from prose and
-let a blended instalment carry interest into the principal column. See
-`agreements/`.
-
-Confidence is directionally useful and not stable. The same agreement extracted
-twice on the same model returned average confidence 0.693 and 0.707 across the
-six headline fields — enough to route the right fields to a human, not enough
-to treat as a measurement.

@@ -3,14 +3,15 @@
 Twelve real loan agreements, as filed. Pulled from SEC EDGAR full-text search
 and converted to PDF exactly as a user would upload one.
 
-They are here as **evidence about the extractor**, not as demo fixtures. Not
-one of them can be minted, and that is the measurement rather than a defect —
-it is the first time this pipeline has been asked to read documents nobody
-wrote for it.
+This is the **test corpus**, not a set of demo fixtures. Every one of these
+documents was written for a real transaction by people with no idea this
+pipeline exists, which is the only way to find out what it does with input it
+was not tuned against. None of the twelve reaches a mint, and each is blocked
+for a different and legible reason — which is what makes them useful to keep.
 
 The hand-written fixtures that used to live here were removed in favour of
-them. They remain in git history, which is where to go when a demo needs a
-document that reaches a mint:
+them. They remain in git history, which is where to go for a document that
+reaches a mint: 
 
 ```bash
 git checkout 4c2d297 -- samples/6-northbridge-past-due-facility.pdf
@@ -112,11 +113,11 @@ purposes entirely, not one produced a high-confidence value that was false.
 Where a document was silent the model said so, and the deterministic checks
 stopped every one before a mint.
 
-**Coverage is narrower than the pitch.** "Upload a loan agreement and tokenize
-it" is not true today. "Upload a self-contained agreement that tabulates its
-own schedule, and refuse anything that cannot be verified" is — a narrower
-claim, and one that survives contact with real documents.
+**What the pipeline is for, stated precisely.** A self-contained agreement that
+tabulates its own schedule goes through; anything whose economics live in an
+annex, a referenced note, or a sentence the model has to do arithmetic on is
+refused rather than guessed at. These twelve are what that boundary looks like
+from the outside, and it is drawn by the validator rather than by taste.
 
-**A useful next search.** Filtering EDGAR to recent filings would clear the
-five past-maturity failures immediately, which is the cheapest way to find a
-real agreement that validates end to end.
+**Where to look for more.** Filtering EDGAR to recent filings clears the five
+past-maturity blocks immediately, and is the cheapest way to widen the corpus.

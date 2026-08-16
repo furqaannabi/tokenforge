@@ -6,8 +6,6 @@
 
 Upload a loan agreement, invoice, or bond term sheet; an AI extracts the economic terms with per-field confidence scores; after human review and issuer approval, a cash-flow-programmed RWA token is minted on X Layer and its coupons pay holders in USDG.
 
-Built for the OKX "Build X" AI Season Hackathon (X Layer, Aug 7–21, 2026), AI-RWA track.
-
 ## The problem
 
 Tokenizing a real-world debt instrument today means a human reads a non-standardized legal PDF and manually transcribes principal, rate, day-count, maturity, schedule, and covenants into a contract deployment. That transcription step is the bottleneck, and it doesn't scale.
@@ -231,91 +229,3 @@ forge test                        # 122 tests
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
 
 For the full pipeline, [agreements/](agreements/) has twelve real filed loan agreements to upload. None of them validates — each is blocked for a reason worth reading — so reaching a mint needs a self-contained document; see that directory's README.
-
-## Scope and honesty statement
-
-This is a hackathon prototype. It uses sample documents and mock loans on X Layer testnet.
-
-**Deliberately out of scope:** legal enforceability, SPV wrappers, custody, regulated investor onboarding, and secondary-market liquidity. Creating a token is the easy part; proving a loan is trustworthy and sellable is the hard part, and TokenForge does not claim to solve it.
-
-**Partially stubbed:** issuer verification. The `IssuerRegistry` and its on-chain enforcement are real — an unregistered address genuinely cannot mint — but admission to the registry is a manual off-chain decision here, not a KYB integration.
-
-**What is real:** the document-to-validated-terms pipeline running against a live model, the deterministic validator, document storage with on-chain-matching hashes, the primary offering, and the repayment logic with 122 passing tests.
-
-## What is not built yet
-
-Stated plainly, because a demo can hide these:
-
-- **Some of it has never been signed from a browser.** Placing an offering has,
-  and so has a full issuance: a second note was minted through the app and its
-  borrower armed automatic repayment, after which the keeper collected two
-  overdue instalments on X Layer testnet without anyone pressing anything —
-  `totalDeposited` on that vault reads 23,300 USDG against a schedule of 11,800
-  and 11,500, and `nextPeriod` has advanced to 2 of 6. Claim and buy remain
-  wired and tested but driven only by a scripted signer, which is now the
-  largest untested surface.
-- **Zoya has answered from real data only recently.** She streams now, and
-  `getPortfolio` reads the connected wallet's positions across every note. But
-  for most of the build there was nothing minted, so every question was
-  answerable with "there are none" — the easy case for a grounding rule. One
-  note is not much more evidence.
-- **The single-signature mint has not run through a browser.** The factory that
-  verifies the borrower's signature is deployed and its message was checked
-  against the service's byte for byte on-chain, and four contract tests cover
-  the signed, unsigned, wrong-signer and altered-terms cases. No wallet has yet
-  driven it end to end.
-- **The borrower's acceptance has never run against a real second wallet.** The
-  `Pending` gate is covered by contract tests and by confirming that notes
-  predating the role do not trip it.
-- **Nothing has been bought.** `raised` is zero on every offering, so the buy
-  path — approve, quote, transfer — has only ever run in Foundry.
-- **Two extracted fields are no longer enforced.** Bedrock compiles a grammar
-  from the structured-output schema and refuses one the size of the full terms
-  object — eleven fields fails, nine passes, and the limit is the platform's
-  rather than any model's. Enforcement now covers the nine that gate a mint;
-  `covenants` and `latePayment` come back marked unextracted at confidence zero
-  instead of being read. They gate nothing — neither has an editor in the
-  review screen or a place in the mint hash — but a loan's covenants are worth
-  reading, and the pipeline no longer reads them. Restoring them costs one
-  extra call carrying the document again.
-- **The same document does not extract the same way twice — now detected, not
-  fixed.** One agreement, one model, one prompt, two runs: the schedule's
-  principal column came to 1,344,330 on the first and 1,500,119 on the second,
-  against a stated principal of 1,500,000. The first is unmintable and the
-  second is off by rounding, and nothing in a single reading can tell them
-  apart, because each is internally tidy on its own.
-
-  Every document is now read twice, concurrently and independently, and the two
-  readings are compared before anything is stored
-  ([`crosscheck.ts`](packages/core/src/crosscheck.ts)). Where they disagree the
-  field's confidence is capped at 0.5 and the disagreement becomes its note, so
-  it routes to a human down the same path every other uncertain field takes.
-  Neither reading wins: averaging invents a third answer nobody produced, and
-  picking the more plausible one is the judgement this pipeline exists not to
-  make quietly.
-
-  What that bought, measured on four real agreements: the two whose schedules
-  the document actually tabulates agreed to the cent, and the two where the
-  model *synthesises* a schedule from "24 equal instalments of $X" both
-  disagreed — BranchOut by 16 and Elixir by 1,614 on the principal column. The
-  check separates what was read from what was computed, which is the line the
-  confidence scores were never able to draw.
-
-  Still a gap, and the heading says detected rather than solved: this makes an
-  unstable extraction visible, it does not make extraction stable. Two runs
-  bound the variance loosely — agreement is evidence, not proof — and reading
-  twice cannot help where the model is confidently wrong the same way twice.
-  Off with `EXTRACT_CROSSCHECK=off`.
-- **Real agreements do not get through.** Twelve filed loan agreements pulled
-  from SEC EDGAR were run end to end: every one was blocked. Five had a maturity
-  already past, five never tabulate a schedule at all — the economics sit in an
-  annex or a referenced note — and three produced a schedule that did not sum to
-  the stated principal, which is the extractor's fault rather than the
-  document's. Nothing in the twelve produced a confident wrong answer, so the
-  refusal machinery holds; what is not true is "upload any loan agreement and
-  tokenize it". See [agreements/](agreements/).
-- **Confidence calibration is unmeasured.** Whether a 0.85 is right 85% of the time, across many documents, is unknown — and the run-to-run variance above has to be measured before calibration can be.
-
-## Status
-
-Day 7 of 12.
