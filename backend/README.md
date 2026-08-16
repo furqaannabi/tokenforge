@@ -25,7 +25,7 @@ than refusing to start.
 PDF
     ↓  parse        text layer via pdf.js, or the model transcribes a scan
 document text
-    ↓  extract      two model passes: read, then audit its own output
+    ↓  extract      read twice independently, compare, then audit
 terms + confidence
     ↓  validate     deterministic rules; ignores confidence entirely
 issues
@@ -37,9 +37,17 @@ The three stages answer different questions and fail independently:
 
 - **Extraction** produces values, per-field confidence, and the verbatim clause
   each value came from. It streams: the partial parse means a term can be
-  reported the moment it completes rather than a minute later in one lump. A second pass audits the first against the source, since
-  a model asked for a number and a certainty in one breath tends to justify the
-  number it just wrote.
+  reported the moment it completes rather than a minute later in one lump.
+
+  Three model calls in two shapes. The document is read **twice, concurrently
+  and independently**, and the readings compared: where they disagree the field
+  is capped at 0.5 and the disagreement becomes its note. Then one reading is
+  **audited** against the source, since a model asked for a number and a
+  certainty in one breath tends to justify the number it just wrote. The audit
+  catches a reading that contradicts the document; the rerun catches one that
+  contradicts the model itself, and neither sees the other's failure. The
+  rerun roughly doubles reading-stage input tokens and costs no wall time;
+  `EXTRACT_CROSSCHECK=off` disables it.
 - **The validator** is rules, not AI. It checks that dates are ordered, the
   schedule reproduces the stated rate against a declining balance, principal
   reconciles, and the cadence matches the declared frequency. It ignores

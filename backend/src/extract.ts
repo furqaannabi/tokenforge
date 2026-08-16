@@ -1,7 +1,10 @@
 import { z } from "zod";
 import {
+  applyDisagreements,
+  compareExtractions,
   extractedTermsSchema,
   findQuote,
+  type Disagreement,
   type ExtractedTerms,
 } from "@tokenforge/core";
 import { bedrockSchema, EFFORT, MODEL, llm } from "./llm";
@@ -10,15 +13,35 @@ import { bedrockSchema, EFFORT, MODEL, llm } from "./llm";
  * The AI core: a legal document in, economic terms with per-field confidence
  * out.
  *
- * Two passes. The first reads the document; the second is shown its own output
- * beside the source and asked to revise the confidence scores. A single pass
- * produces uniformly high confidence, because a model asked for a number and a
- * certainty in the same breath tends to justify the number it just wrote. The
- * second pass has something concrete to disagree with.
+ * Three passes, in two shapes.
+ *
+ * The document is read twice, independently and concurrently — same prompt,
+ * same model, neither run aware of the other. Then one of the readings is shown
+ * back to the model beside the source and audited: a single pass produces
+ * uniformly high confidence, because a model asked for a number and a certainty
+ * in the same breath tends to justify the number it just wrote, and the audit
+ * has something concrete to disagree with.
+ *
+ * The two shapes catch different failures, which is why both are here. The
+ * audit catches a reading that contradicts the document. The rerun catches a
+ * reading that contradicts *the model itself* — a document the extractor is
+ * simply not stable on, where each answer is internally tidy and they are not
+ * the same answer. No amount of auditing one reading reveals that.
  *
  * Nothing here decides whether terms are mintable. That is the validator's job,
  * and it ignores these scores entirely.
  */
+
+/**
+ * Reading twice is the default, and can be turned off.
+ *
+ * It roughly doubles the input tokens for the reading stage — pennies per
+ * document, and no wall-clock cost since the two run concurrently — but this
+ * pipeline reports its own cost and someone batching thousands of agreements
+ * deserves the choice. Off means the disagreement check simply does not run;
+ * it does not mean disagreements are ignored.
+ */
+const CROSSCHECK = process.env.EXTRACT_CROSSCHECK !== "off";
 
 const EXTRACTION_PROMPT = `You extract the economic terms of debt instruments from legal documents: loan agreements, invoices, and bond term sheets.
 
@@ -139,6 +162,12 @@ export interface ExtractionResult {
   promptTokens: number;
   completionTokens: number;
   latencyMs: number;
+  /**
+   * Fields the two readings did not agree on, already reflected in `terms` as
+   * capped confidence. Returned as well so a caller can report the reason
+   * rather than only its effect.
+   */
+  disagreements: Disagreement[];
 }
 
 /**
@@ -155,17 +184,42 @@ export async function extractTerms(
   onEvent?.({
     type: "stage",
     stage: "extracting",
-    message: "Reading the document",
+    message: CROSSCHECK
+      ? "Reading the document twice, independently"
+      : "Reading the document",
   });
 
-  const first = await runPass(
-    `${EXTRACTION_PROMPT}\n\n--- DOCUMENT ---\n\n${documentText}`,
-    onEvent,
-  );
+  const readingPrompt = `${EXTRACTION_PROMPT}\n\n--- DOCUMENT ---\n\n${documentText}`;
+
+  /*
+   * Concurrent, and only the first reports progress.
+   *
+   * Running them in sequence would double the wait for no benefit — neither
+   * reading depends on the other, and that independence is the whole point.
+   * Both streaming into `onEvent` would interleave two sets of fields into one
+   * progress display and show the reviewer values flickering between readings
+   * before either is settled.
+   */
+  const [first, rerun] = await Promise.all([
+    runPass(readingPrompt, onEvent),
+    CROSSCHECK ? runPass(readingPrompt) : undefined,
+  ]);
 
   if (!first.parsed) {
     throw new Error("Extraction returned no parsable output.");
   }
+
+  /*
+   * A rerun that failed to parse is not a disagreement.
+   *
+   * There is nothing to compare against, so the check simply did not run — and
+   * reporting "the two readings disagreed" because the second one came back as
+   * broken JSON would put a false reason in front of a reviewer and send them
+   * looking at a document that was read fine.
+   */
+  const disagreements = rerun?.parsed
+    ? compareExtractions(first.parsed, rerun.parsed)
+    : [];
 
   onEvent?.({
     type: "stage",
@@ -188,12 +242,28 @@ export async function extractTerms(
     message: "Checking the terms are internally consistent",
   });
 
+  /*
+   * The disagreements are applied last, after the audit.
+   *
+   * The audit is allowed to raise confidence on a value that checks out, and
+   * it is auditing only one of the two readings — so it has no idea the other
+   * one said something different. Capping before it runs would let it undo the
+   * cap for exactly the reason the cap exists.
+   */
   return {
-    terms: reconcileQuotes(verified, documentText),
+    terms: applyDisagreements(
+      reconcileQuotes(verified, documentText),
+      disagreements,
+    ),
     model: MODEL,
-    promptTokens: first.promptTokens + second.promptTokens,
-    completionTokens: first.completionTokens + second.completionTokens,
+    promptTokens:
+      first.promptTokens + second.promptTokens + (rerun?.promptTokens ?? 0),
+    completionTokens:
+      first.completionTokens +
+      second.completionTokens +
+      (rerun?.completionTokens ?? 0),
     latencyMs: Date.now() - startedAt,
+    disagreements,
   };
 }
 

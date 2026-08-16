@@ -124,9 +124,10 @@ No single check is trusted on its own. Five layers each do a different job:
 
 An LLM cannot extract facts a document was written to obscure. TokenForge is built around that limit rather than pretending it away.
 
-The three checks fail independently, and the difference matters:
+The four checks fail independently, and the difference matters:
 
-- **Confidence scoring** comes from a second model pass that audits the first against the source. It answers *how sure was the model*.
+- **Confidence scoring** comes from a model pass that audits a reading against the source. It answers *how sure was the model*.
+- **The cross-check** reads the document a second time, independently, and compares the two readings. It answers a question no audit of a single reading can: *does the extractor agree with itself*. A reading can be internally tidy, cite real clauses, and still not be the answer the same model gives the same document a minute later — and where the two differ, the field is capped and sent to a human rather than reconciled.
 - **The deterministic validator** is rules, not AI. It checks that dates are ordered, principal reconciles, the cadence matches the declared frequency, and the schedule reproduces the stated rate against a declining balance. It ignores confidence entirely — terms a model was certain about still fail when the arithmetic doesn't hold.
 - **Human review** clears low-confidence fields. Terms can be arithmetically perfect and still too uncertain to mint unsupervised.
 
@@ -277,15 +278,34 @@ Stated plainly, because a demo can hide these:
   review screen or a place in the mint hash — but a loan's covenants are worth
   reading, and the pipeline no longer reads them. Restoring them costs one
   extra call carrying the document again.
-- **The same document does not extract the same way twice, and the variance is
-  large enough to decide a mint.** One agreement, one model, one prompt, two
-  runs: the schedule's principal column came to 1,344,330 on the first and
-  1,500,119 on the second, against a stated principal of 1,500,000. The first
-  is unmintable and the second is off by rounding. Confidence drifts too —
-  0.693 against 0.707 average across the six headline fields — but that is the
-  small version of the same problem. Nothing here reruns an extraction to see
-  whether it agrees with itself, and until it does, "the validator caught it"
-  is a claim about one roll of the dice.
+- **The same document does not extract the same way twice — now detected, not
+  fixed.** One agreement, one model, one prompt, two runs: the schedule's
+  principal column came to 1,344,330 on the first and 1,500,119 on the second,
+  against a stated principal of 1,500,000. The first is unmintable and the
+  second is off by rounding, and nothing in a single reading can tell them
+  apart, because each is internally tidy on its own.
+
+  Every document is now read twice, concurrently and independently, and the two
+  readings are compared before anything is stored
+  ([`crosscheck.ts`](packages/core/src/crosscheck.ts)). Where they disagree the
+  field's confidence is capped at 0.5 and the disagreement becomes its note, so
+  it routes to a human down the same path every other uncertain field takes.
+  Neither reading wins: averaging invents a third answer nobody produced, and
+  picking the more plausible one is the judgement this pipeline exists not to
+  make quietly.
+
+  What that bought, measured on four real agreements: the two whose schedules
+  the document actually tabulates agreed to the cent, and the two where the
+  model *synthesises* a schedule from "24 equal instalments of $X" both
+  disagreed — BranchOut by 16 and Elixir by 1,614 on the principal column. The
+  check separates what was read from what was computed, which is the line the
+  confidence scores were never able to draw.
+
+  Still a gap, and the heading says detected rather than solved: this makes an
+  unstable extraction visible, it does not make extraction stable. Two runs
+  bound the variance loosely — agreement is evidence, not proof — and reading
+  twice cannot help where the model is confidently wrong the same way twice.
+  Off with `EXTRACT_CROSSCHECK=off`.
 - **Real agreements do not get through.** Twelve filed loan agreements pulled
   from SEC EDGAR were run end to end: every one was blocked. Five had a maturity
   already past, five never tabulate a schedule at all — the economics sit in an

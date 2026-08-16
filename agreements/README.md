@@ -21,9 +21,9 @@ git mv samples/6-northbridge-past-due-facility.pdf agreements/
 
 | | Pages | Chars | Blocked because |
 |---|---|---|---|
-| `branchout-food-inc.pdf` | 2 | 2k | Schedule totals 1,628,182 against a stated principal of 1,500,000 |
+| `branchout-food-inc.pdf` | 2 | 2k | Schedule totals 1,500,387 against a stated principal of 1,500,000, and the two readings of it disagree |
 | `college-partnership-inc.pdf` | 9 | 30k | No rate in the document |
-| `elixir-gaming-technologies-inc.pdf` | 5 | 16k | Schedule totals 9,164,813 against a stated 9,163,809 |
+| `elixir-gaming-technologies-inc.pdf` | 5 | 16k | Schedule totals 9,166,308 against a stated 9,163,809, and the two readings of it disagree |
 | `golden-phoenix-minerals-inc-mn.pdf` | 8 | 21k | No schedule; rate uncertain |
 | `hall-of-fame-port-authority-loan.pdf` | 8 | 18k | No rate and no schedule — both live in referenced documents |
 | `loop-media-agile-lending.pdf` | 33 | 88k | Maturity past; 30 payments against a "monthly" reading |
@@ -56,15 +56,40 @@ Four groups, and only one of them is a fault in this project.
 
 Where a note says *"repayable in 24 equal monthly instalments of $67,840"*, the
 model builds a schedule out of that sentence. The instalment is a **blended**
-payment, so interest ends up counted in the principal column: BranchOut Food
+payment, so interest ended up counted in the principal column: BranchOut Food
 came out at 1,628,182 against a stated 1,500,000, and Elixir Gaming at
 9,164,813 against 9,163,809.
 
-The validator caught both, which is the system working. But the derivation is
-what is wrong, not the check. Either the model should split a blended
-instalment into principal and interest, or it should decline to synthesise a
-schedule the document never tabulated and say so — the second is closer to how
-the rest of this project behaves.
+The validator caught both, which is the system working. But the derivation was
+what was wrong, not the check.
+
+Two changes since, and the second is the more useful one.
+
+The extraction prompt now states the arithmetic that settles a blended
+instalment — total interest is the instalments minus the principal, the
+principal column sums to the stated principal, and the balance reaches zero on
+the last row. BranchOut moved from 1,628,182 to 1,500,387. Better, and still
+wrong by 387.
+
+Then the **cross-check**: every document is read twice and the readings
+compared. Run these four and the split is clean —
+
+| | Schedule in the document | Two readings |
+|---|---|---|
+| Northbridge (the demo fixture) | tabulated | agree exactly |
+| National Investment | tabulated | agree exactly |
+| BranchOut Food | synthesised from one sentence | differ by 16 |
+| Elixir Gaming | synthesised from one sentence | differ by 1,614 |
+
+The documents that tabulate their own schedule are read the same way twice. The
+documents where the model computes the schedule are not — and it is the same
+model, the same prompt, a minute apart. That is the honest boundary of this
+feature, and it is now drawn automatically rather than by someone noticing the
+totals look odd.
+
+Which leaves the original question answered by measurement rather than taste:
+the model should decline to synthesise a schedule the document never tabulated.
+Its own instability on exactly those documents is the argument.
 
 ### Two that are worth reading in full
 
