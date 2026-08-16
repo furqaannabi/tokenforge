@@ -277,10 +277,15 @@ Stated plainly, because a demo can hide these:
   review screen or a place in the mint hash — but a loan's covenants are worth
   reading, and the pipeline no longer reads them. Restoring them costs one
   extra call carrying the document again.
-- **Confidence drifts between identical runs.** The same agreement extracted
-  twice on the same model returned average confidence 0.693 and 0.707 across
-  the six headline fields. The scores are directionally useful and route the
-  right fields to a human; they are not stable enough to treat as a measurement.
+- **The same document does not extract the same way twice, and the variance is
+  large enough to decide a mint.** One agreement, one model, one prompt, two
+  runs: the schedule's principal column came to 1,344,330 on the first and
+  1,500,119 on the second, against a stated principal of 1,500,000. The first
+  is unmintable and the second is off by rounding. Confidence drifts too —
+  0.693 against 0.707 average across the six headline fields — but that is the
+  small version of the same problem. Nothing here reruns an extraction to see
+  whether it agrees with itself, and until it does, "the validator caught it"
+  is a claim about one roll of the dice.
 - **Real agreements do not get through.** Twelve filed loan agreements pulled
   from SEC EDGAR were run end to end: every one was blocked. Five had a maturity
   already past, five never tabulate a schedule at all — the economics sit in an
@@ -289,7 +294,7 @@ Stated plainly, because a demo can hide these:
   document's. Nothing in the twelve produced a confident wrong answer, so the
   refusal machinery holds; what is not true is "upload any loan agreement and
   tokenize it". See [agreements/](agreements/).
-- **Confidence calibration is unmeasured.** It varies run to run and does produce mid-range values, but whether it is *well* calibrated across many documents is unknown. One document run three times is not evidence.
+- **Confidence calibration is unmeasured.** Whether a 0.85 is right 85% of the time, across many documents, is unknown — and the run-to-run variance above has to be measured before calibration can be.
 
 ## Status
 
