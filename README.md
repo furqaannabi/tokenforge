@@ -167,7 +167,9 @@ Nothing she can call writes. `backend/src/abi.ts` carries view functions only.
 ```text
 packages/core   Extraction schema and deterministic validator — one copy,
                 imported by both the web app and the service
-backend         Hono on Bun · Prisma over Postgres · Claude Sonnet 4.6 on Bedrock · R2
+backend         Hono on Bun · Prisma over Postgres · R2
+                Claude Sonnet 4.6 on Amazon Bedrock reads the agreements;
+                Haiku 4.5 transcribes scans, which is reading not reasoning
                 PDFs parsed on upload; scans transcribed by the model
 web             Next.js · wagmi/viem · Reown AppKit
 contracts       Foundry · deployed and verified on X Layer testnet
@@ -266,6 +268,19 @@ Stated plainly, because a demo can hide these:
   predating the role do not trip it.
 - **Nothing has been bought.** `raised` is zero on every offering, so the buy
   path — approve, quote, transfer — has only ever run in Foundry.
+- **Two extracted fields are no longer enforced.** Bedrock compiles a grammar
+  from the structured-output schema and refuses one the size of the full terms
+  object — eleven fields fails, nine passes, and the limit is the platform's
+  rather than any model's. Enforcement now covers the nine that gate a mint;
+  `covenants` and `latePayment` come back marked unextracted at confidence zero
+  instead of being read. They gate nothing — neither has an editor in the
+  review screen or a place in the mint hash — but a loan's covenants are worth
+  reading, and the pipeline no longer reads them. Restoring them costs one
+  extra call carrying the document again.
+- **Confidence drifts between identical runs.** The same agreement extracted
+  twice on the same model returned average confidence 0.693 and 0.707 across
+  the six headline fields. The scores are directionally useful and route the
+  right fields to a human; they are not stable enough to treat as a measurement.
 - **Real agreements do not get through.** Twelve filed loan agreements pulled
   from SEC EDGAR were run end to end: every one was blocked. Five had a maturity
   already past, five never tabulate a schedule at all — the economics sit in an

@@ -7,7 +7,7 @@ themselves.
 ## Running it
 
 ```bash
-cp .env.example .env        # set AWS_REGION and grant Bedrock model access
+cp .env.example .env        # set AWS_REGION; see Models below for access
 bun install
 bun run db:up               # Postgres in Docker
 bun run db:migrate
@@ -159,6 +159,57 @@ input — anyone admitted can upload one — and a PDF carrying instructions is 
 realistic attack on a lending product, not a theoretical one. Figures come from
 the chain and the validator, which no document can reach.
 
+## Models
+
+Claude on Amazon Bedrock, through the `bedrock-runtime` endpoint.
+
+| Slot | Model | Why |
+|---|---|---|
+| `LLM_MODEL` | `us.anthropic.claude-sonnet-4-6` | Extraction, provenance, Zoya |
+| `LLM_MODEL_FAST` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Transcribing scans — reading, not reasoning |
+
+Four things about Bedrock that are not obvious and each cost an afternoon:
+
+**Model IDs need the `us.` inference-profile prefix.** The bare
+`anthropic.claude-sonnet-4-6` returns a 404 that reads as "no such model".
+`aws bedrock list-inference-profiles` is the list of what an account can
+actually invoke, and it is shorter than the model catalogue.
+
+**Access is granted per account, not per user, and the console is not the only
+route.** `create-foundation-model-agreement` plus, for Anthropic,
+`put-use-case-for-model-access` do it from the CLI. Until an agreement exists
+every call is a 403 that names the model rather than the cause.
+
+**Mantle is the newer endpoint and the wrong one here.** It serves only the
+latest models and 404s on the rest, so an account entitled to Sonnet 4.6 but
+not Sonnet 5 can reach nothing through it.
+
+**`output_config.effort` is rejected below the Sonnet tier.** Haiku returns
+"Extra inputs are not permitted" and fails the whole request rather than
+ignoring the field, so the transcription call does not send it.
+
+### What the enforced schema leaves out
+
+Bedrock compiles a grammar from a structured-output schema to constrain
+decoding, and refuses one the size of the full terms object: eleven fields
+fails, nine passes. It is the structure rather than the text — stripping every
+description halved the bytes and changed nothing — and the limit is the
+platform's, not the model's: Opus 4.6, Sonnet 4.6 and Haiku 4.5 all refuse it
+identically.
+
+So enforcement covers the nine fields that gate a mint. `covenants` and
+`latePayment` are left out, which are the same two with no editor in the review
+screen and no place in the mint hash. They come back marked unextracted at
+confidence zero rather than invented, so the interface shows them as unknown
+instead of quietly asserting a loan has no covenants. Restoring them means a
+second call carrying the document again — pennies, but not free.
+
+Value constraints are stripped before sending, too: a `minimum` on a confidence
+field returns "properties maximum, minimum are not supported" and nothing runs.
+Nothing is lost, because every caller parses the response through the same zod
+schema afterwards — the model is constrained to the shape, zod is what says a
+confidence of 1.4 is not a confidence.
+
 ## Sessions
 
 A wallet cannot present a password, so it signs. `/auth/nonce` issues a random
@@ -226,8 +277,17 @@ round trip, but they still land in this process's memory. Fine at agreement
 sizes; anything much larger wants presigned direct-to-bucket uploads, which
 would need a CORS rule on the bucket in exchange.
 
-**Extraction quality is barely measured.** The pipeline runs against a real model for
-real and behaves correctly on both sample documents, but two hand-written
-samples are not evidence about genuine agreements — which remains the project's
-central risk. Confidence varies run to run and does produce mid-range values;
-whether it is *well* calibrated is unknown.
+**Extraction quality is measured, and the measurement is mixed.** Twelve real
+filed agreements from SEC EDGAR were run end to end: every one was blocked, and
+none produced a confident wrong answer — where a document was silent the model
+said so and the validator refused. That is the safety claim holding. What it
+does not show is coverage: a filed agreement routinely keeps its economics in
+an annex, so "upload any loan agreement and tokenize it" is not true, and three
+of the twelve failed because the extractor derived a schedule from prose and
+let a blended instalment carry interest into the principal column. See
+`agreements/`.
+
+Confidence is directionally useful and not stable. The same agreement extracted
+twice on the same model returned average confidence 0.693 and 0.707 across the
+six headline fields — enough to route the right fields to a human, not enough
+to treat as a measurement.
