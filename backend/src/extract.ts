@@ -38,6 +38,10 @@ Rules:
 
 4. Build the schedule from explicit dates in the document where they exist. Only derive dates from a stated cadence when the document gives no table, and lower the schedule's confidence when you do.
 
+5. A stated instalment is usually a blended payment: it covers the interest accrued that period, and whatever is left reduces the principal. When a document gives one figure — "24 equal monthly instalments of $67,840.94" — never copy that figure into the principal column. Two arithmetic facts settle the split and neither is negotiable: total interest is the instalments minus the principal (24 x 67,840.94 against a principal of 1,500,000 leaves 128,182.56 of interest across the whole schedule, and no other figure is possible), and the principal column sums to the stated principal exactly, with the balance reaching zero on the final row. Work period by period: interest is the outstanding balance times the periodic rate — the annual rate divided by the periods in a year, not the annual rate itself — and the rest of the instalment reduces the balance. Derive the interest from the instalments rather than from the rate: when a stated rate and a stated instalment disagree, the instalment is what the borrower actually pays. If your columns do not satisfy both facts, your periodic rate is wrong.
+
+6. Maturity is the date of the final scheduled payment. N payments starting on a given date end N-1 periods later, not N: twenty-four monthly payments beginning 1 April 2026 end on 1 March 2028. Take maturity from the last row of the schedule you built so the two cannot disagree — unless the document states a maturity of its own, in which case extract the stated one and note that it contradicts the schedule.
+
 5. Dates are ISO YYYY-MM-DD. Rates are percent, so 8.5 means 8.50%. Amounts are plain numbers with no separators or symbols.
 
 6. If a field is genuinely absent, use a neutral value, set confidence near 0, and explain in the note. Never guess to fill a gap.
@@ -52,6 +56,8 @@ Re-examine every field and revise confidence to what you would stand behind on a
 
 - Does each sourceQuote appear in the document exactly as written?
 - Does the schedule reproduce the stated rate and principal, roughly?
+- Does the principal column sum to the stated principal? Falling short by roughly the total interest means a blended instalment was copied in whole instead of split.
+- Does the last row's date equal the maturity date? An off-by-one in counting periods shows up here.
 - Does anything in the document contradict the value extracted?
 - Was any value inferred rather than read?
 
