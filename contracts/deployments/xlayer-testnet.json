@@ -3,24 +3,25 @@
   "chainId": 1952,
   "rpcUrl": "https://xlayertestrpc.okx.com",
   "explorer": "https://www.oklink.com/xlayer-test",
-  "deployedAtBlock": 37806496,
+  "deployedAtBlock": 38428262,
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0x0422508c0aFB8fEa40365E7781e0248699824375",
+      "address": "0x89bFE1652c0fB4958701ed5D7e8Ca5c580d67250",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
       },
-      "supersedes": "0x6e27DF0BDE231a2f1864Ee7C9D82508Fa1C260be",
+      "supersedes": "0x0422508c0aFB8fEa40365E7781e0248699824375",
       "note": "Issuers and borrowers are separate rolls. Reading borrowers out of the issuer list gave every admitted borrower the right to mint. Also holds approveMint, keyed by NoteFactory.mintHash."
     },
     "NoteFactory": {
-      "address": "0xDAce270A9991E838bC858884156022fd5ae43aDa",
+      "address": "0x7D7c277cdE9abB358EC86159fc8D7d81612a54E0",
       "constructorArgs": {
-        "registry": "0x0422508c0aFB8fEa40365E7781e0248699824375"
+        "registry": "0x89bFE1652c0fB4958701ed5D7e8Ca5c580d67250"
       },
-      "supersedes": "0xc190e6F26cE14e40D30251fDe25927A73a5D58b6",
-      "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved."
+      "supersedes": "0x0D168958e7Be8873d4A997a0aB6F0Dac5b6966C8",
+      "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved.",
+      "verification": "Unverified. OKLink's plugin endpoint rejects it \u2014 the factory embeds the note and vault creation bytecode, and the endpoint verifies the registry beside it without complaint. Retry, or verify through OKLink's web form."
     },
     "MockUSDG": {
       "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",
@@ -39,14 +40,7 @@
     }
   },
   "notes": [],
-  "demoNote": {
-    "note": "0x58312Cd745B214Dcab5728c31204B1DEDF5B0B35",
-    "vault": "0x6A22eeAa78088085099C17AfdDdc9714F3324cD5",
-    "terms": "1,000 USDG at 10% over the term; five instalments of 200 principal + 20 interest",
-    "supply": "1,000 tokens",
-    "note_": "Minted through the deployed factory to exercise the flow on a real network. One period has settled: supply fell from 1,000 to 800 tokens while shares stayed at 1,000, and 220 USDG became claimable."
-  },
   "demo": {
-    "note_": "Cleared with the database. Earlier notes remain on-chain under the superseded factories but are no longer indexed."
+    "note_": "Cleared with the database. Both rolls on this registry are empty and no note has been minted through this factory. Notes under the superseded factories remain on-chain and are no longer indexed."
   }
 }
