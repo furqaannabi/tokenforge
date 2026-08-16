@@ -4,7 +4,7 @@ import {
   findQuote,
   type ExtractedTerms,
 } from "@tokenforge/core";
-import { MODEL, llm } from "./llm";
+import { EFFORT, MODEL, llm } from "./llm";
 
 /**
  * The AI core: a legal document in, economic terms with per-field confidence
@@ -160,10 +160,20 @@ async function runPass(
   promptTokens: number;
   completionTokens: number;
 }> {
-  const stream = await llm().models.generateContentStream({
+  const stream = llm().messages.stream({
     model: MODEL,
-    contents: prompt,
-    config: { responseMimeType: "application/json", responseJsonSchema },
+    // Room for the whole terms object plus the thinking that precedes it. A
+    // truncated extraction parses as invalid JSON and reads as a model failure
+    // rather than a budget one.
+    max_tokens: 16000,
+    output_config: {
+      effort: EFFORT,
+      // The schema is enforced, not requested. Everything downstream — the
+      // validator, the review pane, the mint hash — assumes these fields exist
+      // and are typed.
+      format: { type: "json_schema", schema: responseJsonSchema },
+    },
+    messages: [{ role: "user", content: prompt }],
   });
 
   let text = "";
@@ -171,16 +181,35 @@ async function runPass(
   let completionTokens = 0;
   const reported = new Set<string>();
 
-  for await (const chunk of stream) {
-    text += chunk.text ?? "";
-
-    if (chunk.usageMetadata) {
-      promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
-      completionTokens =
-        chunk.usageMetadata.candidatesTokenCount ?? completionTokens;
+  for await (const event of stream) {
+    /*
+     * Text deltas only. Thinking arrives on this stream too, and folding it
+     * into the buffer would corrupt the JSON being assembled — the field
+     * scanner below would then announce fields out of the model's reasoning
+     * rather than out of its answer.
+     */
+    if (
+      event.type === "content_block_delta" &&
+      event.delta.type === "text_delta"
+    ) {
+      text += event.delta.text;
+      if (onEvent) reportCompletedFields(text, reported, onEvent);
     }
+  }
 
-    if (onEvent) reportCompletedFields(text, reported, onEvent);
+  const final = await stream.finalMessage();
+  promptTokens = final.usage.input_tokens;
+  completionTokens = final.usage.output_tokens;
+
+  if (final.stop_reason === "refusal") {
+    throw new Error(
+      "The model declined to read this document, so no terms were extracted.",
+    );
+  }
+  if (final.stop_reason === "max_tokens") {
+    throw new Error(
+      "The document is longer than one extraction pass. Raise max_tokens or split it.",
+    );
   }
 
   onEvent?.({ type: "usage", promptTokens, completionTokens });

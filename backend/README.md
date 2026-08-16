@@ -1,20 +1,20 @@
 # TokenForge extraction service
 
 A legal document in, validated economic terms out. Hono on Bun, Prisma over
-Postgres, Gemini for reading documents, and Cloudflare R2 for the documents
+Postgres, Claude on Amazon Bedrock for reading documents, and Cloudflare R2 for the documents
 themselves.
 
 ## Running it
 
 ```bash
-cp .env.example .env        # add GEMINI_API_KEY
+cp .env.example .env        # set AWS_REGION and grant Bedrock model access
 bun install
 bun run db:up               # Postgres in Docker
 bun run db:migrate
 bun run dev                 # http://localhost:8787
 ```
 
-Only extraction needs `GEMINI_API_KEY`, and only file storage needs the `R2_*`
+Only extraction needs AWS credentials, and only file storage needs the `R2_*`
 values. Without either, the rest of the service still runs — a missing key
 fails that one endpoint with a 503 explaining which value is absent, rather
 than refusing to start.
@@ -23,7 +23,7 @@ than refusing to start.
 
 ```text
 PDF
-    ↓  parse        text layer via pdf.js, or Gemini transcribes a scan
+    ↓  parse        text layer via pdf.js, or the model transcribes a scan
 document text
     ↓  extract      two model passes: read, then audit its own output
 terms + confidence
@@ -217,7 +217,7 @@ session, because that one spends the keeper's gas.
 ## Known gaps
 
 **Scans go through the model twice.** A photographed agreement has no text
-layer, so Gemini reads the pages as images and transcribes them, and only then
+layer, so the model reads the pages as images and transcribes them, and only then
 does extraction run. That is two calls where a digital PDF needs one, and the
 transcription is trusted without a second reader checking it.
 
@@ -226,7 +226,7 @@ round trip, but they still land in this process's memory. Fine at agreement
 sizes; anything much larger wants presigned direct-to-bucket uploads, which
 would need a CORS rule on the bucket in exchange.
 
-**Extraction quality is barely measured.** The pipeline runs against Gemini for
+**Extraction quality is barely measured.** The pipeline runs against a real model for
 real and behaves correctly on both sample documents, but two hand-written
 samples are not evidence about genuine agreements — which remains the project's
 central risk. Confidence varies run to run and does produce mid-range values;

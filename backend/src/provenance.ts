@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ExtractedTerms } from "@tokenforge/core";
-import { llm, MODEL } from "./llm";
+import { EFFORT, llm, MODEL } from "./llm";
 
 /**
  * Two questions the hash cannot answer.
@@ -154,16 +154,33 @@ export async function checkProvenance(input: {
       : "Previously extracted agreements: none.",
   ].join("\n");
 
-  const response = await llm().models.generateContent({
+  const response = await llm().messages.create({
     model: MODEL,
-    contents: [{ role: "user", parts: [{ text: `${PROMPT}\n\n${question}` }] }],
-    config: {
-      responseMimeType: "application/json",
-      responseJsonSchema: z.toJSONSchema(provenanceSchema),
+    max_tokens: 4096,
+    output_config: {
+      effort: EFFORT,
+      // The schema is enforced rather than requested. A verdict that failed to
+      // parse would be indistinguishable from a check that never ran, and this
+      // one gates a mint.
+      format: { type: "json_schema", schema: z.toJSONSchema(provenanceSchema) },
     },
+    // The instructions are identical on every call and the question is not, so
+    // splitting them lets the stable half cache rather than being re-read with
+    // each document.
+    system: PROMPT,
+    messages: [{ role: "user", content: question }],
   });
 
-  const text = response.text;
+  if (response.stop_reason === "refusal") {
+    throw new Error(
+      "The model declined to run the provenance check on this document.",
+    );
+  }
+
+  const text = response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
   if (!text) throw new Error("The provenance check returned no content.");
 
   const parsed = provenanceSchema.safeParse(JSON.parse(text));

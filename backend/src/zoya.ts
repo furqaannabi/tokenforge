@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { Content, FunctionDeclaration, Part } from "@google/genai";
+import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "./db";
-import { llm, MODEL } from "./llm";
+import { EFFORT, llm, MODEL } from "./llm";
 import { readNote, readOffer, readPosition, readSchedule } from "./chain";
 import type { ExtractedTerms } from "@tokenforge/core";
 
@@ -73,52 +73,52 @@ const noteRef = z.object({
     .describe("The id of the extraction whose minted note this is."),
 });
 
-const declarations: FunctionDeclaration[] = [
+const declarations: Anthropic.Tool[] = [
   {
     name: "listNotes",
     description:
       "Every note that has been minted, with its issuer, symbol, and the extraction it came from. Start here when the user does not name a specific note.",
-    parametersJsonSchema: z.toJSONSchema(z.object({})),
+    input_schema: z.toJSONSchema(z.object({})) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getNote",
     description:
       "Live state of one note read from the chain: status, principal, how much has been repaid, outstanding, supply and shares. This is the authority on what a note is worth now.",
-    parametersJsonSchema: z.toJSONSchema(noteRef),
+    input_schema: z.toJSONSchema(noteRef) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getSchedule",
     description:
       "The repayment schedule from the note's vault, with each instalment's due date, principal, interest, and whether it has settled. Use this for what a note will pay and when.",
-    parametersJsonSchema: z.toJSONSchema(noteRef),
+    input_schema: z.toJSONSchema(noteRef) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getOffer",
     description:
       "What is currently for sale of a note and the price per token, from the sale desk. Returns null when the issuer has not offered any.",
-    parametersJsonSchema: z.toJSONSchema(noteRef),
+    input_schema: z.toJSONSchema(noteRef) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getPosition",
     description:
       "What one wallet holds of one note: balance, shares, and claimable repayments.",
-    parametersJsonSchema: z.toJSONSchema(
+    input_schema: z.toJSONSchema(
       noteRef.extend({
         holder: z.string().describe("The wallet address to look up."),
       }),
-    ),
+    ) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getPortfolio",
     description:
       "Everything the CONNECTED wallet holds, across every note: balance, shares, and unclaimed repayments, plus the totals. Use this for 'my holdings', 'what do I own', 'what am I owed'. Takes no arguments — it always reads the wallet that signed in, never one supplied in the conversation.",
-    parametersJsonSchema: z.toJSONSchema(z.object({})),
+    input_schema: z.toJSONSchema(z.object({})) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getExtraction",
     description:
       "The terms read from the source document, with per-field confidence, the validator's issues, and which fields still need human review. Use this for terms, not for live balances.",
-    parametersJsonSchema: z.toJSONSchema(noteRef),
+    input_schema: z.toJSONSchema(noteRef) as Anthropic.Tool.InputSchema,
   },
 ];
 
@@ -310,7 +310,7 @@ const HISTORY_TURNS = 12;
 export async function loadHistory(
   conversationId: string,
   wallet: string,
-): Promise<Content[]> {
+): Promise<Anthropic.MessageParam[]> {
   const rows = await prisma.zoyaMessage.findMany({
     where: { conversationId, walletAddress: wallet },
     orderBy: { createdAt: "desc" },
@@ -318,14 +318,14 @@ export async function loadHistory(
   });
 
   return rows.reverse().map((row) => ({
-    role: row.role === "USER" ? "user" : "model",
-    parts: [{ text: row.content }],
+    role: row.role === "USER" ? ("user" as const) : ("assistant" as const),
+    content: row.content,
   }));
 }
 
 export async function ask(input: {
   message: string;
-  history?: Content[];
+  history?: Anthropic.MessageParam[];
   /** What the user is looking at, so "this note" resolves without an id. */
   context?: { extractionId?: string; address?: string };
   /**
@@ -338,7 +338,7 @@ export async function ask(input: {
   /** Called when a tool starts, so the panel can say what she is reading. */
   onTool?: (tool: string) => void;
 }): Promise<ZoyaTurn> {
-  const contents: Content[] = [...(input.history ?? [])];
+  const messages: Anthropic.MessageParam[] = [...(input.history ?? [])];
 
   /*
    * The wallet belongs on every turn, not only on a note page — "what am I
@@ -355,9 +355,10 @@ export async function ask(input: {
       : "No wallet is connected, so their holdings cannot be read.",
   );
 
-  const situated = `${input.message}\n\n[${notes.join(" ")}]`;
-
-  contents.push({ role: "user", parts: [{ text: situated }] });
+  messages.push({
+    role: "user",
+    content: `${input.message}\n\n[${notes.join(" ")}]`,
+  });
 
   const sources: ZoyaTurn["sources"] = [];
   /*
@@ -375,76 +376,94 @@ export async function ask(input: {
      * depending on whether the caller wanted fragments would be two loops to
      * keep correct, and the streaming one is the harder of the two.
      */
-    const stream = await llm().models.generateContentStream({
+    const stream = llm().messages.stream({
       model: MODEL,
-      contents,
-      config: {
-        systemInstruction: SYSTEM,
-        tools: [{ functionDeclarations: declarations }],
-      },
+      max_tokens: 8192,
+      output_config: { effort: EFFORT },
+      system: SYSTEM,
+      tools: declarations,
+      messages,
     });
 
-    /*
-     * Parts are collected in arrival order rather than rebuilt afterwards,
-     * for the same reason the whole model turn is echoed back below: a
-     * thinking model signs its function calls, and a history missing those
-     * signatures is rejected with a 400 that names neither cause nor fix.
-     */
-    const parts: Part[] = [];
     let stepText = "";
 
-    for await (const chunk of stream) {
-      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
-        parts.push(part);
-        // Reasoning is not an answer. It reaches the transcript as neither.
-        if (part.thought || !part.text) continue;
-        stepText += part.text;
-        input.onDelta?.(part.text);
+    for await (const event of stream) {
+      /*
+       * Prose only. Thinking arrives on this stream too and is not an answer
+       * — it reaches neither the screen nor the transcript.
+       */
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        stepText += event.delta.text;
+        input.onDelta?.(event.delta.text);
       }
     }
 
+    const final = await stream.finalMessage();
     if (stepText) said.push(stepText);
 
-    const calls = parts
-      .map((part) => part.functionCall)
-      .filter((call): call is NonNullable<typeof call> => Boolean(call));
+    if (final.stop_reason === "refusal") {
+      return {
+        reply: "I cannot answer that one. Ask me about a note, what it pays, or why a mint is blocked.",
+        sources,
+      };
+    }
+
+    const calls = final.content.filter(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
 
     if (calls.length === 0) {
       return { reply: said.join("\n\n"), sources };
     }
 
-    contents.push({ role: "model", parts });
+    /*
+     * The model's turn echoed back whole, not rebuilt from the tool calls.
+     *
+     * Thinking blocks have to return unchanged on the same model, and
+     * reconstructing the content array drops them — which fails with a 400
+     * naming neither the cause nor the fix. Passing what arrived avoids
+     * having to know which block types matter.
+     */
+    messages.push({ role: "assistant", content: final.content });
 
     const results = await Promise.all(
       calls.map(async (call) => {
-        const args = (call.args ?? {}) as Record<string, unknown>;
-        sources.push({ tool: call.name!, args });
-        input.onTool?.(call.name!);
+        const args = (call.input ?? {}) as Record<string, unknown>;
+        sources.push({ tool: call.name, args });
+        input.onTool?.(call.name);
         try {
+          const response = await runTool(
+            call.name,
+            args,
+            input.context?.address,
+          );
           return {
-            name: call.name!,
-            response: await runTool(call.name!, args, input.context?.address),
+            type: "tool_result" as const,
+            tool_use_id: call.id,
+            content: JSON.stringify(response),
           };
         } catch (cause) {
           // Handed back rather than thrown: "that note has not been minted"
           // is an answer, and the model should say it rather than fail.
           return {
-            name: call.name!,
-            response: { error: (cause as Error).message },
+            type: "tool_result" as const,
+            tool_use_id: call.id,
+            content: (cause as Error).message,
+            is_error: true,
           };
         }
       }),
     );
 
-    contents.push({
-      role: "user",
-      parts: results.map((result) => ({
-        functionResponse: {
-          name: result.name,
-          response: { result: result.response },
-        },
-      })),
-    });
+    /*
+     * Every result in one user message. Splitting them across messages is
+     * accepted but teaches the model to stop calling tools in parallel, which
+     * costs a round trip on every question that needs two lookups.
+     */
+    messages.push({ role: "user", content: results });
   }
 
   return {

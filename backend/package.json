@@ -11,9 +11,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.32.4",
     "@aws-sdk/client-s3": "^3.1106.0",
     "@aws-sdk/s3-request-presigner": "^3.1106.0",
-    "@google/genai": "^2.16.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@tokenforge/core": "file:../packages/core",

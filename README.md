@@ -167,7 +167,7 @@ Nothing she can call writes. `backend/src/abi.ts` carries view functions only.
 ```text
 packages/core   Extraction schema and deterministic validator — one copy,
                 imported by both the web app and the service
-backend         Hono on Bun · Prisma over Postgres · Gemini · R2
+backend         Hono on Bun · Prisma over Postgres · Claude on Bedrock · R2
                 PDFs parsed on upload; scans transcribed by the model
 web             Next.js · wagmi/viem · Reown AppKit
 contracts       Foundry · deployed and verified on X Layer testnet
@@ -210,7 +210,7 @@ but are no longer indexed.
 pnpm install                      # workspace: web + packages/core
 
 cd backend
-cp .env.example .env              # add GEMINI_API_KEY, R2_* for file storage
+cp .env.example .env              # set AWS_REGION, R2_* for file storage
 bun install
 bun run db:up                     # Postgres in Docker
 bun run db:migrate
