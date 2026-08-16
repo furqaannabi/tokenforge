@@ -29,11 +29,16 @@ Return only the transcribed text.`;
 export async function transcribePdf(bytes: Uint8Array): Promise<string> {
   const response = await llm().messages.create({
     // The fast slot: this is reading, not reasoning, and a scanned agreement
-    // can run to many pages. Effort is pinned low for the same reason — the
-    // work is transcription, and deliberation buys nothing but tokens.
+    // can run to many pages.
     model: MODEL_FAST,
     max_tokens: 16000,
-    output_config: { effort: "low" },
+    /*
+     * No `effort` here, deliberately. It is not supported on the cheaper tiers
+     * — Haiku rejects the whole request with "output_config.effort: Extra
+     * inputs are not permitted" — and this slot exists precisely so a cheap
+     * model can be pointed at reading work. Transcription gains nothing from
+     * deliberation anyway.
+     */
     messages: [
       {
         role: "user",
