@@ -181,12 +181,19 @@ export async function extractTerms(
 ): Promise<ExtractionResult> {
   const startedAt = Date.now();
 
+  /*
+   * One stage, whether or not the document is read twice.
+   *
+   * The reviewer is waiting on terms, and how many calls produce them is this
+   * file's business rather than theirs. "Reading it twice" invites the
+   * question of which reading they are about to be shown, when the answer that
+   * matters — the two disagreed about this field — arrives on the field
+   * itself, where it can be acted on.
+   */
   onEvent?.({
     type: "stage",
     stage: "extracting",
-    message: CROSSCHECK
-      ? "Reading the document twice, independently"
-      : "Reading the document",
+    message: "Reading the document",
   });
 
   const readingPrompt = `${EXTRACTION_PROMPT}\n\n--- DOCUMENT ---\n\n${documentText}`;
