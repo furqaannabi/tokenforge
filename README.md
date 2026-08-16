@@ -228,4 +228,4 @@ forge test                        # 122 tests
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
 
-For the full pipeline, [agreements/](agreements/) has twelve real filed loan agreements to upload. None of them validates — each is blocked for a reason worth reading — so reaching a mint needs a self-contained document; see that directory's README.
+For the full pipeline, [agreements/](agreements/) has two real filed loan agreements to upload. Neither validates — one derives a schedule the document never tabulates, the other keeps its economics in a referenced note — so reaching a mint needs a self-contained document; see that directory's README.

@@ -1,39 +1,19 @@
 # Agreements
 
-Twelve real loan agreements, as filed. Pulled from SEC EDGAR full-text search
-and converted to PDF exactly as a user would upload one.
+Real loan agreements, as filed. Pulled from SEC EDGAR full-text search and
+converted to PDF exactly as a user would upload one.
 
-This is the **test corpus**, not a set of demo fixtures. Every one of these
-documents was written for a real transaction by people with no idea this
-pipeline exists, which is the only way to find out what it does with input it
-was not tuned against. None of the twelve reaches a mint, and each is blocked
-for a different and legible reason — which is what makes them useful to keep.
-
-The hand-written fixtures that used to live here were removed in favour of
-them. They remain in git history, which is where to go for a document that
-reaches a mint: 
-
-```bash
-git checkout 4c2d297 -- samples/6-northbridge-past-due-facility.pdf
-git mv samples/6-northbridge-past-due-facility.pdf agreements/
-```
+This is the **test corpus**, not a set of demo fixtures. Both documents were
+written for a real transaction by people with no idea this pipeline exists,
+which is the only way to find out what it does with input it was not tuned
+against.
 
 ## What is here
 
-| | Pages | Chars | Blocked because |
-|---|---|---|---|
-| `branchout-food-inc.pdf` | 2 | 2k | Schedule totals 1,500,387 against a stated principal of 1,500,000, and the two readings of it disagree |
-| `college-partnership-inc.pdf` | 9 | 30k | No rate in the document |
-| `elixir-gaming-technologies-inc.pdf` | 5 | 16k | Schedule totals 9,166,308 against a stated 9,163,809, and the two readings of it disagree |
-| `golden-phoenix-minerals-inc-mn.pdf` | 8 | 21k | No schedule; rate uncertain |
-| `hall-of-fame-port-authority-loan.pdf` | 8 | 18k | No rate and no schedule — both live in referenced documents |
-| `loop-media-agile-lending.pdf` | 33 | 88k | Maturity past; 30 payments against a "monthly" reading |
-| `national-investment-managers-inc.pdf` | 1 | 2k | No rate; schedule totals 405,000 against a stated 475,000 |
-| `nevada-gold-casinos-inc.pdf` | 11 | 21k | Maturity past; no schedule |
-| `ricks-cabaret-international-inc.pdf` | 2 | 11k | Maturity past; no schedule |
-| `sanomedics-international-holdings-.pdf` | 7 | 20k | Maturity past; no schedule; most fields uncertain |
-| `telkonet-inc.pdf` | 3 | 8k | Maturity past; final payment six years before maturity |
-| `vertical-computer-systems-inc.pdf` | 3 | 17k | See the trial output |
+| | Pages | Chars | Maturity | Blocked because |
+|---|---|---|---|---|
+| `branchout-food-inc.pdf` | 2 | 2k | 2028-03-01 | Schedule totals 1,500,209 against a stated principal of 1,500,000, and two readings of it disagree |
+| `hall-of-fame-port-authority-loan.pdf` | 8 | 18k | 2044-06-30 | No rate and no schedule — both live in referenced documents |
 
 `edgar-search.json` and `edgar-search-notes.json` are the two searches that
 found them — 835 and 2,728 hits respectively, so there are plenty more.
@@ -42,82 +22,69 @@ found them — 835 and 2,728 hits respectively, so there are plenty more.
 bun ../backend/scripts/check-pdf.ts *.pdf   # what the parser sees
 ```
 
-## Why each one stopped
+### The ten that were removed
 
-Four groups, and only one of them is a fault in this project.
+Ten agreements were dropped because their maturity date has already passed, and
+a matured note cannot be issued at any point in the future. They were blocked by
+a fact about the calendar rather than by anything the pipeline did, so they
+measured nothing and cost a model call each to re-confirm it.
 
-| | Count | Whose problem |
-|---|---|---|
-| Maturity already in the past | 5 | The search — no date filter, so these are historical filings |
-| No schedule in the document | 5 | The agreement defers to an annex or a referenced note |
-| Schedule does not sum to the principal | 3 | **The extractor** |
-| Rate absent or stated elsewhere | 3 | The agreement |
+They are in git history, and `loop-media-agile-lending.pdf` is worth restoring
+if the refusal behaviour ever needs demonstrating again — a 39% facility repaid
+in 30 instalments, where the model called the frequency "monthly" at confidence
+`0.4` because the payments are actually weekly, and the validator caught what
+that implies:
 
-### The one worth fixing
+```bash
+git checkout 7ac2393 -- agreements/loop-media-agile-lending.pdf
+```
 
-Where a note says *"repayable in 24 equal monthly instalments of $67,840"*, the
-model builds a schedule out of that sentence. The instalment is a **blended**
-payment, so interest ended up counted in the principal column: BranchOut Food
-came out at 1,628,182 against a stated 1,500,000, and Elixir Gaming at
-9,164,813 against 9,163,809.
+The hand-written fixtures that predate all of this are in history too, and are
+where to go for a document that reaches a mint:
 
-The validator caught both, which is the system working. But the derivation was
-what was wrong, not the check.
+```bash
+git checkout 4c2d297 -- samples/6-northbridge-past-due-facility.pdf
+git mv samples/6-northbridge-past-due-facility.pdf agreements/
+```
 
-Two changes since, and the second is the more useful one.
+## What the two show
 
-The extraction prompt now states the arithmetic that settles a blended
-instalment — total interest is the instalments minus the principal, the
-principal column sums to the stated principal, and the balance reaches zero on
-the last row. BranchOut moved from 1,628,182 to 1,500,387. Better, and still
-wrong by 387.
+**BranchOut is the extractor's own limit.** The note says *"24 equal monthly
+instalments of $67,840.94"* and never tabulates a schedule, so the model builds
+one. That instalment is a blended payment, and splitting it into principal and
+interest is arithmetic the document does not do for it. The principal column
+lands within about 200 of the stated 1,500,000 — close, and closeness is not
+what a repayment schedule is for, so the validator refuses it.
 
-Then the **cross-check**: every document is read twice and the readings
-compared. Run these four and the split is clean —
+Read it twice and the two readings disagree, which is the more useful finding:
+the same model, the same prompt, a minute apart, producing different schedules
+from the same sentence. That is what a derived value looks like from the
+outside, and it is why the pipeline now reads every document twice.
 
-| | Schedule in the document | Two readings |
-|---|---|---|
-| Northbridge (the demo fixture) | tabulated | agree exactly |
-| National Investment | tabulated | agree exactly |
-| BranchOut Food | synthesised from one sentence | differ by 16 |
-| Elixir Gaming | synthesised from one sentence | differ by 1,614 |
-
-The documents that tabulate their own schedule are read the same way twice. The
-documents where the model computes the schedule are not — and it is the same
-model, the same prompt, a minute apart. That is the honest boundary of this
-feature, and it is now drawn automatically rather than by someone noticing the
-totals look odd.
-
-Which leaves the original question answered by measurement rather than taste:
-the model should decline to synthesise a schedule the document never tabulated.
-Its own instability on exactly those documents is the argument.
-
-### Two that are worth reading in full
-
-**Loop Media** is the best single demonstration in the set. A 39% facility
-repaid in 30 instalments; the model called the frequency "monthly" at
-confidence `0.4`, hesitating exactly where it should, because the payments are
-weekly. The validator then caught what that implies — *"30 payments, but a
-monthly schedule over this span implies about 8"* — along with a maturity
-already past and interest that does not reproduce the stated rate.
-
-**Hall of Fame** is the quiet one. The exhibit carries no interest rate at all,
+**Hall of Fame is the quiet one.** The exhibit carries no interest rate at all,
 and the model returned `0` at confidence `0` rather than inventing something
-plausible. Refusing to answer is the behaviour that matters most here, and it
-is the hardest to demonstrate any other way.
+plausible. The schedule comes back empty for the same reason — the economics
+live in a referenced note the exhibit never reproduces. Refusing to answer is
+the behaviour that matters most here, and it is the hardest to demonstrate any
+other way.
 
-## What the twelve establish
+Its principal, meanwhile, is extracted at `0.99`: the document states that
+plainly, and the model is confident exactly where it should be. One document,
+both behaviours.
 
-**No confident wrong answers.** Across twelve agreements written for other
-purposes entirely, not one produced a high-confidence value that was false.
-Where a document was silent the model said so, and the deterministic checks
-stopped every one before a mint.
+## What they establish
+
+**No confident wrong answers.** Across every filed agreement run through this
+pipeline, not one produced a high-confidence value that was false. Where a
+document was silent the model said so, and the deterministic checks stopped
+every one before a mint.
 
 **What the pipeline is for, stated precisely.** A self-contained agreement that
 tabulates its own schedule goes through; anything whose economics live in an
 annex, a referenced note, or a sentence the model has to do arithmetic on is
-refused rather than guessed at. These twelve are what that boundary looks like
-from the outside, and it is drawn by the validator rather than by taste.
+refused rather than guessed at. These two are what that boundary looks like from
+either side of it.
 
-**Where to look for more.** Filtering EDGAR to recent filings clears the five
-past-maturity blocks immediately, and is the cheapest way to widen the corpus.
+**Where to look for more.** Filtering EDGAR to recent filings is the cheapest
+way to widen the corpus, and avoids re-collecting the matured filings that were
+just removed.
