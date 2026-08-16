@@ -98,7 +98,7 @@ Its own instability on exactly those documents is the argument.
 repaid in 30 instalments; the model called the frequency "monthly" at
 confidence `0.4`, hesitating exactly where it should, because the payments are
 weekly. The validator then caught what that implies — *"30 payments, but a
-monthly schedule over this term implies about 7"* — along with a maturity
+monthly schedule over this span implies about 8"* — along with a maturity
 already past and interest that does not reproduce the stated rate.
 
 **Hall of Fame** is the quiet one. The exhibit carries no interest rate at all,

@@ -20,11 +20,18 @@ const field = <T>(value: T, confidence = 1) => ({
 });
 
 const schedule = (rows: Partial<PaymentPeriod>[]): PaymentPeriod[] =>
-  rows.map((row, index) => ({
-    dueDate: row.dueDate ?? `2026-0${index + 1}-01`,
+  rows.map((row, i) => ({
+    index: row.index ?? i + 1,
+    dueDate: row.dueDate ?? monthly(i),
     principal: row.principal ?? 1000,
     interest: row.interest ?? 100,
   }));
+
+/** Month `i` of a schedule starting 2026-01-01, so long schedules stay valid. */
+const monthly = (i: number) => {
+  const date = new Date(Date.UTC(2026, i, 1));
+  return date.toISOString().slice(0, 10);
+};
 
 const terms = (overrides: Partial<Record<string, unknown>> = {}) =>
   ({

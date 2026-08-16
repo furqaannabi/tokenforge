@@ -264,13 +264,36 @@ function validateSchedule({
     }
   }
 
-  // Cadence: period count should match the declared frequency over the term.
-  if (agreementDate && maturityDate) {
-    const years = accrualFraction("ACT/365", agreementDate, maturityDate);
-    const expectedPeriods = Math.round(years * PERIODS_PER_YEAR[frequency]);
+  /*
+   * Cadence: the payments should be spaced at the frequency the terms declare.
+   *
+   * Measured across the schedule's own span — first payment to last — rather
+   * than from the agreement date, and the difference is not academic. A loan
+   * signed in September whose first instalment falls the following April is a
+   * perfectly ordinary loan; measuring its term from signature counts the
+   * months before repayment began as though payments had been missed, and this
+   * check then blocks a schedule that is exactly right. Four of the twelve
+   * filed agreements in `agreements/` failed here for that reason alone.
+   *
+   * What it still catches is the error it was written for: a frequency that
+   * does not describe the payments. Loop Media declares monthly and pays
+   * weekly, and 30 payments across seven months disagrees with "monthly" no
+   * matter which end the term is measured from.
+   *
+   * N payments span N-1 gaps, which is where the `+ 1` comes from — the
+   * off-by-one that made a correct schedule look one payment short.
+   */
+  if (schedule.length > 1) {
+    const years = accrualFraction(
+      "ACT/365",
+      dueDates[0]!,
+      dueDates[dueDates.length - 1]!,
+    );
+    const expectedPeriods =
+      Math.round(years * PERIODS_PER_YEAR[frequency]) + 1;
     if (Math.abs(schedule.length - expectedPeriods) > 1) {
       block(
-        `Schedule has ${schedule.length} payments, but a ${frequency} schedule over this term implies about ${expectedPeriods}.`,
+        `Schedule has ${schedule.length} payments, but a ${frequency} schedule over this span implies about ${expectedPeriods}.`,
       );
     }
   }
@@ -283,10 +306,31 @@ function validateSchedule({
     );
   }
 
-  // Interest must reproduce the stated rate against the declining balance.
+  /*
+   * Interest must reproduce the stated rate against the declining balance.
+   *
+   * The first period starts one period before the first payment, or at the
+   * agreement date if that is later — whichever gives the shorter first
+   * period.
+   *
+   * Starting it at the agreement date unconditionally, as this once did, makes
+   * the same mistake as the cadence check above and costs more: where
+   * repayment begins months after signing, the first period accrues all of
+   * that time at the full principal, and the expected total comes out far
+   * above what the document itself states. BranchOut states 128,182 of total
+   * interest in its own arithmetic; this check demanded 183,360 and blocked
+   * the schedule for reproducing the document correctly.
+   *
+   * The `max` keeps the ordinary case exactly as it was: when the first
+   * payment is one period after signing, one period before it *is* the
+   * agreement date. Only a delayed start moves.
+   */
   if (agreementDate && Number.isFinite(ratePct) && ratePct > 0) {
     let outstanding = principal;
-    let periodStart = agreementDate;
+    const periodMs = (365 / PERIODS_PER_YEAR[frequency]) * 86_400_000;
+    const onePeriodBefore = new Date(dueDates[0]!.getTime() - periodMs);
+    let periodStart =
+      onePeriodBefore > agreementDate ? onePeriodBefore : agreementDate;
     let expectedTotal = 0;
 
     for (let i = 0; i < schedule.length; i++) {
