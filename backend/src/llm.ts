@@ -16,7 +16,7 @@ import { ConfigurationError } from "./errors";
  */
 
 /**
- * Claude Opus 5, everywhere.
+ * Claude Sonnet 5, everywhere.
  *
  * Pinned rather than aliased, and the trade is the same one that applied to
  * the model this replaces: an alias survives a retirement, while a pin means
@@ -28,7 +28,7 @@ import { ConfigurationError } from "./errors";
  * `claude-opus-5` is a 400 here, and the reverse is a 404 on the direct API —
  * which is exactly the kind of difference worth keeping in one place.
  */
-export const MODEL = process.env.LLM_MODEL ?? "anthropic.claude-opus-5";
+export const MODEL = process.env.LLM_MODEL ?? "anthropic.claude-sonnet-5";
 
 /**
  * The same model for reading-shaped work.
