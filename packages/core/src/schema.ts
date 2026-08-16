@@ -191,6 +191,34 @@ export const FIELD_LABELS: Record<TermField, string> = {
  *
  * @returns The `[start, end)` range in `text`, or null when genuinely absent.
  */
+/*
+ * Typography, flattened one character at a time.
+ *
+ * A PDF renders curly quotes, en dashes and non-breaking spaces; a model
+ * quoting that text types the ASCII it means. `("EnWave")` and `(“EnWave”)`
+ * are the same citation, and treating them as different was marking correctly
+ * cited fields as untraceable — which lowered their confidence and sent a
+ * reviewer to check something that was already right.
+ *
+ * Every mapping is one character to one character, so offsets into the
+ * normalised string still address the original text and a highlight lands
+ * where the quote actually is.
+ */
+const TYPOGRAPHY: Record<string, string> = {
+  "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+  "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+  "\u2032": "'", "\u2033": '"',
+  "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
+  "\u2014": "-", "\u2015": "-", "\u2212": "-",
+  "\u00a0": " ", "\u2007": " ", "\u202f": " ", "\u2009": " ", "\u200a": " ",
+};
+
+function flatten(value: string): string {
+  let out = "";
+  for (const char of value) out += TYPOGRAPHY[char] ?? char;
+  return out;
+}
+
 export function findQuote(
   text: string,
   quote: string,
@@ -198,12 +226,15 @@ export function findQuote(
   const trimmed = quote.trim();
   if (!trimmed) return null;
 
-  const exact = text.indexOf(trimmed);
-  if (exact !== -1) return [exact, exact + trimmed.length];
+  const haystack = flatten(text);
+  const needle = flatten(trimmed);
+
+  const exact = haystack.indexOf(needle);
+  if (exact !== -1) return [exact, exact + needle.length];
 
   // Every character of the quote, with optional whitespace allowed between
   // each — which covers both a wrapped sentence and a word broken across lines.
-  const pattern = trimmed
+  const pattern = needle
     .split(/\s+/)
     .map((word) =>
       word
@@ -213,6 +244,6 @@ export function findQuote(
     )
     .join("\\s+");
 
-  const match = new RegExp(pattern).exec(text);
+  const match = new RegExp(pattern).exec(haystack);
   return match ? [match.index, match.index + match[0].length] : null;
 }
