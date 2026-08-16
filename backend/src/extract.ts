@@ -4,7 +4,7 @@ import {
   findQuote,
   type ExtractedTerms,
 } from "@tokenforge/core";
-import { EFFORT, MODEL, llm } from "./llm";
+import { bedrockSchema, EFFORT, MODEL, llm } from "./llm";
 
 /**
  * The AI core: a legal document in, economic terms with per-field confidence
@@ -68,7 +68,52 @@ Where a check fails, lower that field's confidence and say why in the note. Retu
  * directly, so the contract with the model cannot drift from the type the rest
  * of the code uses.
  */
-const responseJsonSchema = z.toJSONSchema(extractedTermsSchema);
+/*
+ * Two fields are left out of the enforced schema, and it is a real trade.
+ *
+ * Bedrock compiles a grammar from the schema to constrain decoding, and it
+ * refuses one this size: eleven fields fails, nine passes, and it is the
+ * structure rather than the text — stripping every description halved the
+ * bytes and changed nothing. So enforcement is spent where it earns most.
+ *
+ * `covenants` and `latePayment` are the two that go. They are the same two
+ * that do not gate a mint: neither has an editor in the review screen, and
+ * neither enters the mint hash. Everything the contract commits to — the
+ * parties, the money, the dates, the schedule — is still enforced.
+ *
+ * They come back as unextracted rather than invented, at confidence zero, so
+ * the interface shows them as unknown instead of quietly asserting a loan has
+ * no covenants. Restoring them means a second call carrying the document
+ * again, which is pennies but is not free.
+ */
+const UNENFORCED = ["covenants", "latePayment"] as const;
+
+const responseJsonSchema = (() => {
+  const full = z.toJSONSchema(extractedTermsSchema) as {
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+  const properties = Object.fromEntries(
+    Object.entries(full.properties).filter(
+      ([key]) => !UNENFORCED.includes(key as (typeof UNENFORCED)[number]),
+    ),
+  );
+  return bedrockSchema({
+    ...full,
+    properties,
+    required: Object.keys(properties),
+  });
+})();
+
+/** What an omitted field looks like: absent, and saying so. */
+function unextracted<T>(value: T) {
+  return {
+    value,
+    confidence: 0,
+    sourceQuote: "",
+    note: "Not extracted: this field is outside the enforced schema.",
+  };
+}
 
 /**
  * Progress from a streaming extraction.
@@ -292,7 +337,15 @@ function readBalancedObject(text: string, open: number): string | null {
 
 function parseTerms(text: string): ExtractedTerms | null {
   try {
-    const parsed = extractedTermsSchema.safeParse(JSON.parse(text));
+    const raw = JSON.parse(text) as Record<string, unknown>;
+
+    // The model was never asked for these, so supply them before validating
+    // rather than letting the schema reject a response that is exactly what
+    // was requested.
+    raw.covenants ??= unextracted([]);
+    raw.latePayment ??= unextracted({ penaltyRatePct: 0, gracePeriodDays: 0 });
+
+    const parsed = extractedTermsSchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

@@ -167,7 +167,7 @@ Nothing she can call writes. `backend/src/abi.ts` carries view functions only.
 ```text
 packages/core   Extraction schema and deterministic validator — one copy,
                 imported by both the web app and the service
-backend         Hono on Bun · Prisma over Postgres · Claude on Bedrock · R2
+backend         Hono on Bun · Prisma over Postgres · Claude Sonnet 4.6 on Bedrock · R2
                 PDFs parsed on upload; scans transcribed by the model
 web             Next.js · wagmi/viem · Reown AppKit
 contracts       Foundry · deployed and verified on X Layer testnet

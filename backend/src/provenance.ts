@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ExtractedTerms } from "@tokenforge/core";
-import { EFFORT, llm, MODEL } from "./llm";
+import { bedrockSchema, EFFORT, llm, MODEL } from "./llm";
 
 /**
  * Two questions the hash cannot answer.
@@ -162,7 +162,10 @@ export async function checkProvenance(input: {
       // The schema is enforced rather than requested. A verdict that failed to
       // parse would be indistinguishable from a check that never ran, and this
       // one gates a mint.
-      format: { type: "json_schema", schema: z.toJSONSchema(provenanceSchema) },
+      format: {
+        type: "json_schema",
+        schema: bedrockSchema(z.toJSONSchema(provenanceSchema)),
+      },
     },
     // The instructions are identical on every call and the question is not, so
     // splitting them lets the stable half cache rather than being re-read with
