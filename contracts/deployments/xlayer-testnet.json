@@ -3,23 +3,23 @@
   "chainId": 1952,
   "rpcUrl": "https://xlayertestrpc.okx.com",
   "explorer": "https://www.oklink.com/xlayer-test",
-  "deployedAtBlock": 38499279,
+  "deployedAtBlock": 38514172,
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6",
+      "address": "0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
       },
-      "supersedes": "0x5E33f9be7F6008059fEcC429A94Fed017Bd5A25d",
+      "supersedes": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6",
       "note": "Issuers and borrowers are separate rolls. Reading borrowers out of the issuer list gave every admitted borrower the right to mint. Also holds approveMint, keyed by NoteFactory.mintHash."
     },
     "NoteFactory": {
-      "address": "0x2F3Fc6A039B25FD13Ec7DFdba060Ab916b66579d",
+      "address": "0xAfB4681a7d359F34e99A7a3d37B32f6d4B63DefA",
       "constructorArgs": {
-        "registry": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6"
+        "registry": "0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a"
       },
-      "supersedes": "0xf7974A5bB7caAE07D6d0633B3f6Ac35fb8C06CB6",
+      "supersedes": "0x2F3Fc6A039B25FD13Ec7DFdba060Ab916b66579d",
       "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved.",
       "verification": "Unverified. OKLink's plugin endpoint rejects it \u2014 the factory embeds the note and vault creation bytecode, and the endpoint verifies the registry beside it without complaint. Retry, or verify through OKLink's web form."
     },

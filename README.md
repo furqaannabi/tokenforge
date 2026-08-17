@@ -205,8 +205,8 @@ contracts       Foundry · deployed and verified on X Layer testnet
 
 | Contract | Address | |
 |---|---|---|
-| `IssuerRegistry` | [`0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6`](https://www.oklink.com/xlayer-test/address/0xdb988a31f8685905d1ace4e6cd9c2489e937bdf6) | Verified |
-| `NoteFactory` | [`0x2F3Fc6A039B25FD13Ec7DFdba060Ab916b66579d`](https://www.oklink.com/xlayer-test/address/0x2f3fc6a039b25fd13ec7dfdba060ab916b66579d) | Unverified — OKLink rejects it |
+| `IssuerRegistry` | [`0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a`](https://www.oklink.com/xlayer-test/address/0x66547e61f4b34b9a5592de9ab7e926ef5ad8769a) | Verified |
+| `NoteFactory` | [`0xAfB4681a7d359F34e99A7a3d37B32f6d4B63DefA`](https://www.oklink.com/xlayer-test/address/0xafb4681a7d359f34e99a7a3d37b32f6d4b63defa) | Unverified — OKLink rejects it |
 | `SaleDesk` | [`0x33C3Da08E7e214c9F02Dae4C92D0CD55747f8181`](https://www.oklink.com/xlayer-test/address/0x33c3da08e7e214c9f02dae4c92d0cd55747f8181) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
 
