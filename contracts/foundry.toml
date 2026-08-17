@@ -6,6 +6,19 @@ solc = "0.8.28"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+# Pinned, both of them, and neither is cosmetic.
+#
+# Unpinned, Foundry chose the newest fork it knew about — `prague` on 1.7.1 —
+# which is a fork X Layer may not implement, and which changes the emitted
+# bytecode the moment the toolchain updates under a contract already deployed.
+# A verifier that compiles at a different target then cannot reproduce what is
+# on-chain, which is exactly how NoteFactory became unverifiable while the
+# registry beside it verified.
+evm_version = "cancun"
+# No metadata hash appended. It encodes source paths and an IPFS digest, so the
+# same code compiled from a different directory layout produces different
+# bytecode — and verification turns on an exact match.
+bytecode_hash = "none"
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/forge-std/src/",

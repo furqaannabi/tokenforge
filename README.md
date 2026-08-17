@@ -205,10 +205,23 @@ contracts       Foundry · deployed and verified on X Layer testnet
 
 | Contract | Address | |
 |---|---|---|
-| `IssuerRegistry` | [`0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a`](https://www.oklink.com/xlayer-test/address/0x66547e61f4b34b9a5592de9ab7e926ef5ad8769a) | Verified |
-| `NoteFactory` | [`0xAfB4681a7d359F34e99A7a3d37B32f6d4B63DefA`](https://www.oklink.com/xlayer-test/address/0xafb4681a7d359f34e99a7a3d37b32f6d4b63defa) | Unverified — OKLink rejects it |
+| `IssuerRegistry` | [`0x728CbFFbA7a513c5D915fFBf561D8E1983EED3E9`](https://www.oklink.com/xlayer-test/address/0x728cbffba7a513c5d915ffbf561d8e1983eed3e9) | Verified |
+| `NoteFactory` | [`0xb2898abC5CE84148c80F91483e74fb38A3Ae07cc`](https://www.oklink.com/xlayer-test/address/0xb2898abc5ce84148c80f91483e74fb38a3ae07cc) | Unverified — see below |
 | `SaleDesk` | [`0x33C3Da08E7e214c9F02Dae4C92D0CD55747f8181`](https://www.oklink.com/xlayer-test/address/0x33c3da08e7e214c9f02dae4c92d0cd55747f8181) | Verified |
 | `MockUSDG` | [`0x6AF29b12f4df68C9416A0DC87B80a718ed054A94`](https://www.oklink.com/xlayer-test/address/0x6af29b12f4df68c9416a0dc87b80a718ed054a94) | Verified · testnet only |
+
+`NoteFactory` is the one contract OKLink will not verify, and it is scale
+rather than settings. It embeds the creation code of both the note and the
+vault, which makes it 26 sources and 22.2KB deployed, against 4.3KB for the
+registry and 5.6KB for the desk — and those two verify through the same
+endpoint, with the same pinned compiler, in the same submission. The endpoint
+accepts the payload and then reports it cannot reproduce the bytecode.
+
+Compiler settings are pinned in `foundry.toml` — `evm_version = "cancun"` and
+`bytecode_hash = "none"` — so nothing here drifts when the toolchain updates,
+and a verifier compiles at the same target. That was worth doing regardless: an
+unpinned EVM version means Foundry silently retargets a newer fork under a
+contract already deployed, and it had already picked `prague`.
 
 A primary sale carries a protocol fee of 25 basis points on **each** side: the
 buyer pays the price plus 0.25%, the seller receives it less 0.25%, and both

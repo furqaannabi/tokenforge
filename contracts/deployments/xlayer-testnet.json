@@ -3,25 +3,25 @@
   "chainId": 1952,
   "rpcUrl": "https://xlayertestrpc.okx.com",
   "explorer": "https://www.oklink.com/xlayer-test",
-  "deployedAtBlock": 38514172,
+  "deployedAtBlock": 38518007,
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a",
+      "address": "0x728CbFFbA7a513c5D915fFBf561D8E1983EED3E9",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
       },
-      "supersedes": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6",
+      "supersedes": "0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a",
       "note": "Issuers and borrowers are separate rolls. Reading borrowers out of the issuer list gave every admitted borrower the right to mint. Also holds approveMint, keyed by NoteFactory.mintHash."
     },
     "NoteFactory": {
-      "address": "0xAfB4681a7d359F34e99A7a3d37B32f6d4B63DefA",
+      "address": "0xb2898abC5CE84148c80F91483e74fb38A3Ae07cc",
       "constructorArgs": {
-        "registry": "0x66547e61F4b34b9a5592De9AB7E926EF5ad8769a"
+        "registry": "0x728CbFFbA7a513c5D915fFBf561D8E1983EED3E9"
       },
-      "supersedes": "0x2F3Fc6A039B25FD13Ec7DFdba060Ab916b66579d",
+      "supersedes": "0xAfB4681a7d359F34e99A7a3d37B32f6d4B63DefA",
       "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved.",
-      "verification": "Unverified. OKLink's plugin endpoint rejects it \u2014 the factory embeds the note and vault creation bytecode, and the endpoint verifies the registry beside it without complaint. Retry, or verify through OKLink's web form."
+      "verification": "Unverified. OKLink's plugin endpoint accepts the submission and then cannot reproduce the bytecode. It is scale rather than settings: IssuerRegistry (1 source, 4.3KB) and SaleDesk (11 sources, 5.6KB) both verify, while this is 26 sources and 22.2KB because the factory embeds the note and vault creation code. Compiler settings are pinned and it still fails."
     },
     "MockUSDG": {
       "address": "0x6AF29b12f4df68C9416A0DC87B80a718ed054A94",
@@ -42,5 +42,12 @@
   "notes": [],
   "demo": {
     "note_": "Deployed empty and left empty: no issuer or borrower is admitted, so onboarding runs through the app. Notes under the superseded factories remain on-chain and are no longer indexed."
+  },
+  "compiler": {
+    "solc": "0.8.28",
+    "evmVersion": "cancun",
+    "optimizerRuns": 200,
+    "bytecodeHash": "none",
+    "note": "Pinned so the toolchain cannot change deployed bytecode under a live contract, and so a verifier compiles at the same target."
   }
 }
