@@ -64,8 +64,25 @@ const status: KeeperStatus = {
   recent: [],
 };
 
-export function keeperStatus(): KeeperStatus {
-  return status;
+/**
+ * The status, plus whether to believe it.
+ *
+ * `enabled` only says a key was found at boot, and for four hours that was the
+ * whole story while nothing collected: the keeper reported itself healthy
+ * because it had successfully intended to run. A sweep is due every
+ * `intervalMs`, so a last run older than three of them means the timer is gone
+ * whatever the other fields claim — and saying so is the difference between a
+ * bug someone sees and a bug someone finds later in the ledger.
+ */
+export function keeperStatus(): KeeperStatus & { stale: boolean } {
+  const since = status.lastRunAt
+    ? Date.now() - new Date(status.lastRunAt).getTime()
+    : Infinity;
+
+  return {
+    ...status,
+    stale: status.enabled && since > status.intervalMs * 3,
+  };
 }
 
 /**
@@ -246,6 +263,26 @@ export async function sweep(): Promise<CollectionAttempt[]> {
  * the note page — the call is unpermissioned precisely so that automation is
  * never the only route.
  */
+/**
+ * Survives a hot reload, and refuses to run twice.
+ *
+ * `bun --hot` re-evaluates this module on every file change, which called
+ * `startKeeper` again each time and stacked another interval on top of the
+ * last. Worse, it discards the timers the previous instance registered — so
+ * the keeper announced itself in the log on every reload and then never
+ * collected anything, which is the most expensive way for an automation to
+ * fail: loudly enough to look healthy.
+ *
+ * The handle lives on `globalThis` because that is the one thing a module
+ * reload does not replace. Clearing the old timer before arming a new one
+ * means a reload re-arms rather than accumulates, and two sweeps can never
+ * overlap and race each other's nonce.
+ */
+const timers = globalThis as typeof globalThis & {
+  __tokenforgeKeeper?: ReturnType<typeof setInterval>;
+  __tokenforgeKeeperFirst?: ReturnType<typeof setTimeout>;
+};
+
 export function startKeeper(): void {
   const account = keeperAccount();
   if (!account) {
@@ -254,6 +291,9 @@ export function startKeeper(): void {
     );
     return;
   }
+
+  if (timers.__tokenforgeKeeper) clearInterval(timers.__tokenforgeKeeper);
+  if (timers.__tokenforgeKeeperFirst) clearTimeout(timers.__tokenforgeKeeperFirst);
 
   status.enabled = true;
   status.address = account.address;
@@ -284,6 +324,7 @@ export function startKeeper(): void {
 
   // A first pass shortly after boot rather than a full interval of silence,
   // but not instantly — the database and RPC are still warming up.
-  setTimeout(tick, 15_000);
-  setInterval(tick, status.intervalMs).unref?.();
+  timers.__tokenforgeKeeperFirst = setTimeout(tick, 15_000);
+  timers.__tokenforgeKeeper = setInterval(tick, status.intervalMs);
+  timers.__tokenforgeKeeper.unref?.();
 }
