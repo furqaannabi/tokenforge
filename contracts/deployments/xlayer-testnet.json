@@ -3,23 +3,23 @@
   "chainId": 1952,
   "rpcUrl": "https://xlayertestrpc.okx.com",
   "explorer": "https://www.oklink.com/xlayer-test",
-  "deployedAtBlock": 38494893,
+  "deployedAtBlock": 38499279,
   "deployer": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
   "contracts": {
     "IssuerRegistry": {
-      "address": "0x5E33f9be7F6008059fEcC429A94Fed017Bd5A25d",
+      "address": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6",
       "constructorArgs": {
         "admin": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
       },
-      "supersedes": "0x89bFE1652c0fB4958701ed5D7e8Ca5c580d67250",
+      "supersedes": "0x5E33f9be7F6008059fEcC429A94Fed017Bd5A25d",
       "note": "Issuers and borrowers are separate rolls. Reading borrowers out of the issuer list gave every admitted borrower the right to mint. Also holds approveMint, keyed by NoteFactory.mintHash."
     },
     "NoteFactory": {
-      "address": "0xf7974A5bB7caAE07D6d0633B3f6Ac35fb8C06CB6",
+      "address": "0x2F3Fc6A039B25FD13Ec7DFdba060Ab916b66579d",
       "constructorArgs": {
-        "registry": "0x5E33f9be7F6008059fEcC429A94Fed017Bd5A25d"
+        "registry": "0xDb988a31F8685905D1aCe4e6CD9c2489e937bDF6"
       },
-      "supersedes": "0x7D7c277cdE9abB358EC86159fc8D7d81612a54E0",
+      "supersedes": "0xf7974A5bB7caAE07D6d0633B3f6Ac35fb8C06CB6",
       "note": "Issuer must be a registered issuer, borrower a registered borrower, and the exact parameters approved.",
       "verification": "Unverified. OKLink's plugin endpoint rejects it \u2014 the factory embeds the note and vault creation bytecode, and the endpoint verifies the registry beside it without complaint. Retry, or verify through OKLink's web form."
     },
@@ -41,6 +41,6 @@
   },
   "notes": [],
   "demo": {
-    "note_": "Registry seeded from agreements/branchout-food-inc.pdf: ENWAVE CORPORATION admitted as issuer (the lender), BranchOut Foods Inc. as borrower. No note has been minted through this factory."
+    "note_": "Deployed empty and left empty: no issuer or borrower is admitted, so onboarding runs through the app. Notes under the superseded factories remain on-chain and are no longer indexed."
   }
 }
