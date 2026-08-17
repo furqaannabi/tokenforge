@@ -90,6 +90,8 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   // The wallet that will repay. The document names the borrower; only the
   // issuer can say which address that company controls.
   const [borrower, setBorrower] = useState("");
+  // Dismissal of the schedule warning, which the service does not track.
+  const [scheduleConfirmed, setScheduleConfirmed] = useState(false);
 
   const remote = useExtraction(noteId);
   const review = useReviewExtraction(noteId);
@@ -118,9 +120,13 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
    * forever on any document that had a single low-confidence field. Anything
    * absent from that list has been confirmed.
    */
+  const unreviewed = useMemo(
+    () => new Set<string>(remote.data?.unreviewedFields ?? []),
+    [remote.data?.unreviewedFields],
+  );
+
   const gate = useMemo(() => {
     if (!terms) return null;
-    const unreviewed = new Set(remote.data?.unreviewedFields ?? []);
     const confirmed = new Set(
       (Object.keys(terms) as TermField[]).filter(
         (field) => !unreviewed.has(field),
@@ -131,12 +137,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
       now: DEMO_NOW,
       provenance: remote.data?.provenance ?? undefined,
     });
-  }, [
-    terms,
-    issuer?.verified,
-    remote.data?.unreviewedFields,
-    remote.data?.provenance,
-  ]);
+  }, [terms, issuer?.verified, unreviewed, remote.data?.provenance]);
 
   if (remote.isPending) return <ReviewLoading />;
   if (remote.isError) {
@@ -240,9 +241,20 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
   };
 
   const schedule = terms.schedule.value;
+  /*
+   * The schedule is confirmed here rather than on the service.
+   *
+   * `unreviewedFields` only ever lists fields that gate a mint, and the
+   * schedule is not one of them — it has no editor, so a blocking flag on it
+   * could never be cleared. Confirming it therefore has nothing to record
+   * server-side, and without somewhere to put the answer the button sat there
+   * doing nothing every time it was pressed. Local is the honest scope: it
+   * dismisses a warning, and dismissing it claims nothing the gate relies on.
+   */
   const scheduleLow =
     terms.schedule.confidence < LOW_CONFIDENCE_THRESHOLD &&
-    !terms.schedule.editedByHuman;
+    !terms.schedule.editedByHuman &&
+    !scheduleConfirmed;
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
@@ -265,7 +277,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
             "lg:flex",
           )}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5 sm:py-6">
+          <div className="@container min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5 sm:py-6">
             <header className="mb-4">
               <h1 className="text-xl font-semibold">Extracted terms</h1>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -281,12 +293,21 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
               ).length}
             />
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 @2xl:grid-cols-2">
               {EDITORS.map(({ field, kind, options }) => {
                 const extracted = terms[field];
-                const confirmed =
-                  extracted.confidence >= LOW_CONFIDENCE_THRESHOLD ||
-                  Boolean(extracted.editedByHuman);
+                /*
+                 * The service owns this, not the confidence score.
+                 *
+                 * Deriving it from confidence alone meant "Confirm as
+                 * extracted" appeared to do nothing: the request succeeded and
+                 * the mint gate opened, but the card kept its warning and its
+                 * button, because confirming deliberately does not raise
+                 * confidence — nothing about the value changed. Anything absent
+                 * from `unreviewedFields` has been vouched for, which is the
+                 * same rule the gate above applies.
+                 */
+                const confirmed = !unreviewed.has(field);
                 return (
                   <TermCard
                     key={field}
@@ -313,7 +334,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
                   <Button
                     variant="outline"
                     size="xs"
-                    onClick={() => confirmAsExtracted("schedule")}
+                    onClick={() => setScheduleConfirmed(true)}
                     className="border-review/40 text-review hover:bg-review/10 hover:text-review"
                   >
                     Confirm schedule

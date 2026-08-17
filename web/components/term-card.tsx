@@ -73,14 +73,14 @@ export function TermCard({
         </div>
       ) : null}
 
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <FieldLabel>{FIELD_LABELS[field] ?? field}</FieldLabel>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <FieldLabel className="truncate">{FIELD_LABELS[field] ?? field}</FieldLabel>
         <ConfidenceBadge confidence={confidence} confirmed={confirmed} />
       </div>
 
       {kind === "select" ? (
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger className="w-full font-mono">
+          <SelectTrigger className="h-9 w-full font-mono text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -98,7 +98,11 @@ export function TermCard({
             step={kind === "percent" ? "0.01" : undefined}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className={cn("tnum font-mono", kind === "percent" && "pr-8")}
+            className={cn(
+              "tnum h-9 font-mono text-sm",
+              // The percent sign is drawn over the field, so keep text clear of it.
+              kind === "percent" && "pr-8",
+            )}
           />
           {kind === "percent" ? (
             <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-sm text-muted-foreground">
