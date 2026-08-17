@@ -4,6 +4,7 @@ import {
   compareExtractions,
   extractedTermsSchema,
   findQuote,
+  rebalanceSchedule,
   type Disagreement,
   type ExtractedTerms,
 } from "@tokenforge/core";
@@ -217,6 +218,24 @@ export async function extractTerms(
   }
 
   /*
+   * Both readings are balanced before they are compared.
+   *
+   * The comparison is meant to catch the model reading a document two different
+   * ways, and comparing raw readings does not: two runs amortising the same
+   * payments with slightly different periodic rates disagree about every row
+   * while agreeing about everything the document states. That is an arithmetic
+   * wobble in work now done deterministically, and reporting it as "the two
+   * readings disagreed" points a reviewer at a table that is about to be
+   * recomputed anyway.
+   *
+   * Balancing preserves the dates and the payment amounts, so a genuine
+   * misreading — a different instalment, a different count — survives it and is
+   * still caught.
+   */
+  const firstTerms = balanceSchedule(first.parsed);
+  const rerunTerms = rerun?.parsed ? balanceSchedule(rerun.parsed) : null;
+
+  /*
    * A rerun that failed to parse is not a disagreement.
    *
    * There is nothing to compare against, so the check simply did not run — and
@@ -224,8 +243,8 @@ export async function extractTerms(
    * broken JSON would put a false reason in front of a reviewer and send them
    * looking at a document that was read fine.
    */
-  const disagreements = rerun?.parsed
-    ? compareExtractions(first.parsed, rerun.parsed)
+  const disagreements = rerunTerms
+    ? compareExtractions(firstTerms, rerunTerms)
     : [];
 
   onEvent?.({
@@ -235,13 +254,13 @@ export async function extractTerms(
   });
 
   const second = await runPass(
-    `${VERIFICATION_PROMPT}\n\n--- DOCUMENT ---\n\n${documentText}\n\n--- EXTRACTION TO AUDIT ---\n\n${JSON.stringify(first.parsed, null, 2)}`,
+    `${VERIFICATION_PROMPT}\n\n--- DOCUMENT ---\n\n${documentText}\n\n--- EXTRACTION TO AUDIT ---\n\n${JSON.stringify(firstTerms, null, 2)}`,
     onEvent,
   );
 
   // A failed audit is not a failed extraction: keep the first pass rather than
   // losing the whole result because the second came back unparseable.
-  const verified = second.parsed ?? first.parsed;
+  const verified = second.parsed ?? firstTerms;
 
   onEvent?.({
     type: "stage",
@@ -259,7 +278,7 @@ export async function extractTerms(
    */
   return {
     terms: applyDisagreements(
-      reconcileQuotes(verified, documentText),
+      balanceSchedule(reconcileQuotes(verified, documentText)),
       disagreements,
     ),
     model: MODEL,
@@ -433,6 +452,50 @@ function parseTerms(text: string): ExtractedTerms | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Deterministic backstop for the arithmetic in rule 5.
+ *
+ * Only runs when the principal column does not retire the principal, so a
+ * document that tabulates its own schedule is never touched — those columns are
+ * read rather than derived, and they already balance.
+ *
+ * Where it does run, nothing the document states is changed: the dates stay,
+ * and so does what is paid on each of them. Only the split between principal
+ * and interest moves, to the one allocation that reaches zero on the final row.
+ * The note says so on the field, because a reviewer comparing the table against
+ * the document deserves to know which numbers came from where.
+ */
+function balanceSchedule(terms: ExtractedTerms): ExtractedTerms {
+  const schedule = terms.schedule.value;
+  const principal = terms.principal.value;
+  if (schedule.length === 0) return terms;
+
+  const total = schedule.reduce((sum, period) => sum + period.principal, 0);
+  if (Math.abs(total - principal) <= 0.01) return terms;
+
+  const repaired = rebalanceSchedule({
+    schedule,
+    principal,
+    dayCount: terms.dayCount.value,
+    frequency: terms.paymentFrequency.value,
+    agreementDate: terms.agreementDate.value,
+  });
+
+  // Unrepairable means the payments disagree with the principal by more than an
+  // allocation error can explain. Leave it exactly as extracted and let the
+  // validator refuse it, which is the correct outcome and already works.
+  if (!repaired) return terms;
+
+  return {
+    ...terms,
+    schedule: {
+      ...terms.schedule,
+      value: repaired.schedule,
+      note: `Principal and interest were recomputed from the payment amounts and dates, which is arithmetic rather than extraction: as read, the principal column came to ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })} against a stated ${principal.toLocaleString("en-US")}. The payments imply a rate of ${repaired.impliedRatePct.toFixed(3)}%. ${terms.schedule.note ?? ""}`.trim(),
+    },
+  };
 }
 
 /**

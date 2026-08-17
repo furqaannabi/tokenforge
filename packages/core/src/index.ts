@@ -18,6 +18,9 @@ export * from "./validator";
 // against its own arithmetic; this checks two readings against each other, and
 // nothing else in the pipeline can see that failure.
 export * from "./crosscheck";
+// Splitting a payment into principal and interest. Arithmetic the model was
+// being asked to do and should not have been.
+export * from "./amortise";
 // Building and hashing a mint. Here rather than in the web app because the
 // service now sends the transaction, and two implementations of `mintHash`
 // would disagree the moment either was edited.
