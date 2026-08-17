@@ -58,6 +58,13 @@ test("a party's name wrapped differently is the same name", () => {
   expect(compareExtractions(terms(), wrapped)).toEqual([]);
 });
 
+/** The real case, from agreements/branchout-food-inc.pdf. */
+test("a name split by a page wrap is the same name", () => {
+  const wrapped = terms({ lender: field(" EN WAVE CORPORATION") });
+  const closed = terms({ lender: field("ENWAVE CORPORATION") });
+  expect(compareExtractions(wrapped, closed)).toEqual([]);
+});
+
 test("a party's name punctuated differently is a different entity", () => {
   const suffixed = terms({ borrower: field("Northbridge Manufacturing, LLC") });
   const found = compareExtractions(terms(), suffixed);

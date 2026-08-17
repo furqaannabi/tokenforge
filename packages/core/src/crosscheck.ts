@@ -55,16 +55,22 @@ const money = (value: number) =>
   value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 /**
- * Whitespace and case only.
+ * Case, and every space.
  *
- * A party's name wrapped differently across two reads is the same name. A name
- * punctuated differently is not necessarily — "Acme Holdings" and "Acme
- * Holdings, LLC" name different legal entities, and the note commits to
- * whichever one is minted, so that difference is worth a human's attention
- * rather than a normalisation rule.
+ * Not merely collapsing runs of whitespace, because the difference these
+ * readings actually show is a space in the *middle of a word*. A PDF breaks a
+ * line wherever the column ends, and "ENWAVE CORPORATION" printed across a
+ * wrap comes back as "EN WAVE CORPORATION" from the text layer — one reading
+ * closed the gap and the other did not, and the check reported a lender read
+ * two different ways when both had read the same name. Removing all whitespace
+ * makes them the one string they always were.
+ *
+ * Punctuation is deliberately left alone. "Acme Holdings" and "Acme Holdings,
+ * LLC" name different legal entities, the note commits to whichever is minted,
+ * and no line break invents a comma — so that difference is a reviewer's to
+ * judge rather than a normalisation rule's to erase.
  */
-const normalize = (value: string) =>
-  value.trim().replace(/\s+/g, " ").toLowerCase();
+const normalize = (value: string) => value.replace(/\s+/g, "").toLowerCase();
 
 const sum = (rows: PaymentPeriod[], key: "principal" | "interest") =>
   rows.reduce((total, row) => total + row[key], 0);

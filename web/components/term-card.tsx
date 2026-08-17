@@ -58,7 +58,7 @@ export function TermCard({
       onMouseEnter={() => onHover(field)}
       onMouseLeave={() => onHover(null)}
       className={cn(
-        "flex h-full flex-col rounded-lg border bg-card p-3 transition-colors",
+        "flex flex-col rounded-lg border bg-card p-3 transition-colors",
         needsReview ? "border-review" : "border-border",
         active && "ring-1 ring-verified",
         active && needsReview && "ring-review",
@@ -113,12 +113,10 @@ export function TermCard({
       )}
 
       {note && needsReview ? (
-        <p className="mt-2 grow text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           {note}
         </p>
-      ) : (
-        <div className="grow" />
-      )}
+      ) : null}
 
       {needsReview ? (
         <Button
