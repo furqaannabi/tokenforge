@@ -29,11 +29,11 @@ Human reviews low-confidence fields
         ↓
 Issuer submits the exact parameters for approval
         ↓
-Registry admin clears those exact parameters on-chain
+Borrower signs those exact parameters from their own wallet
         ↓
-Issuer signs the mint — Pending, document hash stored on-chain
+Registry admin clears the same parameters on-chain
         ↓
-Borrower accepts the terms from their own wallet     → the note goes Active
+Issuer mints — the factory recovers the borrower's signature   → the note opens Active
         ↓
 Issuer places a share of the note on the sale desk
         ↓
@@ -111,9 +111,9 @@ No single check is trusted on its own. Five layers each do a different job:
 | Human verification | A person reads the source document and confirms or corrects the AI's output |
 | Issuer approval | The authorized representative signs off on the final terms on-chain |
 | Document provenance | A model checks the agreement names this issuer as lender, and that the same loan has not already been tokenized under a different file |
+| Borrower acceptance | The borrower signs the mint hash from their own wallet, and `NoteFactory` recovers that signature on-chain before the note opens. Without it the note mints `Pending` and nothing trades or settles |
 | Admin approval | The registry admin clears one exact set of mint parameters. Editing anything afterwards produces a different hash and the factory refuses it |
 | Wallet sessions | Reads and writes are scoped to the wallet that signed a challenge, not merely to one that is connected. A minted note stays public; anything in review does not |
-| Borrower acceptance | The borrower signs the mint hash from their own wallet, and `NoteFactory` recovers that signature on-chain before the note opens. Without it the note mints `Pending` and nothing trades or settles |
 | Onchain enforcement | Terms are immutable, the document hash is recorded, the repayment schedule is enforced by contract |
 
 **Issuer verification is an eligibility layer, not a safety guarantee.** A reputable company can still originate a bad loan. Verification controls *who may issue*; it says nothing about whether a particular loan will be repaid. Credit risk remains entirely with the investor.
