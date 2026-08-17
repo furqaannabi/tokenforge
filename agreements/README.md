@@ -3,17 +3,19 @@
 Real loan agreements, as filed. Pulled from SEC EDGAR full-text search and
 converted to PDF exactly as a user would upload one.
 
-This is the **test corpus**, not a set of demo fixtures. Both documents were
-written for a real transaction by people with no idea this pipeline exists,
-which is the only way to find out what it does with input it was not tuned
-against.
+Two of the three were written for a real transaction by people with no idea
+this pipeline exists, which is the only way to find out what it does with input
+it was not tuned against. The third is the hand-built fixture the contract tests
+are shaped around, kept because a corpus where nothing succeeds cannot tell you
+whether success still works.
 
 ## What is here
 
-| | Pages | Chars | Maturity | Blocked because |
+| | Pages | Chars | Maturity | Outcome |
 |---|---|---|---|---|
-| `branchout-food-inc.pdf` | 2 | 2k | 2028-03-01 | Schedule totals 1,500,209 against a stated principal of 1,500,000, and two readings of it disagree |
-| `hall-of-fame-port-authority-loan.pdf` | 8 | 18k | 2044-06-30 | No rate and no schedule — both live in referenced documents |
+| `northbridge-past-due-facility.pdf` | 3 | 3k | 2027-06-15 | **Validates.** Six quarterly instalments, tabulated in the document, and every column balances as read |
+| `branchout-food-inc.pdf` | 2 | 2k | 2028-03-01 | **Validates**, and needs a human first: the rate and the day-count are genuinely unclear in the note |
+| `hall-of-fame-port-authority-loan.pdf` | 8 | 18k | 2044-06-30 | **Blocked.** No rate and no schedule — both live in referenced documents |
 
 `edgar-search.json` and `edgar-search-notes.json` are the two searches that
 found them — 835 and 2,728 hits respectively, so there are plenty more.
@@ -21,6 +23,23 @@ found them — 835 and 2,728 hits respectively, so there are plenty more.
 ```bash
 bun ../backend/scripts/check-pdf.ts *.pdf   # what the parser sees
 ```
+
+### BranchOut used to be blocked, and what changed
+
+Its schedule appears nowhere in the document. One sentence gives the whole
+thing — *"twenty-four (24) equal monthly installments of $67,840.94 ... the
+first installment payable on April 1st, 2026"* — and the model built the table
+from it. The dates were right, the payments were right, and the rows summed to
+exactly 24 x 67,840.94. The split between principal and interest was 336.79
+out, so the principal column did not retire the principal and the validator
+refused it.
+
+That split is now computed rather than extracted, which is why the document
+passes. It is worth being precise about what moved: nothing the note states
+changed hands. The model still reads the principal, the instalment, the count
+and the dates out of prose; only the allocation between two columns is solved
+for in code, and only when the column does not already balance. Documents that
+tabulate their own schedule — the Northbridge fixture — are never touched.
 
 ### The ten that were removed
 
@@ -79,11 +98,12 @@ pipeline, not one produced a high-confidence value that was false. Where a
 document was silent the model said so, and the deterministic checks stopped
 every one before a mint.
 
-**What the pipeline is for, stated precisely.** A self-contained agreement that
-tabulates its own schedule goes through; anything whose economics live in an
-annex, a referenced note, or a sentence the model has to do arithmetic on is
-refused rather than guessed at. These two are what that boundary looks like from
-either side of it.
+**What the pipeline is for, stated precisely.** An agreement that states its own
+economics goes through, whether it tabulates the schedule or gives the one
+sentence the schedule can be derived from. What is refused is a document whose
+terms live somewhere it cannot read — an annex, a referenced note, a rate the
+exhibit never names. These three are what that boundary looks like from either
+side of it.
 
 **Where to look for more.** Filtering EDGAR to recent filings is the cheapest
 way to widen the corpus, and avoids re-collecting the matured filings that were

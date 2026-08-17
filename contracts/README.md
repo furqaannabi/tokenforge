@@ -4,7 +4,7 @@ Foundry. Deployed and verified on X Layer testnet — addresses in
 [deployments/xlayer-testnet.json](deployments/xlayer-testnet.json).
 
 ```bash
-forge test          # 122 tests
+forge test          # 126 tests
 forge coverage      # 96% of lines, 76% of branches
 ```
 

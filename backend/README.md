@@ -27,13 +27,15 @@ PDF
 document text
     ↓  extract      read twice independently, compare, then audit
 terms + confidence
+    ↓  balance      solve the principal/interest split in code, not in the model
+terms + confidence
     ↓  validate     deterministic rules; ignores confidence entirely
 issues
     ↓  route        below-threshold fields go to a human
 status
 ```
 
-The three stages answer different questions and fail independently:
+The stages answer different questions and fail independently:
 
 - **Extraction** produces values, per-field confidence, and the verbatim clause
   each value came from. It streams: the partial parse means a term can be
@@ -48,6 +50,16 @@ The three stages answer different questions and fail independently:
   contradicts the model itself, and neither sees the other's failure. The
   rerun roughly doubles reading-stage input tokens and costs no wall time;
   `EXTRACT_CROSSCHECK=off` disables it.
+
+- **Balancing** takes the arithmetic back. Where a note states an instalment
+  rather than tabulating a schedule, the model builds the table — and gets the
+  dates and the payments right while allocating between principal and interest
+  with a slightly wrong periodic rate. It runs only when the principal column
+  does not already retire the principal, so a tabulated schedule is never
+  touched, and it changes nothing the document states: the dates stay, the
+  payments stay, and the one split that reaches zero on the final row is solved
+  for by bisection. A schedule that cannot repay the loan at any rate is left
+  alone for the validator to refuse.
 - **The validator** is rules, not AI. It checks that dates are ordered, the
   schedule reproduces the stated rate against a declining balance, principal
   reconciles, and the cadence matches the declared frequency. It ignores
@@ -113,7 +125,7 @@ intended to publish.
 | `POST /auth/logout` | Revokes the session and clears the cookie |
 | `POST /zoya/messages` | The assistant. Returns her reply and the tools it rested on |
 | `POST /zoya/stream` | The same turn as server-sent events: `delta` per fragment, `tool` when one starts, `done` with the sources |
-| `GET /keeper` | Whether automatic collection is running and what it last did. Public |
+| `GET /keeper` | Whether automatic collection is running and what it last did, including `stale` — true when the last sweep is older than three intervals, which is how a keeper whose timer has died is told apart from one with nothing to do. Public |
 | `POST /keeper/sweep` | Run a collection sweep now. Signed in — it spends the keeper's gas |
 | `GET /extractions/:id/mint-gate` | Whether these terms may be minted, and why not |
 | `POST /extractions/:id/mint` | Record a mint that already happened on-chain |

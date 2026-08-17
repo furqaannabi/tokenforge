@@ -129,6 +129,31 @@ The four checks fail independently, and the difference matters:
 - **The deterministic validator** is rules, not AI. It checks that dates are ordered, principal reconciles, the cadence matches the declared frequency, and the schedule reproduces the stated rate against a declining balance. It ignores confidence entirely — terms a model was certain about still fail when the arithmetic doesn't hold.
 - **Human review** clears low-confidence fields. Terms can be arithmetically perfect and still too uncertain to mint unsupervised.
 
+### What the model is trusted with, and what it is not
+
+The model reads. It does not compute.
+
+Everything a document *states* comes from the model, and nothing else could get
+it: the parties, the principal, the rate, the day-count, the dates, and — where
+a note gives one sentence instead of a table — the payment amounts and the day
+each one falls due, recovered from prose like *"twenty-four (24) equal monthly
+installments of $67,840.94 ... the first installment payable on April 1st,
+2026"*. Every value arrives with the verbatim clause it came from and a
+confidence score. Remove the model and there is no product.
+
+What the model is not asked for is arithmetic. Splitting an instalment into
+principal and interest across twenty-four periods is a solved calculation with
+one right answer, and a language model gets it nearly right — which is the worst
+possible outcome, because nearly right looks like right. Measured on BranchOut:
+128,182 out on the first attempt, 336.79 out after the prompt spelled out the
+arithmetic, and it was never going to reach zero. So the split is solved in
+code from the payments the model read, and only when the column does not
+already balance ([`amortise.ts`](packages/core/src/amortise.ts)).
+
+The boundary is the point. A model that reads a non-standardised legal PDF is
+doing something nothing else can; a model doing long division is a liability
+with a confidence score attached.
+
 So `INVALID` and `NEEDS_REVIEW` mean genuinely different things: the first cannot be cleared by any amount of human confirmation, the second is waiting for someone to vouch for a field.
 
 This is not theoretical. Running the deliberately contradictory sample document through the real pipeline:
@@ -223,9 +248,11 @@ cp .env.example .env.local        # addresses are in the deployments JSON
 pnpm dev                          # :3000
 
 cd ../contracts
-forge test                        # 122 tests
+forge test                        # 126 tests
 ```
 
 The seed loads two documents with hand-written extractions, so the review flow works without a model key or any spend. The validator runs for real over them.
 
-For the full pipeline, [agreements/](agreements/) has two real filed loan agreements to upload. Neither validates — one derives a schedule the document never tabulates, the other keeps its economics in a referenced note — so reaching a mint needs a self-contained document; see that directory's README.
+For the full pipeline, [agreements/](agreements/) has three documents to upload: one that validates as read, one that validates but sends two genuinely unclear fields to a human first, and one that is refused because its rate and schedule live in a document it references but never reproduces. See that directory's README.
+
+The registry deploys empty. Before a mint will go through, a wallet has to apply as an issuer, be approved, and be admitted on-chain — and the borrower has to be admitted separately, under its own role.
