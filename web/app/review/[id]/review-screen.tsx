@@ -293,7 +293,7 @@ export function ReviewScreen({ noteId }: { noteId: string }) {
               ).length}
             />
 
-            <div className="mt-4 grid gap-3 @2xl:grid-cols-2">
+            <div className="mt-4 grid items-stretch gap-3 @2xl:grid-cols-2">
               {EDITORS.map(({ field, kind, options }) => {
                 const extracted = terms[field];
                 /*

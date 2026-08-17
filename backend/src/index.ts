@@ -731,6 +731,17 @@ app.post("/extractions/:id/review", async (c) => {
       reviewedAt: new Date(),
       reviewedBy: body.reviewedBy,
     },
+    /*
+     * The same shape `GET /extractions/:id` returns, and it has to be.
+     *
+     * The browser writes this response straight into the cache for that key
+     * rather than refetching, so a narrower row here silently deletes whatever
+     * it omits. Returning the bare record made the source document vanish from
+     * the review screen the moment a reviewer confirmed a field — the pane had
+     * nothing left to render, and the correction looked like it had destroyed
+     * the document.
+     */
+    include: { document: true, note: true },
   });
 
   return c.json({ extraction });
@@ -1131,6 +1142,9 @@ app.post("/extractions/:id/mint-request", async (c) => {
         requestedAt: new Date().toISOString(),
       }),
     },
+    // Same shape as the GET, for the same reason: the browser caches this
+    // response in place of the record it already holds.
+    include: { document: true, note: true },
   });
 
   /*
@@ -1198,6 +1212,7 @@ app.post("/extractions/:id/borrower-acceptance", async (c) => {
         },
       }),
     },
+    include: { document: true, note: true },
   });
 
   return c.json({ extraction: jsonSafe(updated) });
