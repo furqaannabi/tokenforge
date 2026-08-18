@@ -8,35 +8,47 @@ Upload a loan agreement, invoice, or bond term sheet; an AI extracts the economi
 
 ## Screens
 
-Every figure below is live testnet state, not a mockup.
+Live testnet state, not mockups — the figures agree across screens because they come from one note. Click any image for full size.
 
-**Review** — the model's output beside the document it came from. Hovering a term highlights the clause it was read out of, and each field carries its own confidence. Nothing mints until the low-confidence ones are cleared by a person.
-
-![Reviewing extracted terms against the source document](docs/screenshots/review-terms.png)
-
-**The note** — minted, active, and four instalments into a twenty-four period schedule. Token supply falls as principal returns, which is why a holder's balance drops while their share of the loan does not.
-
-![A minted note with four of twenty-four instalments repaid](docs/screenshots/minted-note.png)
-
-**Automatic repayment** — an allowance, and nothing more. The borrower authorises the remaining schedule and the vault collects each instalment as it falls due. Revoking takes effect on the next block, which is the only reason a standing authorization over someone's balance is acceptable.
-
-![Automatic repayment armed, covering nineteen of the twenty remaining instalments](docs/screenshots/automatic-repayment.png)
-
-**The offering** — the desk quotes par from the note's own principal, so there is no price to argue about at issuance. Twenty-five basis points from each side reach the treasury in the same transaction.
-
-![Buying into a note at par from the sale desk](docs/screenshots/offering.png)
-
-**What a buyer is actually buying** — their share of every instalment still to be paid, taken from the vault's own schedule rather than from a yield figure.
-
-![A holder's share of each remaining instalment](docs/screenshots/holder-schedule.png)
-
-**Portfolio** — positions read from the chain, with repayments waiting to be claimed.
-
-![Portfolio showing one position and claimable repayments](docs/screenshots/portfolio.png)
-
-**Zoya** — answers from the chain and the extraction record, and names the tools she used. She cannot sign anything; every function she can call is a view. The quote below is computed rather than reasoned: the cost, the fee, and whether the pool would run out first come back from the same arithmetic the sale desk charges, because a model that divides a budget by a price will happily sell more tokens than exist.
-
-![Zoya quoting what 5,000 USDG buys from an open offering](docs/screenshots/zoya.png)
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/review-terms.png"><img src="docs/screenshots/review-terms.png" alt="Review"></a>
+      <sub><b>Review</b> — Extracted terms beside the clause each was read from, with per-field confidence.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/minted-note.png"><img src="docs/screenshots/minted-note.png" alt="The note"></a>
+      <sub><b>The note</b> — Minted and active, four instalments into twenty-four. Supply falls as principal returns.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/automatic-repayment.png"><img src="docs/screenshots/automatic-repayment.png" alt="Automatic repayment"></a>
+      <sub><b>Automatic repayment</b> — An allowance and nothing more. Revoking stops collection on the next block.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/offering.png"><img src="docs/screenshots/offering.png" alt="The offering"></a>
+      <sub><b>The offering</b> — Priced at par from the note's own principal. 0.25% from each side.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/holder-schedule.png"><img src="docs/screenshots/holder-schedule.png" alt="What a buyer gets"></a>
+      <sub><b>What a buyer gets</b> — Their share of every instalment still to be paid, from the vault's own schedule.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/portfolio.png"><img src="docs/screenshots/portfolio.png" alt="Portfolio"></a>
+      <sub><b>Portfolio</b> — Positions read from the chain, with repayments waiting to be claimed.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/zoya.png"><img src="docs/screenshots/zoya.png" alt="Zoya"></a>
+      <sub><b>Zoya</b> — Reads only. The quote is computed rather than reasoned — cost, fee, and whether the pool runs out first.</sub>
+    </td>
+    <td width="50%"></td>
+  </tr>
+</table>
 
 ## The problem
 
