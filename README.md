@@ -34,9 +34,9 @@ Every figure below is live testnet state, not a mockup.
 
 ![Portfolio showing one position and claimable repayments](docs/screenshots/portfolio.png)
 
-**Zoya** — answers from the chain and the extraction record, and names the tools she used. She cannot sign anything; every function she can call is a view.
+**Zoya** — answers from the chain and the extraction record, and names the tools she used. She cannot sign anything; every function she can call is a view. The quote below is computed rather than reasoned: the cost, the fee, and whether the pool would run out first come back from the same arithmetic the sale desk charges, because a model that divides a budget by a price will happily sell more tokens than exist.
 
-![Zoya answering a question about an active offer](docs/screenshots/zoya.png)
+![Zoya quoting what 5,000 USDG buys from an open offering](docs/screenshots/zoya.png)
 
 ## The problem
 
