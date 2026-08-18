@@ -343,10 +343,24 @@ export function Zoya() {
       role="dialog"
       aria-label="Ask Zoya"
       className={cn(
-        "fixed z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-card shadow-2xl",
+        /*
+         * Sized for the answers she actually gives.
+         *
+         * 24rem was a chat-bubble width, and her replies are not chat: an offer
+         * comes back as headings, bullets and figures in columns, and at 384px
+         * "Price per token: 1,500 USDG" wrapped mid-value and a fourteen-row
+         * schedule became a wall. The clamps matter more than the maximums —
+         * every dimension still yields to the viewport, so the panel never
+         * exceeds the screen on a phone.
+         *
+         * The review screen keeps the smaller box on purpose. She sits bottom
+         * left there, over the document pane, and a taller panel would cover
+         * the clause a reviewer is reading her answer against.
+         */
+        "fixed z-50 flex flex-col rounded-xl border border-border bg-card shadow-2xl",
         onReview
-          ? "bottom-28 left-4 h-[min(30rem,calc(100dvh-9rem))]"
-          : "bottom-4 right-4 h-[min(34rem,calc(100dvh-2rem))]",
+          ? "bottom-28 left-4 w-[min(28rem,calc(100vw-2rem))] h-[min(34rem,calc(100dvh-9rem))]"
+          : "bottom-4 right-4 w-[min(34rem,calc(100vw-2rem))] h-[min(44rem,calc(100dvh-2rem))]",
       )}
     >
       <header className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -417,10 +431,13 @@ export function Zoya() {
           >
             <div
               className={cn(
-                "inline-block max-w-[90%] rounded-lg px-3 py-2 text-left",
+                "inline-block rounded-lg px-3 py-2 text-left",
                 turn.role === "user"
-                  ? "whitespace-pre-wrap bg-muted"
-                  : "border border-border bg-background",
+                  // A typed question is short, and keeping it narrow is what
+                  // makes the two sides read as a conversation.
+                  ? "max-w-[85%] whitespace-pre-wrap bg-muted"
+                  // Hers is not chat. A schedule or a quote wants the width.
+                  : "w-full border border-border bg-background",
               )}
             >
               {/* Only her side is formatted. A user who types an asterisk
