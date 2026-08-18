@@ -13,40 +13,43 @@ Live testnet state, not mockups — the figures agree across screens because the
 <table>
   <tr>
     <td width="50%" valign="top">
+      <a href="docs/screenshots/issued-notes.png"><img src="docs/screenshots/issued-notes.png" alt="Issued notes"></a>
+      <sub><b>Issued notes</b> — Every note minted through TokenForge, its terms from the signed agreement and its repayment record from the chain.</sub>
+    </td>
+    <td width="50%" valign="top">
       <a href="docs/screenshots/review-terms.png"><img src="docs/screenshots/review-terms.png" alt="Review"></a>
       <sub><b>Review</b> — Extracted terms beside the clause each was read from, with per-field confidence.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/minted-note.png"><img src="docs/screenshots/minted-note.png" alt="The note"></a>
       <sub><b>The note</b> — Minted and active, four instalments into twenty-four. Supply falls as principal returns.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/automatic-repayment.png"><img src="docs/screenshots/automatic-repayment.png" alt="Automatic repayment"></a>
       <sub><b>Automatic repayment</b> — An allowance and nothing more. Revoking stops collection on the next block.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/offering.png"><img src="docs/screenshots/offering.png" alt="The offering"></a>
       <sub><b>The offering</b> — Priced at par from the note's own principal. 0.25% from each side.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/holder-schedule.png"><img src="docs/screenshots/holder-schedule.png" alt="What a buyer gets"></a>
       <sub><b>What a buyer gets</b> — Their share of every instalment still to be paid, from the vault's own schedule.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/portfolio.png"><img src="docs/screenshots/portfolio.png" alt="Portfolio"></a>
       <sub><b>Portfolio</b> — Positions read from the chain, with repayments waiting to be claimed.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <a href="docs/screenshots/zoya.png"><img src="docs/screenshots/zoya.png" alt="Zoya"></a>
       <sub><b>Zoya</b> — Reads only. The quote is computed rather than reasoned — cost, fee, and whether the pool runs out first.</sub>
     </td>
-    <td width="50%"></td>
   </tr>
 </table>
 
