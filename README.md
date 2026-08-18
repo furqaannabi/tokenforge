@@ -6,6 +6,38 @@
 
 Upload a loan agreement, invoice, or bond term sheet; an AI extracts the economic terms with per-field confidence scores; after human review and issuer approval, a cash-flow-programmed RWA token is minted on X Layer and its coupons pay holders in USDG.
 
+## Screens
+
+Every figure below is live testnet state, not a mockup.
+
+**Review** — the model's output beside the document it came from. Hovering a term highlights the clause it was read out of, and each field carries its own confidence. Nothing mints until the low-confidence ones are cleared by a person.
+
+![Reviewing extracted terms against the source document](docs/screenshots/review-terms.png)
+
+**The note** — minted, active, and four instalments into a twenty-four period schedule. Token supply falls as principal returns, which is why a holder's balance drops while their share of the loan does not.
+
+![A minted note with four of twenty-four instalments repaid](docs/screenshots/minted-note.png)
+
+**Automatic repayment** — an allowance, and nothing more. The borrower authorises the remaining schedule and the vault collects each instalment as it falls due. Revoking takes effect on the next block, which is the only reason a standing authorization over someone's balance is acceptable.
+
+![Automatic repayment armed, covering nineteen of the twenty remaining instalments](docs/screenshots/automatic-repayment.png)
+
+**The offering** — the desk quotes par from the note's own principal, so there is no price to argue about at issuance. Twenty-five basis points from each side reach the treasury in the same transaction.
+
+![Buying into a note at par from the sale desk](docs/screenshots/offering.png)
+
+**What a buyer is actually buying** — their share of every instalment still to be paid, taken from the vault's own schedule rather than from a yield figure.
+
+![A holder's share of each remaining instalment](docs/screenshots/holder-schedule.png)
+
+**Portfolio** — positions read from the chain, with repayments waiting to be claimed.
+
+![Portfolio showing one position and claimable repayments](docs/screenshots/portfolio.png)
+
+**Zoya** — answers from the chain and the extraction record, and names the tools she used. She cannot sign anything; every function she can call is a view.
+
+![Zoya answering a question about an active offer](docs/screenshots/zoya.png)
+
 ## The problem
 
 Tokenizing a real-world debt instrument today means a human reads a non-standardized legal PDF and manually transcribes principal, rate, day-count, maturity, schedule, and covenants into a contract deployment. That transcription step is the bottleneck, and it doesn't scale.
