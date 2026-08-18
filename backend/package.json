@@ -30,6 +30,7 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:migrate": "prisma migrate dev",
+    "db:reset": "bun scripts/reset.ts",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "bun scripts/seed.ts"
