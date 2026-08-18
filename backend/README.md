@@ -124,6 +124,7 @@ intended to publish.
 | `GET /auth/me` | Who the cookie says you are |
 | `POST /auth/logout` | Revokes the session and clears the cookie |
 | `POST /zoya/messages` | The assistant. Returns her reply and the tools it rested on |
+| `DELETE /zoya/messages` | Forgets a thread. Scoped to the signed-in wallet, and deleted server-side rather than hidden — the transcript is what she reasons from next turn |
 | `POST /zoya/stream` | The same turn as server-sent events: `delta` per fragment, `tool` when one starts, `done` with the sources |
 | `GET /keeper` | Whether automatic collection is running and what it last did, including `stale` — true when the last sweep is older than three intervals, which is how a keeper whose timer has died is told apart from one with nothing to do. Public |
 | `POST /keeper/sweep` | Run a collection sweep now. Signed in — it spends the keeper's gas |

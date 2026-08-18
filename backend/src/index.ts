@@ -1084,6 +1084,32 @@ app.get("/zoya/messages", async (c) => {
 });
 
 /**
+ * Forgets a thread.
+ *
+ * Scoped to the signed-in wallet for the same reason the read is: a
+ * conversation id lives in local storage and travels in request bodies, so
+ * treating it as sufficient authority would let anyone who saw one delete a
+ * stranger's transcript.
+ *
+ * Deleting server-side rather than only clearing the panel. The transcript is
+ * what Zoya reasons from on the next turn, so a browser that merely hid it
+ * would leave her still answering from messages the person believes they
+ * erased — which is worse than not offering the button at all.
+ */
+app.delete("/zoya/messages", async (c) => {
+  const conversationId = c.req.query("conversationId");
+  if (!conversationId) {
+    throw new HTTPException(400, { message: "conversationId is required." });
+  }
+
+  const { count } = await prisma.zoyaMessage.deleteMany({
+    where: { conversationId, walletAddress: c.get("address") },
+  });
+
+  return c.json({ deleted: count });
+});
+
+/**
  * The issuer asks the admin to clear a mint.
  *
  * Stores the exact parameters, not a summary. The admin approves a hash of

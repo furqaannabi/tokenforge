@@ -105,6 +105,32 @@ export function Zoya() {
 
   /* Restore the thread the first time the panel is opened, not on every mount:
      most visits never open it, and this is a database round trip. */
+  const [clearing, setClearing] = useState(false);
+
+  /**
+   * Forgets the thread, on the server before the screen.
+   *
+   * The transcript is what Zoya reasons from on her next turn, so clearing only
+   * the panel would leave her still answering from messages the person believes
+   * they erased. If the request fails the messages stay on screen, which is the
+   * honest outcome — they also still exist.
+   */
+  const clearThread = async () => {
+    if (!thread || clearing || turns.length === 0) return;
+    setClearing(true);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/zoya/messages?conversationId=${thread}`,
+        { method: "DELETE", credentials: "include" },
+      );
+      if (response.ok) setTurns([]);
+    } catch {
+      // Left on screen deliberately: they were not deleted.
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const restored = useRef(false);
   useEffect(() => {
     if (!open || !thread || restored.current) return;
@@ -337,11 +363,25 @@ export function Zoya() {
             AI assistant · reads only
           </p>
         </div>
+        {turns.length > 0 ? (
+          <button
+            type="button"
+            onClick={clearThread}
+            disabled={clearing}
+            title="Forget this conversation"
+            className="ml-auto rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            {clearing ? "Clearing…" : "Clear chat"}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setOpen(false)}
           aria-label="Close"
-          className="ml-auto flex size-8 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          className={cn(
+            "flex size-8 items-center justify-center rounded text-muted-foreground hover:text-foreground",
+            turns.length === 0 && "ml-auto",
+          )}
         >
           <X className="size-4" />
         </button>
