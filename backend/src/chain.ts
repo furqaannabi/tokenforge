@@ -1,5 +1,6 @@
-import { createPublicClient, http } from "viem";
+import { createPublicClient, formatUnits, http, parseUnits } from "viem";
 import { xLayerTestnet } from "viem/chains";
+import { CURRENCY_DECIMALS, ceilDiv, quoteOffer } from "@tokenforge/core";
 import {
   issuerRegistryAbi,
   repaymentVaultAbi,
@@ -193,11 +194,17 @@ export async function readSchedule(
 }
 
 /** What is on offer, and what it costs. Zero when nothing is for sale. */
-export async function readOffer(note: `0x${string}`) {
+export async function readOffer(note: `0x${string}`, budget?: number) {
   const desk = process.env.SALE_DESK_ADDRESS as `0x${string}` | undefined;
   if (!desk) return null;
 
   const contract = { abi: saleDeskAbi, address: desk } as const;
+
+  // USDG is the only settlement currency issued so far, and its decimals are
+  // what every figure below is scaled by. Named rather than assumed as 18,
+  // which is the mistake that made a 1,500 price read as 1.50.
+  const currency = "USDG" as const;
+  const decimals = CURRENCY_DECIMALS[currency];
 
   const [available, price, poolBps] = await publicClient.multicall({
     contracts: [
@@ -208,12 +215,59 @@ export async function readOffer(note: `0x${string}`) {
     allowFailure: false,
   });
 
+  /*
+   * Scaled here, and quoted here, rather than handed over raw.
+   *
+   * These come off the chain as bigints in two different bases — the note
+   * ledger is 18-decimal, the price is in the settlement currency's — and
+   * returning them as strings asked the model to know that and divide. It did
+   * not: it read a price of 1,500 USDG as 1.50, and when asked what a budget
+   * would buy it divided by the price and answered 3,333 tokens out of a pool
+   * holding 321. Both are arithmetic, both have one right answer, and neither
+   * is work a language model should be doing.
+   *
+   * `budget` is optional because most questions are "what is on offer". When
+   * it is given, the sums below are the same ones `SaleDesk.quote` performs,
+   * including which way each rounds, so the figure quoted is the figure
+   * charged.
+   */
+  const availableRaw = available as bigint;
+  const priceRaw = price as bigint;
+
+  const offer = {
+    tokensAvailable: Number(formatUnits(availableRaw, 18)),
+    pricePerToken: Number(formatUnits(priceRaw, decimals)),
+    shareOfNoteOfferedPct: Number(poolBps) / 100,
+    currency,
+    /** Everything on offer, at this price, before the buyer's fee. */
+    wholePoolCost: Number(
+      formatUnits(ceilDiv(availableRaw * priceRaw, 10n ** 18n), decimals),
+    ),
+  };
+
+  if (budget === undefined) return offer;
+
+  const quote = quoteOffer(
+    parseUnits(budget.toFixed(decimals), decimals),
+    priceRaw,
+    availableRaw,
+  );
+
   return {
-    tokensAvailable: (available as bigint).toString(),
-    pricePerToken: (price as bigint).toString(),
-    shareOfNoteBps: Number(poolBps),
+    ...offer,
+    quote: {
+      budget,
+      tokens: Number(formatUnits(quote.tokens, 18)),
+      cost: Number(formatUnits(quote.cost, decimals)),
+      protocolFee: Number(formatUnits(quote.fee, decimals)),
+      totalPaid: Number(formatUnits(quote.total, decimals)),
+      limitedByPoolSize: quote.limitedByPoolSize,
+      unspent: Number(formatUnits(quote.unspent, decimals)),
+    },
   };
 }
+
+
 
 /** A wallet's stake: what it is worth, what it owns, what it is owed. */
 export async function readPosition(

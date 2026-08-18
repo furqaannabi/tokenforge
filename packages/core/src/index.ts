@@ -21,6 +21,9 @@ export * from "./crosscheck";
 // Splitting a payment into principal and interest. Arithmetic the model was
 // being asked to do and should not have been.
 export * from "./amortise";
+// What a budget buys from an offering. Arithmetic the assistant was doing in
+// prose, and getting wrong in two directions at once.
+export * from "./offer";
 // Building and hashing a mint. Here rather than in the web app because the
 // service now sends the transaction, and two implementations of `mintHash`
 // would disagree the moment either was edited.

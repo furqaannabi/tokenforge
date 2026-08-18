@@ -95,8 +95,19 @@ const declarations: Anthropic.Tool[] = [
   {
     name: "getOffer",
     description:
-      "What is currently for sale of a note and the price per token, from the sale desk. Returns null when the issuer has not offered any.",
-    input_schema: z.toJSONSchema(noteRef) as Anthropic.Tool.InputSchema,
+      "What is currently for sale of a note and the price per token, from the sale desk. Returns null when the issuer has not offered any. " +
+      "Pass `budget` whenever someone says what they have to spend: the quote comes back computed — tokens, cost, the 0.25% fee, and whether the pool ran out before the budget did. " +
+      "Never work a quote out yourself. Dividing a budget by the price ignores how much is actually for sale, and every figure returned here is already in whole currency units.",
+    input_schema: z.toJSONSchema(
+      noteRef.extend({
+        budget: z
+          .number()
+          .optional()
+          .describe(
+            "How much the buyer has to spend, in whole settlement-currency units. 5000 means 5,000 USDG.",
+          ),
+      }),
+    ) as Anthropic.Tool.InputSchema,
   },
   {
     name: "getPosition",
@@ -185,7 +196,11 @@ async function runTool(
 
     case "getOffer": {
       const { note } = await noteAddresses(args.extractionId as string);
-      return (await readOffer(note)) ?? { forSale: false };
+      return (
+        (await readOffer(note, args.budget as number | undefined)) ?? {
+          forSale: false,
+        }
+      );
     }
 
     case "getPosition": {
